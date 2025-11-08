@@ -3,8 +3,10 @@
 This package provides core analysis functionality including:
 - Similarity calculation (N-gram and LCS)
 - Union-Find data structure for group detection
+- Method matching across revisions
 """
 
+from b4_thesis.analysis.method_matcher import MatchResult, MethodMatcher
 from b4_thesis.analysis.similarity import (
     calculate_lcs_similarity,
     calculate_ngram_similarity,
@@ -19,4 +21,6 @@ __all__ = [
     "calculate_ngram_similarity",
     "calculate_lcs_similarity",
     "parse_token_sequence",
+    "MethodMatcher",
+    "MatchResult",
 ]
