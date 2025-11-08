@@ -21,10 +21,14 @@ b4-thesis/
 │   ├── core/               # コアユーティリティ
 │   │   ├── config.py       # Pydanticベースの設定管理
 │   │   └── revision_manager.py  # リビジョンデータ管理（Phase 1 ✓）
-│   └── analysis/           # 分析モジュール（Phase 1 ✓）
-│       ├── union_find.py   # Union-Findデータ構造
-│       └── similarity.py   # 類似度計算（N-gram/LCS）
-├── tests/                  # テストコード（pytest使用、56 tests passing）
+│   └── analysis/           # 分析モジュール（Phase 1-2 ✓）
+│       ├── union_find.py        # Union-Findデータ構造（Phase 1 ✓）
+│       ├── similarity.py        # 類似度計算（N-gram/LCS）（Phase 1 ✓）
+│       ├── method_matcher.py    # メソッドマッチング（Phase 2 ✓）
+│       ├── group_detector.py    # グループ検出（Phase 2 ✓）
+│       ├── group_matcher.py     # グループマッチング（Phase 2 ✓）
+│       └── state_classifier.py  # 状態分類（Phase 2 ✓）
+├── tests/                  # テストコード（pytest使用、123 tests passing）
 │   ├── analysis/           # 分析モジュールのテスト
 │   ├── core/               # コアモジュールのテスト
 │   └── fixtures/           # テストフィクスチャ
@@ -113,19 +117,30 @@ uv add --dev pytest-cov
 
 ### コード品質チェック
 
+**重要**: このプロジェクトでは`uv`を使用しているため、必ず`uv run`を付けてコマンドを実行すること
+
 ```bash
 # リント + 自動修正（importソート含む）
-ruff check --fix src/
+uv run ruff check --fix src/
 
 # フォーマット
-ruff format src/
+uv run ruff format src/
 
 # テスト実行
-pytest tests/
+uv run pytest tests/
 
-# まとめて実行
-ruff check --fix src/ && ruff format src/ && pytest tests/
+# 詳細モードでテスト実行
+uv run pytest tests/ -v
+
+# まとめて実行（推奨）
+uv run ruff check --fix src/ && uv run ruff format src/ && uv run pytest tests/
 ```
+
+**注意**:
+- ❌ `ruff check src/` → エラー（command not found）
+- ✅ `uv run ruff check src/` → 正しい
+- ❌ `pytest tests/` → エラー（command not found）
+- ✅ `uv run pytest tests/` → 正しい
 
 ### 新しいコマンドの追加方法
 
@@ -371,38 +386,57 @@ git commit -m "docs: update documentation for new feature"
 - CSVファイルをヘッダーなしで読み込む仕様に変更（`header=None`）
 - 空の`clone_pairs.csv`を適切に処理する実装を追加
 
-### 🔄 Phase 2: コア分析コンポーネント（次フェーズ）
+### ✅ Phase 2: コア分析コンポーネント（完了 - 2025-11-08）
 
-**実装予定**:
-- [ ] **MethodMatcher** (`analysis/method_matcher.py`)
-  - メソッド間のマッチング
-  - SimilarityCalculatorを活用
-  - 閾値ベースのマッチング判定
+**実装完了したコンポーネント**:
+- ✅ **MethodMatcher** (`analysis/method_matcher.py`)
+  - メソッド間のマッチング（2段階アプローチ）
+  - Phase 1: token_hash による高速完全一致 (O(n))
+  - Phase 2: 類似度ベースのファジーマッチング (O(m × k × s))
+  - 二重マッチング防止、最高類似度マッチ選択
+  - 12テストケース全てパス
 
-- [ ] **GroupDetector** (`analysis/group_detector.py`)
+- ✅ **GroupDetector** (`analysis/group_detector.py`)
   - クローングループの検出
-  - UnionFindを活用
-  - clone_pairsからグループ生成
+  - UnionFindを活用した効率的なグループ形成
+  - CloneGroupデータクラス（avg_similarity, min_similarity, max_similarity, density等）
+  - 閾値ベースのグループ形成、isolated blocks処理
+  - 20テストケース全てパス
 
-- [ ] **GroupMatcher** (`analysis/group_matcher.py`)
+- ✅ **GroupMatcher** (`analysis/group_matcher.py`)
   - リビジョン間のグループマッチング
-  - MethodMatcherを活用
-  - グループ対グループの類似度計算
+  - オーバーラップベースのマッチング判定
+  - Split/Merge検出機能
+  - 閾値ベースのマッチング（デフォルト50%）
+  - 14テストケース全てパス
 
-- [ ] **StateClassifier** (`analysis/state_classifier.py`)
-  - 状態分類（ADDED, DELETED, STABLE, CHANGED, INCONSISTENT）
-  - MethodMatcher/GroupMatcherの結果を利用
+- ✅ **StateClassifier** (`analysis/state_classifier.py`)
+  - メソッド状態分類（DELETED, SURVIVED, ADDED）
+  - 詳細状態（DELETED_ISOLATED, SURVIVED_UNCHANGED, ADDED_TO_GROUP等）
+  - グループ状態分類（CONTINUED, GROWN, SHRUNK, SPLIT, MERGED, DISSOLVED, BORN）
+  - サイズ許容範囲による柔軟な分類（デフォルト10%）
+  - 21テストケース全てパス
+
+**テスト状況**: 123 tests passing（100% success rate）
+- Phase 1: 56 tests
+- Phase 2: 67 tests
+
+**設計の特徴**:
+- 2段階マッチング戦略による高速化（token_hash + 類似度）
+- 包括的な状態分類（メソッド3状態 × 詳細10状態、グループ7状態）
+- Split/Merge検出による複雑な進化パターンの追跡
+- 全コンポーネントで堅牢なエラーハンドリングとエッジケース処理
 
 **依存関係**:
 ```
-Phase 1 (完了)
+Phase 1 (完了) ✓
     ↓
-MethodMatcher ← SimilarityCalculator
-GroupDetector ← UnionFind
+MethodMatcher ← SimilarityCalculator ✓
+GroupDetector ← UnionFind ✓
     ↓
-GroupMatcher ← MethodMatcher
+GroupMatcher ← MethodMatcher ✓
     ↓
-StateClassifier ← MethodMatcher + GroupMatcher
+StateClassifier ← MethodMatcher + GroupMatcher ✓
 ```
 
 ### 📅 Phase 3: 追跡エンジン
@@ -462,5 +496,5 @@ pytest tests/ -v
 
 ---
 
-**最終更新**: 2025-11-08
+**最終更新**: 2025-11-08 (Phase 2 完了)
 **メンテナー**: Claude Code開発チーム
