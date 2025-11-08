@@ -42,6 +42,7 @@ htmlcov/
 # Data files
 data/
 *.csv
+!tests/fixtures/**/*.csv
 *.json
 !b4-thesis.json
 !package.json
