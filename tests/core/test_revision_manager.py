@@ -64,16 +64,22 @@ class TestRevisionManager:
         manager = RevisionManager(sample_data_dir)
         revisions = manager.get_revisions()
 
-        # Should return 3 revisions
-        assert len(revisions) == 3
+        # Should return 4 revisions
+        assert len(revisions) == 4
 
         # Should be sorted by timestamp (oldest first)
         assert revisions[0].revision_id == "20250101_100000_hash1"
         assert revisions[1].revision_id == "20250101_110000_hash2"
         assert revisions[2].revision_id == "20250101_120000_hash3"
+        assert revisions[3].revision_id == "20250101_130000_hash4"
 
         # Timestamps should be in order
-        assert revisions[0].timestamp < revisions[1].timestamp < revisions[2].timestamp
+        assert (
+            revisions[0].timestamp
+            < revisions[1].timestamp
+            < revisions[2].timestamp
+            < revisions[3].timestamp
+        )
 
     def test_get_revisions_with_start_date(self, sample_data_dir):
         """Test get_revisions with start_date filter."""
@@ -83,10 +89,11 @@ class TestRevisionManager:
         start_date = datetime(2025, 1, 1, 11, 0, 0)
         revisions = manager.get_revisions(start_date=start_date)
 
-        # Should return 2 revisions (11:00 and 12:00)
-        assert len(revisions) == 2
+        # Should return 3 revisions (11:00, 12:00, and 13:00)
+        assert len(revisions) == 3
         assert revisions[0].revision_id == "20250101_110000_hash2"
         assert revisions[1].revision_id == "20250101_120000_hash3"
+        assert revisions[2].revision_id == "20250101_130000_hash4"
 
     def test_get_revisions_with_end_date(self, sample_data_dir):
         """Test get_revisions with end_date filter."""
@@ -134,7 +141,7 @@ class TestRevisionManager:
 
         # Check code_blocks DataFrame
         assert isinstance(code_blocks, pd.DataFrame)
-        assert len(code_blocks) == 3  # 3 blocks in first revision
+        assert len(code_blocks) == 4  # 4 blocks in first revision
         assert "block_id" in code_blocks.columns
         assert "function_name" in code_blocks.columns
         assert "token_sequence" in code_blocks.columns
@@ -143,6 +150,7 @@ class TestRevisionManager:
         assert "block_a" in code_blocks["block_id"].values
         assert "block_b" in code_blocks["block_id"].values
         assert "block_c" in code_blocks["block_id"].values
+        assert "block_d" in code_blocks["block_id"].values
 
         # Check clone_pairs DataFrame
         assert isinstance(clone_pairs, pd.DataFrame)
