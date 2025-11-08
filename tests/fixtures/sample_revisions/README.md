@@ -22,24 +22,33 @@ sample_revisions/
 ## Revisions Timeline
 
 1. **Revision 1** (2025-01-01 10:00:00)
-   - 3 methods: block_a, block_b, block_c
+   - 3 methods:
+     - `block_a`: calculate(x:int; y:int) - 2 parameters
+     - `block_b`: process(data:str) - 1 parameter
+     - `block_c`: compute() - no parameters
    - Clone pairs: 2 pairs
      - block_a ↔ block_b (ngram: 75%)
      - block_b ↔ block_c (ngram: 65%, lcs: 72%)
 
 2. **Revision 2** (2025-01-01 11:00:00)
-   - 3 methods: block_a2, block_b2, block_d
+   - 3 methods:
+     - `block_a2`: calculate(x:int; y:int) - same signature as block_a
+     - `block_b2`: process_data(data:str; config:dict) - signature changed
+     - `block_d`: new_func(n:int) - newly added
    - Clone pairs: 2 pairs
      - block_a2 ↔ block_d (ngram: 80%)
      - block_b2 ↔ block_d (ngram: 55%, lcs: 68%)
    - Method transitions:
      - block_a → block_a2 (survived, unchanged, same token_hash)
-     - block_b → block_b2 (survived, modified)
+     - block_b → block_b2 (survived, modified - parameters changed)
      - block_c → deleted
      - block_d → added
 
 3. **Revision 3** (2025-01-01 12:00:00)
-   - 3 methods: block_a3, block_d2, block_e
+   - 3 methods:
+     - `block_a3`: calculate(x:int; y:int) - still same signature
+     - `block_d2`: new_func(n:int) - same as block_d
+     - `block_e`: helper(msg:str; level:int; verbose:bool) - 3 parameters
    - Clone pairs: 2 pairs
      - block_a3 ↔ block_d2 (ngram: 85%)
      - block_a3 ↔ block_e (ngram: 70%)
@@ -48,6 +57,13 @@ sample_revisions/
      - block_b2 → deleted
      - block_d → block_d2 (survived, unchanged, same token_hash)
      - block_e → added
+
+## Parameter Format Examples
+
+The `parameters` column (7th column) uses semicolon-separated format:
+- No parameters: `[]`
+- Single parameter: `[x:int]`
+- Multiple parameters: `[x:int;y:int]` or `[msg:str;level:int;verbose:bool]`
 
 ## Usage
 
