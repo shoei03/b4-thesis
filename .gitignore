@@ -41,7 +41,6 @@ htmlcov/
 
 # Data files
 data/
-docs/
 *.csv
 *.json
 !b4-thesis.json
