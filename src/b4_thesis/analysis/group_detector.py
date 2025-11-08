@@ -143,12 +143,12 @@ class GroupDetector:
             pair_row: Row from clone_pairs DataFrame
 
         Returns:
-            Effective similarity (ngram if >= 70, otherwise LCS)
+            Effective similarity (ngram if >= threshold, otherwise LCS)
         """
         ngram_similarity = pair_row[2]
 
-        # If N-gram >= 70, use N-gram
-        if ngram_similarity >= 70:
+        # If N-gram >= threshold, use N-gram
+        if ngram_similarity >= self.similarity_threshold:
             return int(ngram_similarity)
 
         # Otherwise, use LCS similarity

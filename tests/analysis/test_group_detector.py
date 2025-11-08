@@ -321,3 +321,39 @@ class TestGroupDetector:
         groups_low = detector_low.detect_groups(code_blocks, clone_pairs)
         assert len(groups_low) == 1
         assert groups_low[list(groups_low.keys())[0]].size == 2
+
+    def test_effective_similarity_respects_threshold(self):
+        """Test that _get_effective_similarity respects the configured threshold."""
+        code_blocks = pd.DataFrame(
+            {0: ["block_a", "block_b"], 1: ["src/util.py"] * 2, 4: ["func_a", "func_b"]}
+        )
+
+        # ngram=60 (< 80), lcs=85
+        # With threshold=80, should use LCS (85)
+        clone_pairs = pd.DataFrame({0: ["block_a"], 1: ["block_b"], 2: [60], 3: [85]})
+
+        detector = GroupDetector(similarity_threshold=80)
+        groups = detector.detect_groups(code_blocks, clone_pairs)
+
+        # Should form a group because LCS (85) >= threshold (80)
+        assert len(groups) == 1
+        group = list(groups.values())[0]
+        assert group.size == 2
+        assert group.similarities[("block_a", "block_b")] == 85
+
+    def test_effective_similarity_threshold_50(self):
+        """Test effective similarity with threshold=50."""
+        code_blocks = pd.DataFrame(
+            {0: ["block_a", "block_b"], 1: ["src/util.py"] * 2, 4: ["func_a", "func_b"]}
+        )
+
+        # ngram=55 (>= 50), lcs=90
+        # With threshold=50, should use ngram (55) instead of LCS
+        clone_pairs = pd.DataFrame({0: ["block_a"], 1: ["block_b"], 2: [55], 3: [90]})
+
+        detector = GroupDetector(similarity_threshold=50)
+        groups = detector.detect_groups(code_blocks, clone_pairs)
+
+        # Should form a group and store ngram similarity (55)
+        group = list(groups.values())[0]
+        assert group.similarities[("block_a", "block_b")] == 55
