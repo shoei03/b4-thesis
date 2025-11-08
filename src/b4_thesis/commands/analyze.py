@@ -1,7 +1,8 @@
 """Analyze command for processing research data."""
 
-import click
 from pathlib import Path
+
+import click
 from rich.console import Console
 from rich.table import Table
 

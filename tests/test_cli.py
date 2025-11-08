@@ -1,7 +1,8 @@
 """Tests for CLI commands."""
 
-import pytest
 from click.testing import CliRunner
+import pytest
+
 from b4_thesis.cli import main
 
 

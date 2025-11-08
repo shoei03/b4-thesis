@@ -1,7 +1,6 @@
 """Visualization command for creating plots."""
 
 import click
-from pathlib import Path
 from rich.console import Console
 
 console = Console()
@@ -41,8 +40,8 @@ def visualize(
     console.print(f"[bold blue]Creating {type} plot from:[/bold blue] {input_file}")
 
     try:
-        import pandas as pd
         import matplotlib.pyplot as plt
+        import pandas as pd
         import seaborn as sns
 
         # Set style
@@ -57,7 +56,9 @@ def visualize(
         # Generate plot based on type
         if type == "scatter":
             if not x_column or not y_column:
-                console.print("[red]Error:[/red] --x-column and --y-column required for scatter plot")
+                console.print(
+                    "[red]Error:[/red] --x-column and --y-column required for scatter plot"
+                )
                 return
             sns.scatterplot(data=df, x=x_column, y=y_column)
 

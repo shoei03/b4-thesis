@@ -1,8 +1,8 @@
 """Configuration management for b4-thesis."""
 
-from pathlib import Path
-from typing import Any
 import json
+from pathlib import Path
+
 from pydantic import BaseModel, Field
 
 

@@ -2,7 +2,6 @@
 
 import click
 import pandas as pd
-from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
