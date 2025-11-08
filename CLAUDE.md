@@ -18,9 +18,17 @@ b4-thesis/
 │   │   ├── analyze.py      # データ/リポジトリ分析コマンド
 │   │   ├── stats.py        # 統計メトリクス計算コマンド
 │   │   └── visualize.py    # データ可視化コマンド
-│   └── core/               # コアユーティリティ
-│       └── config.py       # Pydanticベースの設定管理
-├── tests/                  # テストコード（pytest使用）
+│   ├── core/               # コアユーティリティ
+│   │   ├── config.py       # Pydanticベースの設定管理
+│   │   └── revision_manager.py  # リビジョンデータ管理（Phase 1 ✓）
+│   └── analysis/           # 分析モジュール（Phase 1 ✓）
+│       ├── union_find.py   # Union-Findデータ構造
+│       └── similarity.py   # 類似度計算（N-gram/LCS）
+├── tests/                  # テストコード（pytest使用、56 tests passing）
+│   ├── analysis/           # 分析モジュールのテスト
+│   ├── core/               # コアモジュールのテスト
+│   └── fixtures/           # テストフィクスチャ
+├── docs/                   # 詳細設計ドキュメント
 ├── pyproject.toml          # プロジェクト設定・依存関係
 ├── README.md               # ユーザー向けドキュメント
 └── CLAUDE.md               # このファイル（開発者向け）
@@ -334,34 +342,86 @@ git commit -m "docs: update documentation for new feature"
    - `git add .` は避ける
    - ファイル単位で慎重にステージング
 
-## 今後の拡張予定
+## 開発ロードマップ
 
-優先度順：
+### ✅ Phase 1: 基盤実装（完了 - 2025-11-08）
 
-1. **Git リポジトリ分析機能**
-   - コミット履歴分析
-   - コントリビューター統計
-   - ファイル変更頻度
+**実装完了したコンポーネント**:
+- ✅ **UnionFind** (`analysis/union_find.py`): グループ検出用データ構造
+  - 経路圧縮付きfind操作
+  - union、get_groups、is_connected等のAPI
+  - 13テストケース全てパス
 
-2. **コード複雑度メトリクス**
-   - 循環的複雑度（Cyclomatic Complexity）
-   - 保守性指標（Maintainability Index）
-   - コード重複検出
+- ✅ **SimilarityCalculator** (`analysis/similarity.py`): 類似度計算
+  - N-gram類似度計算
+  - LCS類似度計算
+  - 2段階アプローチ（N-gram >= threshold → N-gram返却、それ以外 → LCS計算）
+  - 27テストケース全てパス
 
-3. **ネットワーク分析**
-   - モジュール依存関係グラフ
-   - コール グラフ分析
-   - クラスタリング
+- ✅ **RevisionManager** (`core/revision_manager.py`): リビジョンデータ管理
+  - リビジョンディレクトリ列挙・ソート
+  - 日付範囲フィルタリング
+  - code_blocks.csv/clone_pairs.csv読み込み
+  - ヘッダーなしCSV対応、空ファイル処理
+  - 11テストケース全てパス
 
-4. **機械学習統合**
-   - コード品質予測
-   - バグ予測モデル
-   - 類似コード検索
+**テスト状況**: 56 tests passing（100% success rate）
 
-5. **レポート自動生成**
-   - Markdown/PDF レポート
-   - グラフ付き統計サマリー
-   - カスタムテンプレート対応
+**設計変更点**:
+- CSVファイルをヘッダーなしで読み込む仕様に変更（`header=None`）
+- 空の`clone_pairs.csv`を適切に処理する実装を追加
+
+### 🔄 Phase 2: コア分析コンポーネント（次フェーズ）
+
+**実装予定**:
+- [ ] **MethodMatcher** (`analysis/method_matcher.py`)
+  - メソッド間のマッチング
+  - SimilarityCalculatorを活用
+  - 閾値ベースのマッチング判定
+
+- [ ] **GroupDetector** (`analysis/group_detector.py`)
+  - クローングループの検出
+  - UnionFindを活用
+  - clone_pairsからグループ生成
+
+- [ ] **GroupMatcher** (`analysis/group_matcher.py`)
+  - リビジョン間のグループマッチング
+  - MethodMatcherを活用
+  - グループ対グループの類似度計算
+
+- [ ] **StateClassifier** (`analysis/state_classifier.py`)
+  - 状態分類（ADDED, DELETED, STABLE, CHANGED, INCONSISTENT）
+  - MethodMatcher/GroupMatcherの結果を利用
+
+**依存関係**:
+```
+Phase 1 (完了)
+    ↓
+MethodMatcher ← SimilarityCalculator
+GroupDetector ← UnionFind
+    ↓
+GroupMatcher ← MethodMatcher
+    ↓
+StateClassifier ← MethodMatcher + GroupMatcher
+```
+
+### 📅 Phase 3: 追跡エンジン
+
+- [ ] **CloneEvolutionTracker**: クローン進化追跡
+- [ ] **LifetimeCalculator**: ライフタイム計算
+- [ ] **PatternDetector**: パターン検出（Stable→Changed等）
+
+### 📅 Phase 4: CLIコマンド統合
+
+- [ ] **track コマンド**: クローン進化追跡の実行
+- [ ] 統計レポート生成機能
+- [ ] 可視化機能の拡張
+
+### 📅 Phase 5: 高度な機能
+
+- [ ] 並列処理最適化
+- [ ] 大規模データセット対応
+- [ ] レポート自動生成（Markdown/PDF）
 
 ## 参考リンク
 

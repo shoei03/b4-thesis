@@ -4,9 +4,18 @@
 
 ## 概要
 
-このツールは、ソフトウェアリポジトリや研究データを分析するためのコマンドラインインターフェースを提供します。データの統計分析、可視化、レポート生成などの機能を備えています。
+このツールは、コードクローン検出・追跡のためのPython CLI分析ツールです。ソフトウェアリポジトリのリビジョンデータを分析し、コードクローンの進化を追跡します。
 
 ## 機能
+
+### 実装済み（Phase 1完了）
+
+- **コア分析モジュール**:
+  - `UnionFind`: グループ検出のためのUnion-Findデータ構造
+  - `SimilarityCalculator`: N-gram/LCS類似度計算（2段階アプローチ）
+  - `RevisionManager`: リビジョンデータの読み込み・管理
+
+### CLI コマンド（基本実装）
 
 - **analyze**: リポジトリやデータファイルの分析
 - **stats**: 統計メトリクスの計算
@@ -122,10 +131,16 @@ b4-thesis/
 │       │   ├── analyze.py      # analyzeコマンド
 │       │   ├── stats.py        # statsコマンド
 │       │   └── visualize.py    # visualizeコマンド
-│       └── core/               # コアユーティリティ
+│       ├── core/               # コアユーティリティ
+│       │   ├── __init__.py
+│       │   ├── config.py       # 設定管理
+│       │   └── revision_manager.py  # リビジョン管理（Phase 1）
+│       └── analysis/           # 分析モジュール（Phase 1）
 │           ├── __init__.py
-│           └── config.py       # 設定管理
-├── tests/                      # テストファイル
+│           ├── union_find.py   # Union-Findデータ構造
+│           └── similarity.py   # 類似度計算
+├── tests/                      # テストファイル（56 tests passing）
+├── docs/                       # 詳細設計ドキュメント
 ├── pyproject.toml              # プロジェクト設定
 └── README.md
 ```
@@ -160,10 +175,36 @@ ruff format src/
 
 研究用途のみ
 
-## 今後の拡張予定
+## 開発ロードマップ
 
-- [ ] Git リポジトリ分析機能
-- [ ] コード複雑度メトリクス計算
-- [ ] ネットワーク分析機能
-- [ ] 機械学習モデルの統合
-- [ ] レポート自動生成
+### ✅ Phase 1: 基盤実装（完了）
+
+- [x] UnionFind データ構造
+- [x] Similarity 計算（N-gram/LCS、2段階アプローチ）
+- [x] RevisionManager（リビジョンデータ管理）
+- [x] テストフレームワーク構築（56 tests passing）
+
+### 🔄 Phase 2: コア分析コンポーネント（次フェーズ）
+
+- [ ] MethodMatcher: メソッド間マッチング
+- [ ] GroupDetector: グループ検出
+- [ ] GroupMatcher: グループ間マッチング
+- [ ] StateClassifier: 状態分類
+
+### 📅 Phase 3: 追跡エンジン
+
+- [ ] CloneEvolutionTracker: クローン進化追跡
+- [ ] LifetimeCalculator: ライフタイム計算
+- [ ] PatternDetector: パターン検出
+
+### 📅 Phase 4: CLIコマンド統合
+
+- [ ] track コマンド実装
+- [ ] 統計レポート生成
+- [ ] 可視化機能拡張
+
+### 📅 Phase 5: 高度な機能
+
+- [ ] 並列処理最適化
+- [ ] 大規模データセット対応
+- [ ] レポート自動生成（Markdown/PDF）
