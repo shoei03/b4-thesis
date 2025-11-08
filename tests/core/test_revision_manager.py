@@ -148,7 +148,11 @@ class TestRevisionManager:
         assert isinstance(clone_pairs, pd.DataFrame)
         assert "block_id_1" in clone_pairs.columns
         assert "block_id_2" in clone_pairs.columns
-        assert len(clone_pairs) == 0  # No clones in first revision
+        assert len(clone_pairs) == 2  # 2 clone pairs in first revision
+
+        # Check clone pair data
+        assert "block_a" in clone_pairs["block_id_1"].values
+        assert "block_b" in clone_pairs["block_id_2"].values
 
     def test_load_revision_data_second_revision(self, sample_data_dir):
         """Test loading data from second revision."""

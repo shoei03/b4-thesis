@@ -23,21 +23,31 @@ sample_revisions/
 
 1. **Revision 1** (2025-01-01 10:00:00)
    - 3 methods: block_a, block_b, block_c
-   - No clones
+   - Clone pairs: 2 pairs
+     - block_a ↔ block_b (ngram: 75%)
+     - block_b ↔ block_c (ngram: 65%, lcs: 72%)
 
 2. **Revision 2** (2025-01-01 11:00:00)
    - 3 methods: block_a2, block_b2, block_d
-   - block_a → block_a2 (survived, unchanged)
-   - block_b → block_b2 (survived, modified)
-   - block_c → deleted
-   - block_d → added
+   - Clone pairs: 2 pairs
+     - block_a2 ↔ block_d (ngram: 80%)
+     - block_b2 ↔ block_d (ngram: 55%, lcs: 68%)
+   - Method transitions:
+     - block_a → block_a2 (survived, unchanged, same token_hash)
+     - block_b → block_b2 (survived, modified)
+     - block_c → deleted
+     - block_d → added
 
 3. **Revision 3** (2025-01-01 12:00:00)
    - 3 methods: block_a3, block_d2, block_e
-   - block_a2 → block_a3 (survived, unchanged)
-   - block_b2 → deleted
-   - block_d → block_d2 (survived, unchanged)
-   - block_e → added
+   - Clone pairs: 2 pairs
+     - block_a3 ↔ block_d2 (ngram: 85%)
+     - block_a3 ↔ block_e (ngram: 70%)
+   - Method transitions:
+     - block_a2 → block_a3 (survived, unchanged, same token_hash)
+     - block_b2 → deleted
+     - block_d → block_d2 (survived, unchanged, same token_hash)
+     - block_e → added
 
 ## Usage
 
