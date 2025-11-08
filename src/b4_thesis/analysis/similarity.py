@@ -116,17 +116,19 @@ def calculate_lcs_similarity(tokens_1: list[int], tokens_2: list[int]) -> int:
     return int(round(similarity))
 
 
-def calculate_similarity(token_seq_1: str, token_seq_2: str) -> int:
+def calculate_similarity(token_seq_1: str, token_seq_2: str, ngram_threshold: int = 70) -> int:
     """Calculate similarity between two token sequences.
 
     2-phase approach:
     1. Calculate N-gram similarity
-    2. If N-gram >= 70, return N-gram similarity (skip LCS for efficiency)
-    3. If N-gram < 70, calculate and return LCS similarity
+    2. If N-gram >= ngram_threshold, return N-gram similarity (skip LCS for efficiency)
+    3. If N-gram < ngram_threshold, calculate and return LCS similarity
 
     Args:
         token_seq_1: Token sequence string (e.g., "[123;456;789]")
         token_seq_2: Token sequence string
+        ngram_threshold: Threshold for skipping LCS calculation (default: 70).
+                        If N-gram similarity >= threshold, LCS is skipped.
 
     Returns:
         Similarity score (0-100)
@@ -141,10 +143,10 @@ def calculate_similarity(token_seq_1: str, token_seq_2: str) -> int:
     # Phase 1: Calculate N-gram similarity
     ngram_sim = calculate_ngram_similarity(tokens_1, tokens_2)
 
-    # Phase 2: If N-gram >= 70, skip LCS (optimization)
-    if ngram_sim >= 70:
+    # Phase 2: If N-gram >= threshold, skip LCS (optimization)
+    if ngram_sim >= ngram_threshold:
         return ngram_sim
 
-    # N-gram < 70, calculate LCS similarity
+    # N-gram < threshold, calculate LCS similarity
     lcs_sim = calculate_lcs_similarity(tokens_1, tokens_2)
     return lcs_sim

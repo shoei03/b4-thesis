@@ -201,3 +201,54 @@ class TestCalculateSimilarity:
         similarity = calculate_similarity(seq1, seq2)
         assert 0 <= similarity <= 100
         assert isinstance(similarity, int)
+
+    def test_custom_threshold_high(self):
+        """Test with custom high threshold (e.g., 90)."""
+        # With high threshold (90), even good N-gram similarity should trigger LCS
+        seq1 = "[1;2;3;4;5;6;7;8;9;10]"
+        seq2 = "[1;2;3;4;5;6;7;8;9;99]"
+
+        # Default threshold (70) - should return N-gram
+        similarity_default = calculate_similarity(seq1, seq2)
+
+        # High threshold (90) - should trigger LCS if N-gram < 90
+        similarity_high = calculate_similarity(seq1, seq2, ngram_threshold=90)
+
+        # Both should return valid similarity
+        assert 0 <= similarity_default <= 100
+        assert 0 <= similarity_high <= 100
+
+    def test_custom_threshold_low(self):
+        """Test with custom low threshold (e.g., 50)."""
+        # With low threshold (50), more cases will skip LCS
+        seq1 = "[1;2;3;4;5]"
+        seq2 = "[1;2;3;99;99]"
+
+        # Default threshold (70)
+        similarity_default = calculate_similarity(seq1, seq2)
+
+        # Low threshold (50) - may skip LCS if N-gram >= 50
+        similarity_low = calculate_similarity(seq1, seq2, ngram_threshold=50)
+
+        # Both should return valid similarity
+        assert 0 <= similarity_default <= 100
+        assert 0 <= similarity_low <= 100
+
+    def test_threshold_zero(self):
+        """Test with threshold 0 (always use N-gram, never LCS)."""
+        seq1 = "[1;2;3;4;5]"
+        seq2 = "[10;20;30;40;50]"
+
+        # With threshold 0, should always use N-gram (even if 0%)
+        similarity = calculate_similarity(seq1, seq2, ngram_threshold=0)
+        assert similarity == 0  # N-gram similarity is 0
+
+    def test_threshold_100(self):
+        """Test with threshold 100 (always use LCS unless N-gram is 100)."""
+        seq1 = "[1;2;3;4;5]"
+        seq2 = "[1;2;3;4;99]"
+
+        # With threshold 100, should use LCS unless perfect match
+        similarity = calculate_similarity(seq1, seq2, ngram_threshold=100)
+        # Should calculate LCS since N-gram < 100
+        assert 0 <= similarity <= 100
