@@ -122,11 +122,36 @@ class RevisionManager:
             FileNotFoundError: If CSV files don't exist.
             pd.errors.EmptyDataError: If CSV files are malformed.
         """
-        # Load code_blocks.csv
-        code_blocks = pd.read_csv(revision.code_blocks_path)
+        # Load code_blocks.csv (no header, specify column names)
+        code_blocks = pd.read_csv(
+            revision.code_blocks_path,
+            header=None,
+            names=[
+                "block_id",
+                "file_path",
+                "start_line",
+                "end_line",
+                "function_name",
+                "return_type",
+                "parameters",
+                "token_hash",
+                "token_sequence",
+            ],
+        )
 
-        # Load clone_pairs.csv
-        clone_pairs = pd.read_csv(revision.clone_pairs_path)
+        # Load clone_pairs.csv (no header, specify column names)
+        # Handle empty file case (when no clones exist)
+        try:
+            clone_pairs = pd.read_csv(
+                revision.clone_pairs_path,
+                header=None,
+                names=["block_id_1", "block_id_2", "ngram_similarity", "lcs_similarity"],
+            )
+        except pd.errors.EmptyDataError:
+            # Create empty DataFrame with correct columns if file is empty
+            clone_pairs = pd.DataFrame(
+                columns=["block_id_1", "block_id_2", "ngram_similarity", "lcs_similarity"]
+            )
 
         return code_blocks, clone_pairs
 
