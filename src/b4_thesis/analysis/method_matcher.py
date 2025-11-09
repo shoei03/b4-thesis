@@ -4,14 +4,116 @@ This module provides functionality to match methods (code blocks) across
 different revisions using a 2-phase approach:
 1. Fast token_hash-based exact matching
 2. Similarity-based fuzzy matching for remaining blocks
+
+Performance optimizations (Phase 5.3.1):
+- Length-based pre-filter (skip if length diff > 30%)
+- Jaccard-based pre-filter (skip if Jaccard < 0.3)
+- LRU cache for similarity calculations
+- Smart parallel mode selection
 """
 
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 
 import pandas as pd
 
-from b4_thesis.analysis.similarity import calculate_similarity
+from b4_thesis.analysis.similarity import calculate_similarity, parse_token_sequence
+
+
+def _should_skip_by_length(token_seq_1: str, token_seq_2: str, max_diff_ratio: float = 0.3) -> bool:
+    """Check if two sequences should be skipped based on length difference.
+
+    Args:
+        token_seq_1: First token sequence string
+        token_seq_2: Second token sequence string
+        max_diff_ratio: Maximum allowed length difference ratio (default: 0.3 = 30%)
+
+    Returns:
+        True if length difference is too large and should skip, False otherwise.
+    """
+    try:
+        tokens_1 = parse_token_sequence(token_seq_1)
+        tokens_2 = parse_token_sequence(token_seq_2)
+    except ValueError:
+        # Invalid sequences should be skipped
+        return True
+
+    len_1, len_2 = len(tokens_1), len(tokens_2)
+    if len_1 == 0 or len_2 == 0:
+        return True
+
+    # Calculate length difference ratio
+    max_len = max(len_1, len_2)
+    min_len = min(len_1, len_2)
+    diff_ratio = (max_len - min_len) / max_len
+
+    return diff_ratio > max_diff_ratio
+
+
+def _calculate_jaccard(token_seq_1: str, token_seq_2: str) -> float:
+    """Calculate Jaccard similarity between two token sequences.
+
+    Args:
+        token_seq_1: First token sequence string
+        token_seq_2: Second token sequence string
+
+    Returns:
+        Jaccard similarity (0.0-1.0)
+    """
+    try:
+        tokens_1 = parse_token_sequence(token_seq_1)
+        tokens_2 = parse_token_sequence(token_seq_2)
+    except ValueError:
+        return 0.0
+
+    set_1 = set(tokens_1)
+    set_2 = set(tokens_2)
+
+    if not set_1 or not set_2:
+        return 0.0
+
+    intersection = len(set_1 & set_2)
+    union = len(set_1 | set_2)
+
+    if union == 0:
+        return 0.0
+
+    return intersection / union
+
+
+def _should_skip_by_jaccard(token_seq_1: str, token_seq_2: str, min_jaccard: float = 0.3) -> bool:
+    """Check if two sequences should be skipped based on Jaccard similarity.
+
+    Args:
+        token_seq_1: First token sequence string
+        token_seq_2: Second token sequence string
+        min_jaccard: Minimum required Jaccard similarity (default: 0.3)
+
+    Returns:
+        True if Jaccard similarity is too low and should skip, False otherwise.
+    """
+    jaccard = _calculate_jaccard(token_seq_1, token_seq_2)
+    return jaccard < min_jaccard
+
+
+@lru_cache(maxsize=10000)
+def _cached_similarity(token_seq_1: str, token_seq_2: str) -> int:
+    """Calculate similarity with LRU caching.
+
+    Args:
+        token_seq_1: First token sequence string
+        token_seq_2: Second token sequence string
+
+    Returns:
+        Similarity score (0-100)
+
+    Raises:
+        ValueError: If token sequences are invalid.
+    """
+    # Sort sequences to ensure cache hits for bidirectional matching
+    seq_a, seq_b = sorted([token_seq_1, token_seq_2])
+    return calculate_similarity(seq_a, seq_b)
 
 
 def _compute_similarity_for_pair(
@@ -29,8 +131,16 @@ def _compute_similarity_for_pair(
     """
     block_id_source, token_seq_source, block_id_target, token_seq_target, threshold = args
 
+    # Phase 5.3.1 optimization: Pre-filters
+    if _should_skip_by_length(token_seq_source, token_seq_target):
+        return None
+
+    if _should_skip_by_jaccard(token_seq_source, token_seq_target):
+        return None
+
     try:
-        similarity = calculate_similarity(token_seq_source, token_seq_target)
+        # Use cached similarity calculation
+        similarity = _cached_similarity(token_seq_source, token_seq_target)
     except ValueError:
         # Skip if token sequences are invalid
         return None
@@ -80,6 +190,8 @@ class MethodMatcher:
         target_blocks: pd.DataFrame,
         parallel: bool = False,
         max_workers: int | None = None,
+        auto_parallel: bool = True,
+        parallel_threshold: int = 100000,
     ) -> MatchResult:
         """Match code blocks from source revision to target revision.
 
@@ -89,6 +201,10 @@ class MethodMatcher:
             parallel: If True, use parallel processing for similarity calculation (default: False)
             max_workers: Maximum number of worker processes for parallel processing.
                         If None, defaults to number of CPU cores.
+            auto_parallel: If True, automatically select parallel mode based on data size
+                          (default: True). This overrides the 'parallel' parameter.
+            parallel_threshold: Number of unmatched pairs above which parallel processing
+                               is automatically enabled (default: 100000).
 
         Returns:
             MatchResult containing forward matches, backward matches, types, and similarities.
@@ -116,7 +232,13 @@ class MethodMatcher:
         matched_target_ids = set(forward_matches.values())
         unmatched_target = target_blocks[~target_blocks["block_id"].isin(matched_target_ids)]
 
-        if parallel:
+        # Phase 5.3.1: Smart parallel mode selection
+        use_parallel = parallel
+        if auto_parallel:
+            num_pairs = len(unmatched_source) * len(unmatched_target)
+            use_parallel = num_pairs > parallel_threshold
+
+        if use_parallel:
             # Parallel processing version
             self._match_similarity_parallel(
                 unmatched_source,
@@ -127,7 +249,7 @@ class MethodMatcher:
                 max_workers,
             )
         else:
-            # Sequential processing version (original implementation)
+            # Sequential processing version
             self._match_similarity_sequential(
                 unmatched_source,
                 unmatched_target,
@@ -174,7 +296,12 @@ class MethodMatcher:
         match_types: dict[str, str],
         match_similarities: dict[str, int],
     ) -> None:
-        """Sequential similarity-based matching (original implementation).
+        """Sequential similarity-based matching with Phase 5.3.1 optimizations.
+
+        Optimizations:
+        - Length-based pre-filter (skip if length diff > 30%)
+        - Jaccard-based pre-filter (skip if Jaccard < 0.3)
+        - LRU cache for similarity calculations
 
         Args:
             unmatched_source: Unmatched source blocks
@@ -193,9 +320,16 @@ class MethodMatcher:
                 block_id_target = target_row["block_id"]
                 token_seq_target = target_row["token_sequence"]
 
-                # Calculate similarity dynamically
+                # Phase 5.3.1 optimization: Pre-filters
+                if _should_skip_by_length(token_seq_source, token_seq_target):
+                    continue
+
+                if _should_skip_by_jaccard(token_seq_source, token_seq_target):
+                    continue
+
+                # Calculate similarity with caching
                 try:
-                    similarity = calculate_similarity(token_seq_source, token_seq_target)
+                    similarity = _cached_similarity(token_seq_source, token_seq_target)
                 except ValueError:
                     # Skip if token sequences are invalid
                     continue
