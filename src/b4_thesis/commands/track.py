@@ -57,6 +57,17 @@ def track():
     help="Display summary statistics",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
+@click.option(
+    "--parallel",
+    "-p",
+    is_flag=True,
+    help="Enable parallel processing for similarity calculation",
+)
+@click.option(
+    "--max-workers",
+    type=click.IntRange(1),
+    help="Maximum number of worker processes (default: number of CPU cores)",
+)
 def methods(
     data_dir: str,
     output: str,
@@ -65,6 +76,8 @@ def methods(
     similarity: int,
     summary: bool,
     verbose: bool,
+    parallel: bool,
+    max_workers: int | None,
 ):
     """Track method evolution across revisions.
 
@@ -87,14 +100,27 @@ def methods(
             console.print(f"[dim]Start date: {start_date.strftime('%Y-%m-%d')}[/dim]")
         if end_date:
             console.print(f"[dim]End date: {end_date.strftime('%Y-%m-%d')}[/dim]")
+        if parallel:
+            workers = max_workers if max_workers else "auto (CPU cores)"
+            console.print(f"[dim]Parallel processing: enabled (workers: {workers})[/dim]")
 
     try:
         # Initialize tracker
         tracker = MethodTracker(data_path, similarity_threshold=similarity)
 
         # Track methods
-        with console.status("[bold green]Analyzing methods..."):
-            df = tracker.track(start_date=start_date, end_date=end_date)
+        status_msg = (
+            "[bold green]Analyzing methods (parallel)..."
+            if parallel
+            else "[bold green]Analyzing methods..."
+        )
+        with console.status(status_msg):
+            df = tracker.track(
+                start_date=start_date,
+                end_date=end_date,
+                parallel=parallel,
+                max_workers=max_workers,
+            )
 
         # Check if any data was found
         if len(df) == 0:

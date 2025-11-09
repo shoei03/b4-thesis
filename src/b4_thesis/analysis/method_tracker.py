@@ -54,7 +54,11 @@ class MethodTracker:
         self.state_classifier = StateClassifier()
 
     def track(
-        self, start_date: datetime | None = None, end_date: datetime | None = None
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        parallel: bool = False,
+        max_workers: int | None = None,
     ) -> pd.DataFrame:
         """
         Track methods across revisions.
@@ -62,6 +66,8 @@ class MethodTracker:
         Args:
             start_date: Start date for filtering revisions
             end_date: End date for filtering revisions
+            parallel: If True, use parallel processing for similarity calculation
+            max_workers: Maximum number of worker processes (if parallel=True)
 
         Returns:
             DataFrame with method tracking results
@@ -141,7 +147,13 @@ class MethodTracker:
             revision_old = revisions[i]
             revision_new = revisions[i + 1]
 
-            pair_results = self._process_revision_pair(revision_old, revision_new, lifetime_tracker)
+            pair_results = self._process_revision_pair(
+                revision_old,
+                revision_new,
+                lifetime_tracker,
+                parallel=parallel,
+                max_workers=max_workers,
+            )
             all_results.extend(pair_results)
 
         # Convert to DataFrame
@@ -164,6 +176,8 @@ class MethodTracker:
         revision_old: RevisionInfo,
         revision_new: RevisionInfo,
         lifetime_tracker: dict[str, dict],
+        parallel: bool = False,
+        max_workers: int | None = None,
     ) -> list[MethodTrackingResult]:
         """
         Process a pair of consecutive revisions.
@@ -172,6 +186,8 @@ class MethodTracker:
             revision_old: Previous revision
             revision_new: Current revision
             lifetime_tracker: Dictionary tracking method lifetimes
+            parallel: If True, use parallel processing for similarity calculation
+            max_workers: Maximum number of worker processes (if parallel=True)
 
         Returns:
             List of tracking results for the new revision
@@ -185,7 +201,9 @@ class MethodTracker:
         groups_new = self.group_detector.detect_groups(code_blocks_new, clone_pairs_new)
 
         # Match methods between revisions
-        match_result = self.method_matcher.match_blocks(code_blocks_old, code_blocks_new)
+        match_result = self.method_matcher.match_blocks(
+            code_blocks_old, code_blocks_new, parallel=parallel, max_workers=max_workers
+        )
 
         # Use backward_matches for reverse mapping (new -> old)
         reverse_matches = match_result.backward_matches
