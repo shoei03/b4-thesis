@@ -198,6 +198,7 @@ class MethodMatcher:
         lsh_num_perm: int = 128,
         top_k: int = 20,
         use_optimized_similarity: bool = False,
+        progressive_thresholds: list[int] | None = None,
     ) -> None:
         """Initialize MethodMatcher.
 
@@ -208,6 +209,9 @@ class MethodMatcher:
             lsh_num_perm: Number of LSH permutations (default: 128).
             top_k: Number of top candidates to consider per source block (default: 20).
             use_optimized_similarity: Use optimized similarity with banded LCS (default: False).
+            progressive_thresholds: List of thresholds to try progressively
+                                   (e.g., [90, 80, 70]). If None, uses single threshold.
+                                   Higher thresholds are tried first.
         """
         self.similarity_threshold = similarity_threshold
         self.use_lsh = use_lsh
@@ -215,6 +219,7 @@ class MethodMatcher:
         self.lsh_num_perm = lsh_num_perm
         self.top_k = top_k
         self.use_optimized_similarity = use_optimized_similarity
+        self.progressive_thresholds = progressive_thresholds
 
     def match_blocks(
         self,
@@ -260,45 +265,65 @@ class MethodMatcher:
                 match_similarities[block_id_source] = 100
 
         # Phase 2: similarity-based matching for unmatched blocks
-        unmatched_source = source_blocks[~source_blocks["block_id"].isin(forward_matches.keys())]
-        matched_target_ids = set(forward_matches.values())
-        unmatched_target = target_blocks[~target_blocks["block_id"].isin(matched_target_ids)]
-
-        # Phase 5.3.1: Smart parallel mode selection
-        use_parallel = parallel
-        if auto_parallel:
-            num_pairs = len(unmatched_source) * len(unmatched_target)
-            use_parallel = num_pairs > parallel_threshold
-
-        # Phase 5.3.2: LSH-based matching
-        if self.use_lsh:
-            # Use LSH index for candidate filtering
-            self._match_similarity_lsh(
-                unmatched_source,
-                unmatched_target,
+        # Phase 5.3.3: Progressive thresholds
+        if self.progressive_thresholds:
+            # Use progressive thresholds (high to low)
+            thresholds = sorted(self.progressive_thresholds, reverse=True)
+            self._match_with_progressive_thresholds(
+                source_blocks,
+                target_blocks,
                 forward_matches,
                 match_types,
                 match_similarities,
-            )
-        elif use_parallel:
-            # Parallel processing version
-            self._match_similarity_parallel(
-                unmatched_source,
-                unmatched_target,
-                forward_matches,
-                match_types,
-                match_similarities,
+                thresholds,
+                parallel,
                 max_workers,
+                auto_parallel,
+                parallel_threshold,
             )
         else:
-            # Sequential processing version
-            self._match_similarity_sequential(
-                unmatched_source,
-                unmatched_target,
-                forward_matches,
-                match_types,
-                match_similarities,
-            )
+            # Single threshold matching
+            unmatched_source = source_blocks[
+                ~source_blocks["block_id"].isin(forward_matches.keys())
+            ]
+            matched_target_ids = set(forward_matches.values())
+            unmatched_target = target_blocks[~target_blocks["block_id"].isin(matched_target_ids)]
+
+            # Phase 5.3.1: Smart parallel mode selection
+            use_parallel = parallel
+            if auto_parallel:
+                num_pairs = len(unmatched_source) * len(unmatched_target)
+                use_parallel = num_pairs > parallel_threshold
+
+            # Phase 5.3.2: LSH-based matching
+            if self.use_lsh:
+                # Use LSH index for candidate filtering
+                self._match_similarity_lsh(
+                    unmatched_source,
+                    unmatched_target,
+                    forward_matches,
+                    match_types,
+                    match_similarities,
+                )
+            elif use_parallel:
+                # Parallel processing version
+                self._match_similarity_parallel(
+                    unmatched_source,
+                    unmatched_target,
+                    forward_matches,
+                    match_types,
+                    match_similarities,
+                    max_workers,
+                )
+            else:
+                # Sequential processing version
+                self._match_similarity_sequential(
+                    unmatched_source,
+                    unmatched_target,
+                    forward_matches,
+                    match_types,
+                    match_similarities,
+                )
 
         # Create backward matches (reverse mapping)
         backward_matches = {v: k for k, v in forward_matches.items()}
@@ -562,3 +587,94 @@ class MethodMatcher:
                     match_types[block_id_source] = "similarity"
                     match_similarities[block_id_source] = best_similarity
                     matched_targets.add(best_match_id)
+
+    def _match_with_progressive_thresholds(
+        self,
+        source_blocks: pd.DataFrame,
+        target_blocks: pd.DataFrame,
+        forward_matches: dict[str, str],
+        match_types: dict[str, str],
+        match_similarities: dict[str, int],
+        thresholds: list[int],
+        parallel: bool,
+        max_workers: int | None,
+        auto_parallel: bool,
+        parallel_threshold: int,
+    ) -> None:
+        """Match blocks using progressive thresholds (Phase 5.3.3).
+
+        This method tries multiple thresholds progressively from high to low.
+        Higher thresholds are tried first to prioritize high-quality matches,
+        then lower thresholds are used for remaining unmatched blocks.
+
+        Args:
+            source_blocks: Source blocks DataFrame
+            target_blocks: Target blocks DataFrame
+            forward_matches: Dict to update with matches
+            match_types: Dict to update with match types
+            match_similarities: Dict to update with similarities
+            thresholds: List of thresholds in descending order (e.g., [90, 80, 70])
+            parallel: If True, use parallel processing
+            max_workers: Maximum number of worker processes
+            auto_parallel: If True, automatically select parallel mode
+            parallel_threshold: Threshold for auto-parallel selection
+        """
+        for i, threshold in enumerate(thresholds):
+            # Get unmatched blocks
+            unmatched_source = source_blocks[
+                ~source_blocks["block_id"].isin(forward_matches.keys())
+            ]
+
+            if len(unmatched_source) == 0:
+                # All blocks matched, stop early
+                break
+
+            matched_target_ids = set(forward_matches.values())
+            unmatched_target = target_blocks[~target_blocks["block_id"].isin(matched_target_ids)]
+
+            if len(unmatched_target) == 0:
+                # No more target blocks to match
+                break
+
+            # Temporarily set the threshold for this iteration
+            original_threshold = self.similarity_threshold
+            self.similarity_threshold = threshold
+
+            # Phase 5.3.1: Smart parallel mode selection
+            use_parallel = parallel
+            if auto_parallel:
+                num_pairs = len(unmatched_source) * len(unmatched_target)
+                use_parallel = num_pairs > parallel_threshold
+
+            # Perform matching with current threshold
+            if self.use_lsh:
+                # Use LSH index for candidate filtering
+                self._match_similarity_lsh(
+                    unmatched_source,
+                    unmatched_target,
+                    forward_matches,
+                    match_types,
+                    match_similarities,
+                )
+            elif use_parallel:
+                # Parallel processing version
+                self._match_similarity_parallel(
+                    unmatched_source,
+                    unmatched_target,
+                    forward_matches,
+                    match_types,
+                    match_similarities,
+                    max_workers,
+                )
+            else:
+                # Sequential processing version
+                self._match_similarity_sequential(
+                    unmatched_source,
+                    unmatched_target,
+                    forward_matches,
+                    match_types,
+                    match_similarities,
+                )
+
+            # Restore original threshold
+            self.similarity_threshold = original_threshold
