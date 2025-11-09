@@ -84,15 +84,21 @@ class GroupDetector:
         """
         # Initialize UnionFind with all block IDs
         uf = UnionFind()
-        block_ids = code_blocks[0].tolist()
+        # Support both integer and string column names
+        block_id_col = "block_id" if "block_id" in code_blocks.columns else 0
+        block_ids = code_blocks[block_id_col].tolist()
 
         # Track similarities between pairs
         pair_similarities: dict[tuple[str, str], int] = {}
 
+        # Support both integer and string column names for clone_pairs
+        id1_col = "block_id_1" if "block_id_1" in clone_pairs.columns else 0
+        id2_col = "block_id_2" if "block_id_2" in clone_pairs.columns else 1
+
         # Process clone pairs
         for _, row in clone_pairs.iterrows():
-            block_id_1 = row[0]
-            block_id_2 = row[1]
+            block_id_1 = row[id1_col]
+            block_id_2 = row[id2_col]
 
             # Get effective similarity
             similarity = self._get_effective_similarity(row)
@@ -145,14 +151,18 @@ class GroupDetector:
         Returns:
             Effective similarity (ngram if >= threshold, otherwise LCS)
         """
-        ngram_similarity = pair_row[2]
+        # Support both integer and string column names
+        ngram_col = "ngram_similarity" if "ngram_similarity" in pair_row.index else 2
+        lcs_col = "lcs_similarity" if "lcs_similarity" in pair_row.index else 3
+
+        ngram_similarity = pair_row[ngram_col]
 
         # If N-gram >= threshold, use N-gram
         if ngram_similarity >= self.similarity_threshold:
             return int(ngram_similarity)
 
         # Otherwise, use LCS similarity
-        lcs_similarity = pair_row[3]
+        lcs_similarity = pair_row[lcs_col]
 
         # Handle empty LCS values
         if pd.isna(lcs_similarity) or lcs_similarity == "":
