@@ -30,9 +30,11 @@ b4-thesis/
 │       ├── state_classifier.py  # 状態分類（Phase 2 ✓）
 │       ├── method_tracker.py    # メソッド追跡（Phase 3 ✓）
 │       └── clone_group_tracker.py  # グループ追跡（Phase 3 ✓）
-├── tests/                  # テストコード（pytest使用、162 tests passing）
+├── tests/                  # テストコード（pytest使用、271 tests passing）
 │   ├── analysis/           # 分析モジュールのテスト
 │   ├── core/               # コアモジュールのテスト
+│   ├── commands/           # コマンドのテスト
+│   ├── integration/        # 統合テスト
 │   └── fixtures/           # テストフィクスチャ
 ├── docs/                   # 詳細設計ドキュメント
 ├── pyproject.toml          # プロジェクト設定・依存関係
