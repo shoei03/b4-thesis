@@ -78,14 +78,23 @@ b4-thesis visualize data.csv -o plot.png -t scatter --x-column x --y-column y
 b4-thesis track methods <DATA_DIR> [OPTIONS]
 
 Options:
-  -o, --output DIRECTORY      出力ディレクトリ（デフォルト: カレントディレクトリ）
-  --start-date YYYY-MM-DD     リビジョンフィルタリングの開始日
-  --end-date YYYY-MM-DD       リビジョンフィルタリングの終了日
-  --similarity INTEGER        メソッドマッチングの類似度閾値 (0-100, デフォルト: 70)
-  -p, --parallel              類似度計算の並列処理を有効化（実験的機能）
-  --max-workers INTEGER       並列処理のワーカープロセス数（デフォルト: CPU数）
-  -s, --summary               サマリー統計を表示
-  -v, --verbose               詳細な出力を表示
+  -o, --output DIRECTORY          出力ディレクトリ（デフォルト: カレントディレクトリ）
+  --start-date YYYY-MM-DD         リビジョンフィルタリングの開始日
+  --end-date YYYY-MM-DD           リビジョンフィルタリングの終了日
+  --similarity INTEGER            メソッドマッチングの類似度閾値 (0-100, デフォルト: 70)
+  -p, --parallel                  類似度計算の並列処理を有効化（実験的機能）
+  --max-workers INTEGER           並列処理のワーカープロセス数（デフォルト: CPU数）
+  -s, --summary                   サマリー統計を表示
+  -v, --verbose                   詳細な出力を表示
+
+  Phase 5.3最適化オプション（大規模データセット推奨）:
+  --optimize                      全Phase 5.3最適化を一括有効化（推奨）
+  --use-lsh                       LSHインデックスを有効化（~100倍高速化）
+  --lsh-threshold FLOAT           LSH類似度閾値 (0.0-1.0, デフォルト: 0.7)
+  --lsh-num-perm INTEGER          LSH置換数 (32-256, デフォルト: 128)
+  --top-k INTEGER                 候補数 (デフォルト: 20)
+  --use-optimized-similarity      バンド付きLCSを使用（~2倍高速化）
+  --progressive-thresholds TEXT   プログレッシブ閾値（例: "90,80,70"）
 ```
 
 **DATA_DIR**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
@@ -104,9 +113,25 @@ b4-thesis track methods ./revision_data -o ./output --start-date 2024-01-01 --en
 # 類似度閾値を変更してサマリー表示
 b4-thesis track methods ./revision_data -o ./output --similarity 80 --summary
 
+# Phase 5.3最適化を有効化（大規模データセット推奨、20+リビジョンで50-100倍高速化）
+b4-thesis track methods ./revision_data -o ./output --optimize
+
+# カスタムプログレッシブ閾値を使用
+b4-thesis track methods ./revision_data -o ./output --progressive-thresholds "95,85,75,70"
+
+# LSHパラメータを調整
+b4-thesis track methods ./revision_data -o ./output --use-lsh --lsh-num-perm 256 --top-k 30
+
 # 並列処理を有効化（実験的機能 - 小規模データでは逆に遅くなる可能性あり）
 b4-thesis track methods ./revision_data -o ./output --parallel --max-workers 4
 ```
+
+**Phase 5.3最適化について**:
+- `--optimize`フラグは全Phase 5.3最適化を一括有効化（LSH + バンド付きLCS + プログレッシブ閾値[90,80,70]）
+- **予想高速化**: 小規模(<5リビジョン): 2-5倍、中規模(5-20リビジョン): 10-30倍、大規模(20+リビジョン): 50-100倍
+- **トレードオフ**: LSHは近似マッチング（recall 90-95%）、バンド付きLCSは近似LCS（精度ロスは最小）
+- **推奨**: 20+リビジョンの大規模データセットで使用。100%再現性が必要な場合は最適化なしで実行
+- 詳細: [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 
 **注意**: `--parallel`オプションは実験的機能です。小規模データセット（<10リビジョン）では、
 プロセス間通信のオーバーヘッドにより逆に遅くなる場合があります。大規模データセット（20+リビジョン）
@@ -122,13 +147,22 @@ b4-thesis track methods ./revision_data -o ./output --parallel --max-workers 4
 b4-thesis track groups <DATA_DIR> [OPTIONS]
 
 Options:
-  -o, --output DIRECTORY      出力ディレクトリ（デフォルト: カレントディレクトリ）
-  --start-date YYYY-MM-DD     リビジョンフィルタリングの開始日
-  --end-date YYYY-MM-DD       リビジョンフィルタリングの終了日
-  --similarity INTEGER        グループ検出の類似度閾値 (0-100, デフォルト: 70)
-  --overlap FLOAT             グループマッチングの重複閾値 (0.0-1.0, デフォルト: 0.5)
-  -s, --summary               サマリー統計を表示
-  -v, --verbose               詳細な出力を表示
+  -o, --output DIRECTORY          出力ディレクトリ（デフォルト: カレントディレクトリ）
+  --start-date YYYY-MM-DD         リビジョンフィルタリングの開始日
+  --end-date YYYY-MM-DD           リビジョンフィルタリングの終了日
+  --similarity INTEGER            グループ検出の類似度閾値 (0-100, デフォルト: 70)
+  --overlap FLOAT                 グループマッチングの重複閾値 (0.0-1.0, デフォルト: 0.5)
+  -s, --summary                   サマリー統計を表示
+  -v, --verbose                   詳細な出力を表示
+
+  Phase 5.3最適化オプション（大規模データセット推奨）:
+  --optimize                      全Phase 5.3最適化を一括有効化（推奨）
+  --use-lsh                       LSHインデックスを有効化（~100倍高速化）
+  --lsh-threshold FLOAT           LSH類似度閾値 (0.0-1.0, デフォルト: 0.7)
+  --lsh-num-perm INTEGER          LSH置換数 (32-256, デフォルト: 128)
+  --top-k INTEGER                 候補数 (デフォルト: 20)
+  --use-optimized-similarity      バンド付きLCSを使用（~2倍高速化）
+  --progressive-thresholds TEXT   プログレッシブ閾値（例: "90,80,70"）
 ```
 
 **DATA_DIR**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
@@ -144,7 +178,12 @@ b4-thesis track groups ./revision_data -o ./output
 
 # カスタム閾値で実行
 b4-thesis track groups ./revision_data -o ./output --similarity 75 --overlap 0.6 --verbose
+
+# Phase 5.3最適化を有効化（大規模データセット推奨）
+b4-thesis track groups ./revision_data -o ./output --optimize
 ```
+
+**Phase 5.3最適化について**: track methodsと同様の最適化オプションが利用可能です。詳細は上記「track methods」セクションを参照してください。
 
 #### track all
 
