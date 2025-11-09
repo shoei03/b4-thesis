@@ -473,14 +473,50 @@ CloneGroupTracker ← GroupDetector + GroupMatcher + MethodMatcher + StateClassi
 - メンバー変更追跡（グループへの追加・削除）
 - CSV出力対応（method_tracking.csv, group_tracking.csv, group_membership.csv）
 
-### 📅 Phase 4: CLIコマンド統合
+### 🔄 Phase 4: CLIコマンド統合（進行中 - 2025-11-09）
 
-- [ ] **track コマンド**: クローン進化追跡の実行
+**実装完了したコンポーネント**:
+- ✅ **track コマンド** (`commands/track.py`)
+  - `track methods`: メソッド進化追跡
+  - `track groups`: クローングループ進化追跡
+  - `track all`: メソッド・グループ両方の追跡
+  - 日付範囲フィルタリング、類似度閾値、重複閾値のカスタマイズ対応
+  - サマリー統計表示機能
+  - 19テストケース全てパス
+
+- ✅ **統合テスト** (`tests/integration/test_end_to_end.py`)
+  - エンドツーエンド統合テスト（10テストケース）
+  - 出力CSV検証（構造・内容・データ整合性）
+  - データ整合性チェック（メソッド追跡 ↔ グループメンバーシップ）
+  - 全テストパス
+
+- ✅ **ドキュメント更新**
+  - README.md: trackコマンド使用例、出力CSVフォーマット説明
+  - CLAUDE.md: Phase 4進捗状況の更新
+
+**テスト状況**: 191 tests passing（100% success rate）
+- Phase 1: 56 tests
+- Phase 2: 67 tests
+- Phase 3: 39 tests
+- Phase 4: 29 tests (19 CLI tests + 10 integration tests)
+
+**カバレッジ**: 82% (1006 statements, 186 missing)
+- コア分析モジュール: 90-100%
+- track CLI: 86%
+- その他CLI: 38-93%（未完成機能）
+
+**成果物**:
+- `track methods` → `method_tracking.csv`（17列）
+- `track groups` → `group_tracking.csv`（14列）, `group_membership.csv`（5列）
+- `track all` → 上記3ファイル
+
+**今後の拡張**:
 - [ ] 統計レポート生成機能
 - [ ] 可視化機能の拡張
 
-### 📅 Phase 5: 高度な機能
+### 📅 Phase 5: 高度な機能（計画中）
 
+- [ ] 実データでの検証テスト
 - [ ] 並列処理最適化
 - [ ] 大規模データセット対応
 - [ ] レポート自動生成（Markdown/PDF）
@@ -524,5 +560,5 @@ pytest tests/ -v
 
 ---
 
-**最終更新**: 2025-11-09 (Phase 3 完了)
+**最終更新**: 2025-11-09 (Phase 4 T4.1-T4.3 完了)
 **メンテナー**: Claude Code開発チーム
