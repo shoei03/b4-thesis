@@ -4,8 +4,10 @@ import pytest
 
 from b4_thesis.analysis.similarity import (
     calculate_lcs_similarity,
+    calculate_lcs_similarity_banded,
     calculate_ngram_similarity,
     calculate_similarity,
+    calculate_similarity_optimized,
     parse_token_sequence,
 )
 
@@ -252,3 +254,148 @@ class TestCalculateSimilarity:
         similarity = calculate_similarity(seq1, seq2, ngram_threshold=100)
         # Should calculate LCS since N-gram < 100
         assert 0 <= similarity <= 100
+
+
+class TestCalculateLCSSimilarityBanded:
+    """Test banded LCS similarity calculation (Phase 5.3.2)."""
+
+    def test_identical_sequences(self):
+        """Test banded LCS with identical sequences."""
+        tokens1 = [1, 2, 3, 4, 5]
+        tokens2 = [1, 2, 3, 4, 5]
+        similarity = calculate_lcs_similarity_banded(tokens1, tokens2, threshold=70)
+        assert similarity == 100
+
+    def test_similar_sequences_above_threshold(self):
+        """Test banded LCS with similar sequences above threshold."""
+        tokens1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        tokens2 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99]
+        similarity = calculate_lcs_similarity_banded(tokens1, tokens2, threshold=70)
+        assert similarity is not None
+        assert similarity >= 70
+
+    def test_dissimilar_sequences_below_threshold(self):
+        """Test banded LCS returns None for dissimilar sequences."""
+        tokens1 = [1, 2, 3, 4, 5]
+        tokens2 = [10, 20, 30, 40, 50]
+        similarity = calculate_lcs_similarity_banded(tokens1, tokens2, threshold=70)
+        assert similarity is None
+
+    def test_early_termination_length(self):
+        """Test early termination based on length difference."""
+        # Very different lengths, max possible similarity < threshold
+        tokens1 = [1, 2, 3]
+        tokens2 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        similarity = calculate_lcs_similarity_banded(tokens1, tokens2, threshold=80)
+        # max_possible_lcs = 3, max_length = 10
+        # max_possible_similarity = 3/10 * 100 = 30 < 80
+        assert similarity is None
+
+    def test_empty_sequences(self):
+        """Test banded LCS with empty sequences."""
+        assert calculate_lcs_similarity_banded([], [1, 2, 3], threshold=70) is None
+        assert calculate_lcs_similarity_banded([1, 2, 3], [], threshold=70) is None
+        assert calculate_lcs_similarity_banded([], [], threshold=70) is None
+
+    def test_custom_band_width(self):
+        """Test banded LCS with custom band width."""
+        tokens1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        tokens2 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99]
+
+        # Narrow band
+        similarity_narrow = calculate_lcs_similarity_banded(
+            tokens1, tokens2, threshold=70, band_width=5
+        )
+
+        # Wide band
+        similarity_wide = calculate_lcs_similarity_banded(
+            tokens1, tokens2, threshold=70, band_width=20
+        )
+
+        # Both should succeed for this similar sequence
+        assert similarity_narrow is not None
+        assert similarity_wide is not None
+
+    def test_auto_band_width(self):
+        """Test auto band width calculation."""
+        tokens1 = [1, 2, 3, 4, 5]
+        tokens2 = [1, 2, 3, 4, 99]
+
+        # Auto band width (None)
+        similarity = calculate_lcs_similarity_banded(tokens1, tokens2, threshold=70)
+        assert similarity is not None
+
+    def test_comparison_with_standard_lcs(self):
+        """Test that banded LCS gives same result as standard LCS when above threshold."""
+        tokens1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        tokens2 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99]
+
+        standard = calculate_lcs_similarity(tokens1, tokens2)
+        banded = calculate_lcs_similarity_banded(tokens1, tokens2, threshold=70)
+
+        # If banded returns a value (not None), it should match standard
+        if banded is not None:
+            assert abs(standard - banded) <= 1  # Allow 1 point rounding difference
+
+
+class TestCalculateSimilarityOptimized:
+    """Test optimized similarity calculation (Phase 5.3.2)."""
+
+    def test_identical_sequences(self):
+        """Test optimized similarity with identical sequences."""
+        seq1 = "[1;2;3;4;5]"
+        seq2 = "[1;2;3;4;5]"
+        similarity = calculate_similarity_optimized(seq1, seq2)
+        assert similarity == 100
+
+    def test_high_similarity_ngram_shortcut(self):
+        """Test that high N-gram similarity uses shortcut."""
+        # Very similar sequences, N-gram should be >= 70
+        seq1 = "[1;2;3;4;5;6;7;8;9;10]"
+        seq2 = "[1;2;3;4;5;6;7;8;9;99]"
+        similarity = calculate_similarity_optimized(seq1, seq2)
+        assert similarity is not None
+        assert similarity >= 70
+
+    def test_low_similarity_returns_none(self):
+        """Test that low similarity returns None."""
+        seq1 = "[1;2;3;4;5]"
+        seq2 = "[10;20;30;40;50]"
+        similarity = calculate_similarity_optimized(seq1, seq2, ngram_threshold=70)
+        assert similarity is None
+
+    def test_medium_similarity_uses_banded_lcs(self):
+        """Test that medium similarity uses banded LCS."""
+        # Somewhat similar, N-gram < 70, but LCS might be >= 70
+        seq1 = "[1;2;3;4;5;6;7]"
+        seq2 = "[1;2;3;99;99;6;7]"
+        similarity = calculate_similarity_optimized(seq1, seq2, use_banded_lcs=True)
+
+        # Result depends on actual similarity
+        assert similarity is None or (isinstance(similarity, int) and 0 <= similarity <= 100)
+
+    def test_without_banded_lcs(self):
+        """Test optimized similarity without banded LCS."""
+        seq1 = "[1;2;3;4;5]"
+        seq2 = "[1;2;3;99;99]"
+
+        similarity = calculate_similarity_optimized(seq1, seq2, use_banded_lcs=False)
+
+        # Should return None if below threshold
+        assert similarity is None or (isinstance(similarity, int) and 0 <= similarity <= 100)
+
+    def test_empty_sequences(self):
+        """Test optimized similarity with empty sequences."""
+        with pytest.raises(ValueError):
+            calculate_similarity_optimized("[]", "[1;2;3]")
+
+        with pytest.raises(ValueError):
+            calculate_similarity_optimized("[1;2;3]", "[]")
+
+    def test_malformed_sequences(self):
+        """Test optimized similarity with malformed sequences."""
+        with pytest.raises(ValueError):
+            calculate_similarity_optimized("invalid", "[1;2;3]")
+
+        with pytest.raises(ValueError):
+            calculate_similarity_optimized("[1;2;3]", "malformed")

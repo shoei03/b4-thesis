@@ -116,6 +116,94 @@ def calculate_lcs_similarity(tokens_1: list[int], tokens_2: list[int]) -> int:
     return int(round(similarity))
 
 
+def calculate_lcs_similarity_banded(
+    tokens_1: list[int],
+    tokens_2: list[int],
+    threshold: int = 70,
+    band_width: int | None = None,
+) -> int | None:
+    """Calculate LCS similarity with early termination and banded DP.
+
+    This is an optimized version of LCS that:
+    1. Terminates early if theoretical maximum similarity < threshold
+    2. Uses banded dynamic programming to reduce computation
+    3. Monitors progress and exits early if similarity becomes impossible
+
+    Args:
+        tokens_1: First token sequence.
+        tokens_2: Second token sequence.
+        threshold: Minimum similarity threshold (0-100). Returns None if below.
+        band_width: Width of the diagonal band for DP. If None, auto-calculated
+                   based on length difference.
+
+    Returns:
+        Similarity score (0-100) if >= threshold, None otherwise.
+    """
+    if not tokens_1 or not tokens_2:
+        return None
+
+    len1, len2 = len(tokens_1), len(tokens_2)
+
+    # Early termination: Check theoretical maximum similarity
+    max_possible_lcs = min(len1, len2)
+    max_length = max(len1, len2)
+    max_possible_similarity = (max_possible_lcs / max_length) * 100
+
+    if max_possible_similarity < threshold:
+        return None
+
+    # Auto-calculate band width if not provided
+    if band_width is None:
+        # Band width should cover the length difference plus some margin
+        band_width = abs(len1 - len2) + max(10, int(0.1 * max(len1, len2)))
+
+    # Banded dynamic programming
+    dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
+    max_lcs_so_far = 0
+
+    for i in range(1, len1 + 1):
+        # Calculate band boundaries
+        j_start = max(1, i - band_width)
+        j_end = min(len2 + 1, i + band_width + 1)
+
+        max_in_row = 0
+
+        for j in range(j_start, j_end):
+            if tokens_1[i - 1] == tokens_2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                # Only look at cells within the band
+                prev_i = dp[i - 1][j] if j < j_end else 0
+                prev_j = dp[i][j - 1] if j > j_start else 0
+                dp[i][j] = max(prev_i, prev_j)
+
+            max_in_row = max(max_in_row, dp[i][j])
+
+        max_lcs_so_far = max(max_lcs_so_far, max_in_row)
+
+        # Early termination: Check if we can still reach threshold
+        # Optimistically assume we can match all remaining tokens
+        if i > band_width:
+            remaining_rows = len1 - i
+            optimistic_lcs = max_lcs_so_far + min(remaining_rows, len2)
+            optimistic_similarity = (optimistic_lcs / max_length) * 100
+
+            # Add margin (0.8) to avoid premature termination near threshold
+            if optimistic_similarity < threshold * 0.8:
+                return None
+
+    lcs_length = dp[len1][len2]
+
+    # Calculate final similarity
+    similarity = (lcs_length / max_length) * 100
+    similarity_int = int(round(similarity))
+
+    if similarity_int < threshold:
+        return None
+
+    return similarity_int
+
+
 def calculate_similarity(token_seq_1: str, token_seq_2: str, ngram_threshold: int = 70) -> int:
     """Calculate similarity between two token sequences.
 
@@ -149,4 +237,53 @@ def calculate_similarity(token_seq_1: str, token_seq_2: str, ngram_threshold: in
 
     # N-gram < threshold, calculate LCS similarity
     lcs_sim = calculate_lcs_similarity(tokens_1, tokens_2)
+    return lcs_sim
+
+
+def calculate_similarity_optimized(
+    token_seq_1: str,
+    token_seq_2: str,
+    ngram_threshold: int = 70,
+    use_banded_lcs: bool = True,
+) -> int | None:
+    """Calculate similarity with Phase 5.3.2 optimizations.
+
+    Enhanced 2-phase approach with early termination:
+    1. Calculate N-gram similarity
+    2. If N-gram >= ngram_threshold, return N-gram similarity
+    3. If N-gram < ngram_threshold, calculate LCS with early termination
+
+    Args:
+        token_seq_1: Token sequence string (e.g., "[123;456;789]")
+        token_seq_2: Token sequence string
+        ngram_threshold: Threshold for skipping LCS calculation (default: 70).
+        use_banded_lcs: If True, use banded LCS with early termination (default: True).
+
+    Returns:
+        Similarity score (0-100) if >= ngram_threshold, None otherwise.
+
+    Raises:
+        ValueError: If token sequences are invalid or empty.
+    """
+    # Parse token sequences
+    tokens_1 = parse_token_sequence(token_seq_1)
+    tokens_2 = parse_token_sequence(token_seq_2)
+
+    # Phase 1: Calculate N-gram similarity
+    ngram_sim = calculate_ngram_similarity(tokens_1, tokens_2)
+
+    # Phase 2: If N-gram >= threshold, skip LCS (optimization)
+    if ngram_sim >= ngram_threshold:
+        return ngram_sim
+
+    # N-gram < threshold, calculate LCS similarity with optimizations
+    if use_banded_lcs:
+        # Use banded LCS with early termination
+        lcs_sim = calculate_lcs_similarity_banded(tokens_1, tokens_2, ngram_threshold)
+    else:
+        # Use standard LCS
+        lcs_sim = calculate_lcs_similarity(tokens_1, tokens_2)
+        if lcs_sim < ngram_threshold:
+            return None
+
     return lcs_sim

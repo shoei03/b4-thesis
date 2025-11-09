@@ -22,6 +22,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "click" },
+    { name = "datasketch" },
     { name = "matplotlib" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -50,6 +51,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
+    { name = "datasketch", specifier = ">=1.7.0" },
     { name = "matplotlib", specifier = ">=3.7.0" },
     { name = "networkx", specifier = ">=3.0.0" },
     { name = "numpy", specifier = ">=2.2.6" },
@@ -369,6 +371,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a9/95/a3dbbb5028f35eafb79008e7522a75244477d2838f38cbb722248dabc2a8/cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c", size = 7615, upload-time = "2023-10-07T05:32:18.335Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30", size = 8321, upload-time = "2023-10-07T05:32:16.783Z" },
+]
+
+[[package]]
+name = "datasketch"
+version = "1.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.16.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/69/307f9e7838f563118f3256b2be0692e0a25ff54f279d036c289270bb6f6e/datasketch-1.7.0.tar.gz", hash = "sha256:6e9913e923655dd5b1bc5ba6eecc1ff597b876a31720a49ed01570ea3069d9e3", size = 97008, upload-time = "2025-11-05T05:47:51.654Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/8c/96b7f34fe9e37d2f567ba56ddcdcc6f16bfaa6f3a277031cc517842895e2/datasketch-1.7.0-py3-none-any.whl", hash = "sha256:0a91dacdb623396c398a8d20300943d609319c072491f625da9452c6803e5767", size = 93773, upload-time = "2025-11-05T05:47:50.282Z" },
 ]
 
 [[package]]
