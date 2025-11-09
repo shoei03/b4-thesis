@@ -82,6 +82,8 @@ Options:
   --start-date YYYY-MM-DD     リビジョンフィルタリングの開始日
   --end-date YYYY-MM-DD       リビジョンフィルタリングの終了日
   --similarity INTEGER        メソッドマッチングの類似度閾値 (0-100, デフォルト: 70)
+  -p, --parallel              類似度計算の並列処理を有効化（実験的機能）
+  --max-workers INTEGER       並列処理のワーカープロセス数（デフォルト: CPU数）
   -s, --summary               サマリー統計を表示
   -v, --verbose               詳細な出力を表示
 ```
@@ -101,6 +103,15 @@ b4-thesis track methods ./revision_data -o ./output --start-date 2024-01-01 --en
 
 # 類似度閾値を変更してサマリー表示
 b4-thesis track methods ./revision_data -o ./output --similarity 80 --summary
+
+# 並列処理を有効化（実験的機能 - 小規模データでは逆に遅くなる可能性あり）
+b4-thesis track methods ./revision_data -o ./output --parallel --max-workers 4
+```
+
+**注意**: `--parallel`オプションは実験的機能です。小規模データセット（<10リビジョン）では、
+プロセス間通信のオーバーヘッドにより逆に遅くなる場合があります。大規模データセット（20+リビジョン）
+での使用を推奨します。詳細は[docs/PERFORMANCE.md](docs/PERFORMANCE.md)を参照してください。
+
 ```
 
 #### track groups
