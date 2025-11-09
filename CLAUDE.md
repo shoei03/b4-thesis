@@ -21,14 +21,16 @@ b4-thesis/
 │   ├── core/               # コアユーティリティ
 │   │   ├── config.py       # Pydanticベースの設定管理
 │   │   └── revision_manager.py  # リビジョンデータ管理（Phase 1 ✓）
-│   └── analysis/           # 分析モジュール（Phase 1-2 ✓）
+│   └── analysis/           # 分析モジュール（Phase 1-3 ✓）
 │       ├── union_find.py        # Union-Findデータ構造（Phase 1 ✓）
 │       ├── similarity.py        # 類似度計算（N-gram/LCS）（Phase 1 ✓）
 │       ├── method_matcher.py    # メソッドマッチング（Phase 2 ✓）
 │       ├── group_detector.py    # グループ検出（Phase 2 ✓）
 │       ├── group_matcher.py     # グループマッチング（Phase 2 ✓）
-│       └── state_classifier.py  # 状態分類（Phase 2 ✓）
-├── tests/                  # テストコード（pytest使用、123 tests passing）
+│       ├── state_classifier.py  # 状態分類（Phase 2 ✓）
+│       ├── method_tracker.py    # メソッド追跡（Phase 3 ✓）
+│       └── clone_group_tracker.py  # グループ追跡（Phase 3 ✓）
+├── tests/                  # テストコード（pytest使用、162 tests passing）
 │   ├── analysis/           # 分析モジュールのテスト
 │   ├── core/               # コアモジュールのテスト
 │   └── fixtures/           # テストフィクスチャ
@@ -437,13 +439,39 @@ GroupDetector ← UnionFind ✓
 GroupMatcher ← MethodMatcher ✓
     ↓
 StateClassifier ← MethodMatcher + GroupMatcher ✓
+    ↓
+MethodTracker ← MethodMatcher + GroupDetector + StateClassifier ✓
+CloneGroupTracker ← GroupDetector + GroupMatcher + MethodMatcher + StateClassifier ✓
 ```
 
-### 📅 Phase 3: 追跡エンジン
+### ✅ Phase 3: 追跡エンジン（完了 - 2025-11-09）
 
-- [ ] **CloneEvolutionTracker**: クローン進化追跡
-- [ ] **LifetimeCalculator**: ライフタイム計算
-- [ ] **PatternDetector**: パターン検出（Stable→Changed等）
+**実装完了したコンポーネント**:
+- ✅ **MethodTracker** (`analysis/method_tracker.py`)
+  - メソッド単位の進化追跡（複数リビジョン対応）
+  - MethodTrackingResult データクラス（17フィールド）
+  - ライフタイム計算（リビジョン数・日数）
+  - 状態分類統合（StateClassifier使用）
+  - 20テストケース全てパス
+
+- ✅ **CloneGroupTracker** (`analysis/clone_group_tracker.py`)
+  - クローングループ単位の進化追跡
+  - GroupTrackingResult データクラス（14フィールド）
+  - GroupMembershipResult データクラス（5フィールド）
+  - メンバー変更計算（追加・削除カウント）
+  - 2つのDataFrame出力（グループ追跡 + メンバーシップ）
+  - 19テストケース全てパス
+
+**テスト状況**: 162 tests passing（100% success rate）
+- Phase 1: 56 tests
+- Phase 2: 67 tests
+- Phase 3: 39 tests
+
+**主要機能**:
+- 複数リビジョンにわたるメソッド・グループ追跡
+- ライフタイム計算（初出〜最終出現の日数・リビジョン数）
+- メンバー変更追跡（グループへの追加・削除）
+- CSV出力対応（method_tracking.csv, group_tracking.csv, group_membership.csv）
 
 ### 📅 Phase 4: CLIコマンド統合
 
@@ -496,5 +524,5 @@ pytest tests/ -v
 
 ---
 
-**最終更新**: 2025-11-08 (Phase 2 完了)
+**最終更新**: 2025-11-09 (Phase 3 完了)
 **メンテナー**: Claude Code開発チーム
