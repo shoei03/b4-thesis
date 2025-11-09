@@ -4,6 +4,8 @@ This module provides functions to calculate similarity between token sequences
 using N-gram and LCS (Longest Common Subsequence) approaches.
 """
 
+import numpy as np
+
 
 def parse_token_sequence(token_seq: str) -> list[int]:
     """Parse token sequence from string format to list of integers.
@@ -75,6 +77,62 @@ def calculate_ngram_similarity(tokens_1: list[int], tokens_2: list[int]) -> int:
         return 0
 
     similarity = (2.0 * intersection / total) * 100
+    return int(round(similarity))
+
+
+def calculate_ngram_similarity_vectorized(tokens_1: list[int], tokens_2: list[int]) -> int:
+    """Calculate N-gram similarity using NumPy vectorization.
+
+    This is a vectorized version of calculate_ngram_similarity that uses NumPy
+    for potentially faster computation on larger sequences.
+
+    Args:
+        tokens_1: First token sequence.
+        tokens_2: Second token sequence.
+
+    Returns:
+        Similarity score (0-100).
+    """
+    if not tokens_1 or not tokens_2:
+        return 0
+
+    # Handle single token case
+    if len(tokens_1) == 1 and len(tokens_2) == 1:
+        return 100 if tokens_1[0] == tokens_2[0] else 0
+
+    # Generate bi-grams using NumPy views
+    def get_bigrams_vectorized(tokens: list[int]) -> np.ndarray:
+        if len(tokens) < 2:
+            # For single token, create a special bi-gram with itself
+            if tokens:
+                return np.array([[tokens[0], tokens[0]]], dtype=np.int32)
+            return np.array([], dtype=np.int32).reshape(0, 2)
+
+        arr = np.array(tokens, dtype=np.int32)
+        # Create a view of bi-grams: [[t[0], t[1]], [t[1], t[2]], ...]
+        bigrams = np.column_stack([arr[:-1], arr[1:]])
+        return bigrams
+
+    bigrams_1 = get_bigrams_vectorized(tokens_1)
+    bigrams_2 = get_bigrams_vectorized(tokens_2)
+
+    if len(bigrams_1) == 0 or len(bigrams_2) == 0:
+        return 0
+
+    # Convert to structured arrays for efficient set operations
+    # This allows us to treat each bi-gram as a single comparable unit
+    dt = np.dtype([("a", np.int32), ("b", np.int32)])
+    bigrams_1_struct = np.array([tuple(b) for b in bigrams_1], dtype=dt)
+    bigrams_2_struct = np.array([tuple(b) for b in bigrams_2], dtype=dt)
+
+    # Calculate intersection using numpy
+    intersection_count = len(np.intersect1d(bigrams_1_struct, bigrams_2_struct))
+    total = len(bigrams_1_struct) + len(bigrams_2_struct)
+
+    if total == 0:
+        return 0
+
+    similarity = (2.0 * intersection_count / total) * 100
     return int(round(similarity))
 
 
