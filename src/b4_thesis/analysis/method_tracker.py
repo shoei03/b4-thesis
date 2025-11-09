@@ -38,18 +38,49 @@ class MethodTrackingResult:
 class MethodTracker:
     """Tracks method evolution across revisions."""
 
-    def __init__(self, data_dir: Path, similarity_threshold: int = 70) -> None:
+    def __init__(
+        self,
+        data_dir: Path,
+        similarity_threshold: int = 70,
+        use_lsh: bool = False,
+        lsh_threshold: float = 0.7,
+        lsh_num_perm: int = 128,
+        top_k: int = 20,
+        use_optimized_similarity: bool = False,
+        progressive_thresholds: list[int] | None = None,
+    ) -> None:
         """
         Initialize method tracker.
 
         Args:
             data_dir: Directory containing revision subdirectories
             similarity_threshold: Similarity threshold for matching (0-100)
+            use_lsh: Enable LSH indexing for candidate filtering (Phase 5.3.2)
+            lsh_threshold: LSH similarity threshold 0.0-1.0 (Phase 5.3.2)
+            lsh_num_perm: Number of LSH permutations (Phase 5.3.2)
+            top_k: Number of top candidates to consider per source block (Phase 5.3.2)
+            use_optimized_similarity: Use optimized similarity with banded LCS (Phase 5.3.2)
+            progressive_thresholds: List of thresholds to try progressively (Phase 5.3.3)
+                                   (e.g., [90, 80, 70]). If None, uses single threshold.
         """
         self.data_dir = data_dir
         self.similarity_threshold = similarity_threshold
+        self.use_lsh = use_lsh
+        self.lsh_threshold = lsh_threshold
+        self.lsh_num_perm = lsh_num_perm
+        self.top_k = top_k
+        self.use_optimized_similarity = use_optimized_similarity
+        self.progressive_thresholds = progressive_thresholds
         self.revision_manager = RevisionManager(data_dir)
-        self.method_matcher = MethodMatcher(similarity_threshold=similarity_threshold)
+        self.method_matcher = MethodMatcher(
+            similarity_threshold=similarity_threshold,
+            use_lsh=use_lsh,
+            lsh_threshold=lsh_threshold,
+            lsh_num_perm=lsh_num_perm,
+            top_k=top_k,
+            use_optimized_similarity=use_optimized_similarity,
+            progressive_thresholds=progressive_thresholds,
+        )
         self.group_detector = GroupDetector(similarity_threshold=similarity_threshold)
         self.state_classifier = StateClassifier()
 
