@@ -92,3 +92,8 @@ line-ending = "auto"
 [tool.ruff.lint.isort]
 known-first-party = ["b4_thesis"]
 force-sort-within-sections = true
+
+[tool.pytest.ini_options]
+markers = [
+    "ci: marks tests as CI-only (deselect with '-m \"not ci\"')",
+]
