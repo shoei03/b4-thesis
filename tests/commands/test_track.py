@@ -103,6 +103,56 @@ class TestTrackMethods:
 
         assert result.exit_code == 0
 
+    def test_track_methods_with_lineage_flag(self, runner, sample_data_dir, temp_output_dir):
+        """Test method tracking with --lineage flag generates both CSV files."""
+        result = runner.invoke(
+            track,
+            ["methods", str(sample_data_dir), "--output", str(temp_output_dir), "--lineage"],
+        )
+
+        assert result.exit_code == 0
+        assert "Method tracking complete" in result.output
+        assert "Lineage data" in result.output
+
+        # Check both output files exist
+        tracking_file = temp_output_dir / "method_tracking.csv"
+        lineage_file = temp_output_dir / "method_lineage.csv"
+        assert tracking_file.exists()
+        assert lineage_file.exists()
+
+        # Verify tracking CSV has block_id and matched_block_id
+        tracking_df = pd.read_csv(tracking_file)
+        assert "block_id" in tracking_df.columns
+        assert "matched_block_id" in tracking_df.columns
+        assert "global_block_id" not in tracking_df.columns
+
+        # Verify lineage CSV has global_block_id but not block_id/matched_block_id
+        lineage_df = pd.read_csv(lineage_file)
+        assert "global_block_id" in lineage_df.columns
+        assert "block_id" not in lineage_df.columns
+        assert "matched_block_id" not in lineage_df.columns
+
+        # Verify lineage CSV has 16 columns
+        assert len(lineage_df.columns) == 16
+
+        # Verify both have same number of rows
+        assert len(tracking_df) == len(lineage_df)
+
+    def test_track_methods_without_lineage_flag(self, runner, sample_data_dir, temp_output_dir):
+        """Test that lineage CSV is not generated without --lineage flag."""
+        result = runner.invoke(
+            track,
+            ["methods", str(sample_data_dir), "--output", str(temp_output_dir)],
+        )
+
+        assert result.exit_code == 0
+
+        # Check only tracking file exists
+        tracking_file = temp_output_dir / "method_tracking.csv"
+        lineage_file = temp_output_dir / "method_lineage.csv"
+        assert tracking_file.exists()
+        assert not lineage_file.exists()
+
 
 class TestTrackGroups:
     """Tests for 'track groups' command."""
