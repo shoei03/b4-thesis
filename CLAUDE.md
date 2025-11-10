@@ -146,6 +146,40 @@ uv run ruff check --fix src/ && uv run ruff format src/ && uv run pytest tests/
 - ❌ `pytest tests/` → エラー（command not found）
 - ✅ `uv run pytest tests/` → 正しい
 
+#### CI専用テスト
+
+一部のテスト（特にパフォーマンステスト）は実行時間が長いため、GitHub Actionsでのみ実行されます。
+
+**CI専用テストの仕組み**:
+- `@pytest.mark.ci` マーカーで識別
+- ローカル実行時は自動的にスキップ（CI環境変数がないため）
+- GitHub Actionsでは自動的に実行（`CI=true`環境変数が設定されているため）
+
+**テスト実行例**:
+```bash
+# 通常のテスト実行（CI専用テストはスキップされる）
+uv run pytest tests/
+
+# CI専用テストのみ実行（ローカルで強制実行する場合）
+uv run pytest -m ci tests/
+
+# CI専用テストを除外して実行
+uv run pytest -m "not ci" tests/
+
+# マーカー一覧を確認
+uv run pytest --markers
+```
+
+**CI専用テストの例**:
+- `test_track_all_performance`: 中規模データセット（3リビジョン）のパフォーマンステスト
+  - 実行時間: 約3分
+  - 場所: `tests/integration/test_real_data_validation.py`
+
+**注意**: 実データテスト（`data/clone_NIL/`）とCI専用テストは独立した機能です：
+- 実データが存在しない場合: すべての実データテストがスキップ
+- ローカル環境: CI専用テストがスキップ（実データが存在してもスキップ）
+- GitHub Actions: 実データが存在すればCI専用テストも実行
+
 ### 新しいコマンドの追加方法
 
 1. `src/b4_thesis/commands/` に新しいファイルを作成（例: `new_command.py`）
