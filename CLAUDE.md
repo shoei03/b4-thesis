@@ -710,12 +710,54 @@ b4-thesis track methods ./data -o ./output --use-lsh --lsh-num-perm 256 --top-k 
 - [ ] サマリーダッシュボード
 - [ ] カスタマイズ可能なテンプレート
 
-**現在のテスト状況**: 271 tests passing（100% success rate）
+**現在のテスト状況**: 282 tests passing（100% success rate）
 - Phase 1-4: 237 tests
 - Phase 5.1: 8 tests（実データ利用可能時のみ）
 - Phase 5.3: 既存テスト全て互換性維持（Phase 5.3.1-5.3.3の最適化を含む）
+- Phase 6: 11 tests（新規lineage機能）
 
 **パフォーマンス最適化の詳細**: [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
+
+### ✅ Phase 6: メソッドLineage追跡機能（完了 - 2025-11-10）
+
+**目的**: メソッドの進化系譜を簡単に追跡できる`method_lineage.csv`を生成
+
+**実装完了したコンポーネント**:
+- ✅ **MethodTracker拡張** (`analysis/method_tracker.py`)
+  - `_global_block_id_map`: リビジョン間でglobal_block_idをマッピング
+  - `to_tracking_format()`: 従来形式（block_id + matched_block_id）を返す
+  - `to_lineage_format()`: lineage形式（global_block_id、matched_block_id削除）を返す
+  - 追跡中にglobal_block_id を自動割り当て
+  - 9テストケース全てパス
+
+- ✅ **CLI統合** (`commands/track.py`)
+  - `--lineage` フラグ追加
+  - `method_lineage.csv` 自動生成機能
+  - 2テストケース全てパス
+
+**出力フォーマット**:
+
+| 形式 | 列数 | global_block_id | block_id | matched_block_id |
+|------|------|-----------------|----------|------------------|
+| method_tracking.csv | 17 | ❌ | ✅ | ✅ |
+| method_lineage.csv | 16 | ✅ | ❌ | ❌ |
+
+**使用例**:
+```bash
+# lineage形式を生成
+b4-thesis track methods ./data -o ./output --lineage
+
+# 出力: method_tracking.csv + method_lineage.csv
+```
+
+**メリット**:
+- **シンプルなクエリ**: 同じメソッドは同じ`global_block_id`
+- **追跡が簡単**: `matched_block_id`をたどる必要なし
+- **後方互換性**: デフォルトでは従来形式のみ生成
+
+**テスト状況**: 11 tests passing
+- TestMethodTrackerLineage: 9 tests（単体テスト）
+- TestTrackMethods: 2 tests（CLIテスト）
 
 ## 参考リンク
 
@@ -756,5 +798,5 @@ pytest tests/ -v
 
 ---
 
-**最終更新**: 2025-11-10 (Phase 5.3.3 完了 - NumPy最適化、プログレッシブ閾値、CLI統合完了)
+**最終更新**: 2025-11-10 (Phase 6 完了 - メソッドLineage追跡機能実装完了)
 **メンテナー**: Claude Code開発チーム

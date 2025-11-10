@@ -454,6 +454,45 @@ b4-thesis visualize groups ./output/group_tracking.csv -o ./plots -t members
 | `lifetime_revisions` | int | ライフタイム（リビジョン数） |
 | `lifetime_days` | int | ライフタイム（日数） |
 
+#### method_lineage.csv
+
+メソッドのlineage（系譜）を追跡するためのCSVファイル。`--lineage`フラグを指定すると生成されます。
+
+`method_tracking.csv`との違い：
+- `block_id` → `global_block_id`: リビジョン間で統一されたID
+- `matched_block_id`列を削除: lineageで自動的に紐付けられるため不要
+
+| 列名 | 型 | 説明 |
+|------|------|------|
+| `global_block_id` | str | リビジョン全体で統一されたブロックID |
+| `revision` | str | リビジョン識別子 |
+| `function_name` | str | 関数名 |
+| `file_path` | str | ファイルパス |
+| `start_line` | int | 開始行番号 |
+| `end_line` | int | 終了行番号 |
+| `loc` | int | コード行数 |
+| `state` | str | 状態 (deleted/survived/added) |
+| `state_detail` | str | 詳細状態 |
+| `match_type` | str | マッチタイプ (exact/fuzzy/none) |
+| `match_similarity` | int/null | マッチ類似度 (0-100) |
+| `clone_count` | int | このブロックのクローン数 |
+| `clone_group_id` | str/null | 所属クローングループID |
+| `clone_group_size` | int | クローングループのサイズ |
+| `lifetime_revisions` | int | ライフタイム（リビジョン数） |
+| `lifetime_days` | int | ライフタイム（日数） |
+
+**使用例**:
+```sql
+-- 特定メソッドの進化を追跡
+SELECT * FROM method_lineage WHERE global_block_id = 'block_a';
+
+-- 長寿命メソッドの分析
+SELECT global_block_id, function_name, lifetime_days
+FROM method_lineage
+GROUP BY global_block_id
+HAVING MAX(lifetime_days) > 365;
+```
+
 **状態の説明**:
 - `deleted`: 削除されたメソッド
   - `deleted_isolated`: 孤立メソッドとして削除
