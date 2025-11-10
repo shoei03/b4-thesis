@@ -107,6 +107,11 @@ def track():
     is_flag=True,
     help="Enable all Phase 5.3 optimizations with recommended defaults",
 )
+@click.option(
+    "--lineage",
+    is_flag=True,
+    help="Generate method_lineage.csv with unified global_block_id",
+)
 def methods(
     data_dir: str,
     output: str,
@@ -124,6 +129,7 @@ def methods(
     use_optimized_similarity: bool,
     progressive_thresholds: str | None,
     optimize: bool,
+    lineage: bool,
 ):
     """Track method evolution across revisions.
 
@@ -234,6 +240,13 @@ def methods(
 
         console.print("[green]✓[/green] Method tracking complete!")
         console.print(f"[green]Results saved to:[/green] {output_file}")
+
+        # Generate lineage format if requested
+        if lineage:
+            lineage_df = tracker.to_lineage_format()
+            lineage_file = output_path / "method_lineage.csv"
+            lineage_df.to_csv(lineage_file, index=False)
+            console.print(f"[green]✓[/green] Lineage data: {lineage_file}")
 
         # Display summary if requested
         if summary:
