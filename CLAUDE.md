@@ -1,189 +1,190 @@
-# CLAUDE.md - Claude Code 開発ガイド
+# CLAUDE.md - Claude Code Development Guide
 
-このドキュメントは、Claude Codeでこのプロジェクトを開発する際の重要な情報をまとめています。
+This document contains essential information for developing this project with Claude Code.
 
-## プロジェクト概要
+## Project Overview
 
-**プロジェクト名**: B4 Thesis - Software Engineering Research Analysis Tool
-**目的**: ソフトウェア工学研究のためのPython CLI分析ツール
-**Python バージョン**: 3.10以上
+**Project Name**: B4 Thesis - Software Engineering Research Analysis Tool
+**Purpose**: Python CLI analysis tool for software engineering research
+**Python Version**: 3.10+
 
-## プロジェクト構造
+## Project Structure
 
 ```
 b4-thesis/
-├── src/b4_thesis/          # メインパッケージ
-│   ├── cli.py              # CLIエントリーポイント（Clickベース）
-│   ├── commands/           # 各サブコマンドの実装
-│   │   ├── analyze.py      # データ/リポジトリ分析コマンド
-│   │   ├── stats.py        # 統計メトリクス計算コマンド
-│   │   └── visualize.py    # データ可視化コマンド
-│   ├── core/               # コアユーティリティ
-│   │   ├── config.py       # Pydanticベースの設定管理
-│   │   └── revision_manager.py  # リビジョンデータ管理（Phase 1 ✓）
-│   └── analysis/           # 分析モジュール（Phase 1-3 ✓）
-│       ├── union_find.py        # Union-Findデータ構造（Phase 1 ✓）
-│       ├── similarity.py        # 類似度計算（N-gram/LCS）（Phase 1 ✓）
-│       ├── method_matcher.py    # メソッドマッチング（Phase 2 ✓）
-│       ├── group_detector.py    # グループ検出（Phase 2 ✓）
-│       ├── group_matcher.py     # グループマッチング（Phase 2 ✓）
-│       ├── state_classifier.py  # 状態分類（Phase 2 ✓）
-│       ├── method_tracker.py    # メソッド追跡（Phase 3 ✓）
-│       └── clone_group_tracker.py  # グループ追跡（Phase 3 ✓）
-├── tests/                  # テストコード（pytest使用、271 tests passing）
-│   ├── analysis/           # 分析モジュールのテスト
-│   ├── core/               # コアモジュールのテスト
-│   ├── commands/           # コマンドのテスト
-│   ├── integration/        # 統合テスト
-│   └── fixtures/           # テストフィクスチャ
-├── docs/                   # 詳細設計ドキュメント
-├── pyproject.toml          # プロジェクト設定・依存関係
-├── README.md               # ユーザー向けドキュメント
-└── CLAUDE.md               # このファイル（開発者向け）
+├── src/b4_thesis/          # Main package
+│   ├── cli.py              # CLI entry point (Click-based)
+│   ├── commands/           # Subcommand implementations
+│   │   ├── analyze.py      # Data/repository analysis command
+│   │   ├── stats.py        # Statistical metrics command
+│   │   └── visualize.py    # Data visualization command
+│   ├── core/               # Core utilities
+│   │   ├── config.py       # Pydantic-based config management
+│   │   └── revision_manager.py  # Revision data management (Phase 1 ✓)
+│   └── analysis/           # Analysis modules (Phase 1-3 ✓)
+│       ├── union_find.py        # Union-Find data structure (Phase 1 ✓)
+│       ├── similarity.py        # Similarity calculation (N-gram/LCS) (Phase 1 ✓)
+│       ├── method_matcher.py    # Method matching (Phase 2 ✓)
+│       ├── group_detector.py    # Group detection (Phase 2 ✓)
+│       ├── group_matcher.py     # Group matching (Phase 2 ✓)
+│       ├── state_classifier.py  # State classification (Phase 2 ✓)
+│       ├── method_tracker.py    # Method tracking (Phase 3 ✓)
+│       └── clone_group_tracker.py  # Group tracking (Phase 3 ✓)
+├── tests/                  # Test code (pytest, 282 tests passing)
+│   ├── analysis/           # Analysis module tests
+│   ├── core/               # Core module tests
+│   ├── commands/           # Command tests
+│   ├── integration/        # Integration tests
+│   └── fixtures/           # Test fixtures
+├── docs/                   # Detailed design docs
+│   └── task_breakdown.md   # Task breakdown & roadmap
+├── pyproject.toml          # Project config & dependencies
+├── README.md               # User documentation
+└── CLAUDE.md               # This file (developer guide)
 ```
 
-## 技術スタック
+## Tech Stack
 
-### コア技術
-- **CLI Framework**: Click 8.1+ (コマンドライン構築)
-- **出力装飾**: Rich 13.0+ (美しいターミナル出力)
-- **設定管理**: Pydantic 2.12+ (型安全な設定)
+### Core Technologies
+- **CLI Framework**: Click 8.1+ (command-line building)
+- **Output Decoration**: Rich 13.0+ (beautiful terminal output)
+- **Config Management**: Pydantic 2.12+ (type-safe config)
 
-### データ分析・科学計算
-- **pandas**: データ分析・操作
-- **numpy**: 数値計算
-- **scipy**: 科学計算
-- **scikit-learn**: 機械学習
+### Data Analysis & Scientific Computing
+- **pandas**: Data analysis & manipulation
+- **numpy**: Numerical computation
+- **scipy**: Scientific computing
+- **scikit-learn**: Machine learning
 
-### 可視化
-- **matplotlib**: 基本的なプロット作成
-- **seaborn**: 統計的データ可視化
-- **networkx**: グラフ・ネットワーク分析
+### Visualization
+- **matplotlib**: Basic plotting
+- **seaborn**: Statistical data visualization
+- **networkx**: Graph & network analysis
 
-### 開発ツール
-- **ruff**: リンター・フォーマッター（importソート含む）
-- **pytest**: テストフレームワーク
-- **uv**: パッケージマネージャー
+### Development Tools
+- **ruff**: Linter & formatter (including import sorting)
+- **pytest**: Test framework
+- **uv**: Package manager
 
-## 開発ワークフロー
+## Development Workflow
 
-### セットアップ
+### Setup
 
 ```bash
-# 依存関係のインストール
+# Install dependencies
 uv sync --all-groups
 
-# 開発モードでインストール
+# Install in development mode
 uv pip install -e .
 ```
 
-### 依存関係の管理（重要）
+### Dependency Management (Important)
 
-**必ず `uv add` を使用して依存関係を追加すること**
+**Always use `uv add` to add dependencies**
 
 ```bash
-# 本番依存関係の追加
+# Add production dependency
 uv add <package-name>
 
-# 開発依存関係の追加
+# Add development dependency
 uv add --dev <package-name>
 
-# 特定のバージョンを指定
+# Specify version
 uv add <package-name>>=1.0.0
 
-# 依存関係の削除
+# Remove dependency
 uv remove <package-name>
 
-# 依存関係の更新
+# Update dependencies
 uv sync
 ```
 
-**例**:
+**Examples**:
 ```bash
-# Gitリポジトリ分析用にGitPythonを追加
+# Add GitPython for git repo analysis
 uv add gitpython
 
-# テスト用にpytest-covを開発依存関係として追加
+# Add pytest-cov as dev dependency
 uv add --dev pytest-cov
 ```
 
-**注意**:
-- `pip install` は使用しない
-- `pyproject.toml` を手動で編集した後は `uv sync` を実行
-- `uv add` は自動的に `pyproject.toml` と `uv.lock` を更新
+**Important**:
+- Do NOT use `pip install`
+- Run `uv sync` after manually editing `pyproject.toml`
+- `uv add` automatically updates `pyproject.toml` and `uv.lock`
 
-### コーディング規約
+### Coding Standards
 
-1. **フォーマット**: Ruffを使用（line-length: 100）
-2. **Import順序**: 自動ソート有効（標準 → サードパーティ → ファーストパーティ）
-3. **文字列**: ダブルクォート使用
-4. **型ヒント**: 可能な限り使用（Python 3.10+ syntax）
+1. **Format**: Use Ruff (line-length: 100)
+2. **Import Order**: Auto-sort enabled (stdlib → third-party → first-party)
+3. **Strings**: Use double quotes
+4. **Type Hints**: Use wherever possible (Python 3.10+ syntax)
 
-### コード品質チェック
+### Code Quality Checks
 
-**重要**: このプロジェクトでは`uv`を使用しているため、必ず`uv run`を付けてコマンドを実行すること
+**Important**: This project uses `uv`, so always prefix commands with `uv run`
 
 ```bash
-# リント + 自動修正（importソート含む）
+# Lint + auto-fix (including import sorting)
 uv run ruff check --fix src/
 
-# フォーマット
+# Format
 uv run ruff format src/
 
-# テスト実行
+# Run tests
 uv run pytest tests/
 
-# 詳細モードでテスト実行
+# Verbose test output
 uv run pytest tests/ -v
 
-# まとめて実行（推奨）
+# Run all together (recommended)
 uv run ruff check --fix src/ && uv run ruff format src/ && uv run pytest tests/
 ```
 
-**注意**:
-- ❌ `ruff check src/` → エラー（command not found）
-- ✅ `uv run ruff check src/` → 正しい
-- ❌ `pytest tests/` → エラー（command not found）
-- ✅ `uv run pytest tests/` → 正しい
+**Important**:
+- ❌ `ruff check src/` → Error (command not found)
+- ✅ `uv run ruff check src/` → Correct
+- ❌ `pytest tests/` → Error (command not found)
+- ✅ `uv run pytest tests/` → Correct
 
-#### CI専用テスト
+#### CI-Only Tests
 
-一部のテスト（特にパフォーマンステスト）は実行時間が長いため、GitHub Actionsでのみ実行されます。
+Some tests (especially performance tests) take too long to run locally and are only executed in GitHub Actions.
 
-**CI専用テストの仕組み**:
-- `@pytest.mark.ci` マーカーで識別
-- ローカル実行時は自動的にスキップ（CI環境変数がないため）
-- GitHub Actionsでは自動的に実行（`CI=true`環境変数が設定されているため）
+**CI-Only Test Mechanism**:
+- Identified by `@pytest.mark.ci` marker
+- Automatically skipped locally (no CI env variable)
+- Automatically run in GitHub Actions (`CI=true` env variable set)
 
-**テスト実行例**:
+**Test Execution Examples**:
 ```bash
-# 通常のテスト実行（CI専用テストはスキップされる）
+# Normal test run (CI-only tests skipped)
 uv run pytest tests/
 
-# CI専用テストのみ実行（ローカルで強制実行する場合）
+# Run only CI-only tests (force run locally)
 uv run pytest -m ci tests/
 
-# CI専用テストを除外して実行
+# Exclude CI-only tests
 uv run pytest -m "not ci" tests/
 
-# マーカー一覧を確認
+# List all markers
 uv run pytest --markers
 ```
 
-**CI専用テストの例**:
-- `test_track_all_performance`: 中規模データセット（3リビジョン）のパフォーマンステスト
-  - 実行時間: 約3分
-  - 場所: `tests/integration/test_real_data_validation.py`
+**CI-Only Test Examples**:
+- `test_track_all_performance`: Medium dataset (3 revisions) performance test
+  - Runtime: ~3 minutes
+  - Location: `tests/integration/test_real_data_validation.py`
 
-**注意**: 実データテスト（`data/clone_NIL/`）とCI専用テストは独立した機能です：
-- 実データが存在しない場合: すべての実データテストがスキップ
-- ローカル環境: CI専用テストがスキップ（実データが存在してもスキップ）
-- GitHub Actions: 実データが存在すればCI専用テストも実行
+**Note**: Real data tests (`data/clone_NIL/`) and CI-only tests are independent features:
+- Real data absent: All real data tests skipped
+- Local environment: CI-only tests skipped (even if real data exists)
+- GitHub Actions: CI-only tests run if real data exists
 
-### 新しいコマンドの追加方法
+### Adding New Commands
 
-1. `src/b4_thesis/commands/` に新しいファイルを作成（例: `new_command.py`）
-2. Clickデコレータでコマンド定義：
+1. Create new file in `src/b4_thesis/commands/` (e.g., `new_command.py`)
+2. Define command with Click decorator:
    ```python
    import click
    from rich.console import Console
@@ -194,606 +195,222 @@ uv run pytest --markers
    @click.argument("input_path", type=click.Path(exists=True))
    @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
    def new_command(input_path: str, verbose: bool):
-       """コマンドの説明."""
+       """Command description."""
        console.print(f"[bold blue]Processing:[/bold blue] {input_path}")
-       # 実装...
+       # Implementation...
    ```
-3. `src/b4_thesis/cli.py` でコマンドを登録：
+3. Register command in `src/b4_thesis/cli.py`:
    ```python
    from b4_thesis.commands import new_command
 
    main.add_command(new_command.new_command)
    ```
 
-## 重要な設計方針
+## Important Design Principles
 
-### 1. エラーハンドリング
-- ユーザー入力エラーは明確なメッセージで表示（Rich使用）
-- 例外は適切にキャッチして、ユーザーフレンドリーなエラーメッセージに変換
+### 1. Error Handling
+- Display user input errors with clear messages (use Rich)
+- Catch exceptions appropriately and convert to user-friendly error messages
 
-### 2. 出力
-- プログレスバー: `tqdm` 使用
-- テーブル/装飾: `rich` 使用
-- データ出力: JSON/CSV/TXT形式をサポート
+### 2. Output
+- Progress bars: Use `tqdm`
+- Tables/decoration: Use `rich`
+- Data output: Support JSON/CSV/TXT formats
 
-### 3. 設定管理
-- `core/config.py` のPydanticモデルを使用
-- 設定ファイルの場所:
+### 3. Config Management
+- Use Pydantic models in `core/config.py`
+- Config file locations:
   - `~/.config/b4-thesis/config.json`
-  - `./b4-thesis.json`（プロジェクトルート）
+  - `./b4-thesis.json` (project root)
 
-### 4. テスト
-- 各コマンドに対応するテストを `tests/` に配置
-- Click の `CliRunner` を使用してCLIテスト
-- カバレッジ目標: 80%以上
+### 4. Testing
+- Place tests corresponding to each command in `tests/`
+- Use Click's `CliRunner` for CLI testing
+- Coverage target: 80%+
 
-## よくある開発タスク
+## Common Development Tasks
 
-### データ分析機能の追加
-1. `commands/analyze.py` または新しいコマンドファイルに実装
-2. pandas/numpyで処理
-3. Rich tableで結果表示
+### Adding Data Analysis Features
+1. Implement in `commands/analyze.py` or new command file
+2. Process with pandas/numpy
+3. Display results with Rich table
 
-### 可視化機能の追加
-1. `commands/visualize.py` に新しいプロットタイプ追加
-2. matplotlib/seabornで描画
-3. 設定で DPI/サイズ/スタイルをカスタマイズ可能に
+### Adding Visualization Features
+1. Add new plot type to `commands/visualize.py`
+2. Draw with matplotlib/seaborn
+3. Make DPI/size/style customizable via config
 
-### 統計メトリクスの追加
-1. `commands/stats.py` に新しいメトリクス追加
-2. scipy/scikit-learnの関数を活用
-3. `--metrics` オプションで選択可能に
+### Adding Statistical Metrics
+1. Add new metrics to `commands/stats.py`
+2. Leverage scipy/scikit-learn functions
+3. Make selectable via `--metrics` option
 
-## デバッグのヒント
+## Debugging Tips
 
-### CLIのデバッグ
+### CLI Debugging
 ```python
-# デバッグ用の詳細出力
+# Verbose debug output
 console.print("[dim]Debug info here[/dim]")
 
-# 例外の詳細表示
+# Display exception details
 import traceback
 console.print(f"[red]Error:[/red] {traceback.format_exc()}")
 ```
 
-### データ分析のデバッグ
+### Data Analysis Debugging
 ```python
-# DataFrameの確認
+# Check DataFrame
 console.print(df.head())
 console.print(df.info())
 console.print(df.describe())
 ```
 
-## Git ワークフロー
+## Git Workflow
 
-### コミットの粒度（重要）
+### Commit Granularity (Important)
 
-**適切な粒度で頻繁にコミットすること**
+**Commit frequently with appropriate granularity**
 
-#### コミットのタイミング
-以下のような単位で1つのコミットを作成：
+#### When to Commit
+Create one commit for each of the following units:
 
-1. **機能追加の場合**
-   - 新しいコマンド追加 → 1コミット
-   - コマンドにオプション追加 → 1コミット
-   - テスト追加 → 1コミット（または機能と同時）
+1. **Feature Addition**
+   - Add new command → 1 commit
+   - Add option to command → 1 commit
+   - Add test → 1 commit (or together with feature)
 
-2. **リファクタリングの場合**
-   - ファイル1つの整理 → 1コミット
-   - 関数の抽出・移動 → 1コミット
-   - Import整理 → 1コミット
+2. **Refactoring**
+   - Organize one file → 1 commit
+   - Extract/move function → 1 commit
+   - Organize imports → 1 commit
 
-3. **ドキュメント更新**
-   - README更新 → 1コミット
-   - CLAUDE.md更新 → 1コミット
-   - コメント追加・修正 → 1コミット
+3. **Documentation Updates**
+   - Update README → 1 commit
+   - Update CLAUDE.md → 1 commit
+   - Add/fix comments → 1 commit
 
-4. **設定変更**
-   - 依存関係追加 → 1コミット
-   - Ruff設定変更 → 1コミット
-   - .gitignore更新 → 1コミット
+4. **Configuration Changes**
+   - Add dependency → 1 commit
+   - Change Ruff config → 1 commit
+   - Update .gitignore → 1 commit
 
-#### 悪い例（粒度が大きすぎる）
+#### Bad Example (Too Coarse)
 ```bash
-# ❌ 複数の変更をまとめてコミット
+# ❌ Batch multiple changes together
 git add .
-git commit -m "feat: いろいろ追加"
+git commit -m "feat: add various things"
 ```
 
-#### 良い例（適切な粒度）
+#### Good Examples (Appropriate Granularity)
 ```bash
-# ✅ 新コマンド追加
+# ✅ Add new command
 git add src/b4_thesis/commands/git_analysis.py
 git commit -m "feat: add git analysis command
 
 Add basic git repository analysis functionality"
 
-# ✅ テスト追加
+# ✅ Add tests
 git add tests/test_git_analysis.py
 git commit -m "test: add tests for git analysis command"
 
-# ✅ 依存関係追加
+# ✅ Add dependency
 git add pyproject.toml uv.lock
 git commit -m "chore: add gitpython dependency"
 
-# ✅ ドキュメント更新
+# ✅ Update documentation
 git add README.md
 git commit -m "docs: update README with git analysis usage"
 ```
 
-### コミット前のチェックリスト
-- [ ] `ruff check --fix src/` でリント
-- [ ] `ruff format src/` でフォーマット
-- [ ] `pytest tests/` でテスト実行（関連テストのみでも可）
-- [ ] 新機能には対応するテストを追加
-- [ ] コミットメッセージは明確で具体的
-- [ ] 1コミット = 1つの論理的な変更
+### Pre-Commit Checklist
+- [ ] `uv run ruff check --fix src/` for linting
+- [ ] `uv run ruff format src/` for formatting
+- [ ] `uv run pytest tests/` for tests (or just relevant tests)
+- [ ] Add tests for new features
+- [ ] Commit message is clear and specific
+- [ ] 1 commit = 1 logical change
 
-### コミットメッセージ規約
+### Commit Message Convention
 ```
 <type>: <subject>
 
 <body>
 
 Types:
-- feat: 新機能
-- fix: バグ修正
-- docs: ドキュメント更新
-- style: コードスタイル修正
-- refactor: リファクタリング
-- test: テスト追加・修正
-- chore: ビルド・設定変更
+- feat: New feature
+- fix: Bug fix
+- docs: Documentation update
+- style: Code style fix
+- refactor: Refactoring
+- test: Add/fix tests
+- chore: Build/config changes
 ```
 
-### 推奨される開発フロー
+### Recommended Development Flow
 
 ```bash
-# 1. 新機能開発開始
-# 2. 実装
-# 3. リント・フォーマット
-ruff check --fix src/ && ruff format src/
+# 1. Start new feature development
+# 2. Implementation
+# 3. Lint & format
+uv run ruff check --fix src/ && uv run ruff format src/
 
-# 4. テスト実行
-pytest tests/
+# 4. Run tests
+uv run pytest tests/
 
-# 5. 変更内容を確認
+# 5. Check changes
 git status
 git diff
 
-# 6. 関連ファイルのみステージング
+# 6. Stage only relevant files
 git add src/b4_thesis/commands/new_feature.py
 
-# 7. コミット
+# 7. Commit
 git commit -m "feat: add new feature
 
 Detailed description of what this commit does"
 
-# 8. 次の変更（テスト追加など）に移る
+# 8. Move to next change (e.g., add tests)
 git add tests/test_new_feature.py
 git commit -m "test: add tests for new feature"
 
-# 9. 必要に応じてドキュメント更新
-git add README.md CLAUDE.md
+# 9. Update docs as needed
+git add README.md CLAUDE.md docs/task_breakdown.md
 git commit -m "docs: update documentation for new feature"
 ```
 
-### コミットのベストプラクティス
+### Commit Best Practices
 
-1. **小さく、頻繁にコミット**
-   - 1つの変更 = 1つのコミット
-   - 作業を細かく区切る
+1. **Small, Frequent Commits**
+   - 1 change = 1 commit
+   - Break work into small units
 
-2. **意味のある単位でコミット**
-   - コンパイル/テストが通る状態でコミット
-   - 中途半端な状態でコミットしない
+2. **Meaningful Units**
+   - Commit when compile/tests pass
+   - Don't commit half-finished work
 
-3. **明確なメッセージ**
-   - 何を変更したか（What）
-   - なぜ変更したか（Why）
+3. **Clear Messages**
+   - What was changed (What)
+   - Why it was changed (Why)
 
-4. **関連ファイルのみコミット**
-   - `git add .` は避ける
-   - ファイル単位で慎重にステージング
+4. **Only Related Files**
+   - Avoid `git add .`
+   - Carefully stage file by file
 
-## 開発ロードマップ
+## Development Roadmap
 
-### ✅ Phase 1: 基盤実装（完了 - 2025-11-08）
+**See [task_breakdown.md](docs/task_breakdown.md) for detailed task breakdown and roadmap.**
 
-**実装完了したコンポーネント**:
-- ✅ **UnionFind** (`analysis/union_find.py`): グループ検出用データ構造
-  - 経路圧縮付きfind操作
-  - union、get_groups、is_connected等のAPI
-  - 13テストケース全てパス
+### Current Status Summary
 
-- ✅ **SimilarityCalculator** (`analysis/similarity.py`): 類似度計算
-  - N-gram類似度計算
-  - LCS類似度計算
-  - 2段階アプローチ（N-gram >= threshold → N-gram返却、それ以外 → LCS計算）
-  - 27テストケース全てパス
+- **Completed**: Phase 1-4, Phase 5.1-5.3, Phase 6
+- **In Progress**: Phase 5.4-5.5
+- **Planned**: Phase 7
 
-- ✅ **RevisionManager** (`core/revision_manager.py`): リビジョンデータ管理
-  - リビジョンディレクトリ列挙・ソート
-  - 日付範囲フィルタリング
-  - code_blocks.csv/clone_pairs.csv読み込み
-  - ヘッダーなしCSV対応、空ファイル処理
-  - 11テストケース全てパス
+**Test Status**: 282 tests passing (100% success rate)
 
-**テスト状況**: 56 tests passing（100% success rate）
+**Code Quality**: ruff checks passing (0 errors)
 
-**設計変更点**:
-- CSVファイルをヘッダーなしで読み込む仕様に変更（`header=None`）
-- 空の`clone_pairs.csv`を適切に処理する実装を追加
-
-### ✅ Phase 2: コア分析コンポーネント（完了 - 2025-11-08）
-
-**実装完了したコンポーネント**:
-- ✅ **MethodMatcher** (`analysis/method_matcher.py`)
-  - メソッド間のマッチング（2段階アプローチ）
-  - Phase 1: token_hash による高速完全一致 (O(n))
-  - Phase 2: 類似度ベースのファジーマッチング (O(m × k × s))
-  - 二重マッチング防止、最高類似度マッチ選択
-  - 12テストケース全てパス
-
-- ✅ **GroupDetector** (`analysis/group_detector.py`)
-  - クローングループの検出
-  - UnionFindを活用した効率的なグループ形成
-  - CloneGroupデータクラス（avg_similarity, min_similarity, max_similarity, density等）
-  - 閾値ベースのグループ形成、isolated blocks処理
-  - 20テストケース全てパス
-
-- ✅ **GroupMatcher** (`analysis/group_matcher.py`)
-  - リビジョン間のグループマッチング
-  - オーバーラップベースのマッチング判定
-  - Split/Merge検出機能
-  - 閾値ベースのマッチング（デフォルト50%）
-  - 14テストケース全てパス
-
-- ✅ **StateClassifier** (`analysis/state_classifier.py`)
-  - メソッド状態分類（DELETED, SURVIVED, ADDED）
-  - 詳細状態（DELETED_ISOLATED, SURVIVED_UNCHANGED, ADDED_TO_GROUP等）
-  - グループ状態分類（CONTINUED, GROWN, SHRUNK, SPLIT, MERGED, DISSOLVED, BORN）
-  - サイズ許容範囲による柔軟な分類（デフォルト10%）
-  - 21テストケース全てパス
-
-**テスト状況**: 123 tests passing（100% success rate）
-- Phase 1: 56 tests
-- Phase 2: 67 tests
-
-**設計の特徴**:
-- 2段階マッチング戦略による高速化（token_hash + 類似度）
-- 包括的な状態分類（メソッド3状態 × 詳細10状態、グループ7状態）
-- Split/Merge検出による複雑な進化パターンの追跡
-- 全コンポーネントで堅牢なエラーハンドリングとエッジケース処理
-
-**依存関係**:
-```
-Phase 1 (完了) ✓
-    ↓
-MethodMatcher ← SimilarityCalculator ✓
-GroupDetector ← UnionFind ✓
-    ↓
-GroupMatcher ← MethodMatcher ✓
-    ↓
-StateClassifier ← MethodMatcher + GroupMatcher ✓
-    ↓
-MethodTracker ← MethodMatcher + GroupDetector + StateClassifier ✓
-CloneGroupTracker ← GroupDetector + GroupMatcher + MethodMatcher + StateClassifier ✓
-```
-
-### ✅ Phase 3: 追跡エンジン（完了 - 2025-11-09）
-
-**実装完了したコンポーネント**:
-- ✅ **MethodTracker** (`analysis/method_tracker.py`)
-  - メソッド単位の進化追跡（複数リビジョン対応）
-  - MethodTrackingResult データクラス（17フィールド）
-  - ライフタイム計算（リビジョン数・日数）
-  - 状態分類統合（StateClassifier使用）
-  - 20テストケース全てパス
-
-- ✅ **CloneGroupTracker** (`analysis/clone_group_tracker.py`)
-  - クローングループ単位の進化追跡
-  - GroupTrackingResult データクラス（14フィールド）
-  - GroupMembershipResult データクラス（5フィールド）
-  - メンバー変更計算（追加・削除カウント）
-  - 2つのDataFrame出力（グループ追跡 + メンバーシップ）
-  - 19テストケース全てパス
-
-**テスト状況**: 162 tests passing（100% success rate）
-- Phase 1: 56 tests
-- Phase 2: 67 tests
-- Phase 3: 39 tests
-
-**主要機能**:
-- 複数リビジョンにわたるメソッド・グループ追跡
-- ライフタイム計算（初出〜最終出現の日数・リビジョン数）
-- メンバー変更追跡（グループへの追加・削除）
-- CSV出力対応（method_tracking.csv, group_tracking.csv, group_membership.csv）
-
-### ✅ Phase 4: CLIコマンド統合（完了 - 2025-11-09）
-
-**実装完了したコンポーネント**:
-- ✅ **track コマンド** (`commands/track.py`)
-  - `track methods`: メソッド進化追跡
-  - `track groups`: クローングループ進化追跡
-  - `track all`: メソッド・グループ両方の追跡
-  - 日付範囲フィルタリング、類似度閾値、重複閾値のカスタマイズ対応
-  - サマリー統計表示機能
-  - 19テストケース全てパス
-
-- ✅ **stats コマンド拡張** (`commands/stats.py`)
-  - `stats general`: 一般的な統計（既存機能）
-  - `stats methods`: メソッド追跡結果の統計レポート
-  - `stats groups`: グループ追跡結果の統計レポート
-  - 詳細統計のExcel出力機能
-  - 11テストケース全てパス
-
-- ✅ **visualize コマンド拡張** (`commands/visualize.py`)
-  - `visualize general`: 一般的な可視化（既存機能）
-  - `visualize methods`: メソッド追跡結果の可視化（dashboard/state/lifetime/timeline）
-  - `visualize groups`: グループ追跡結果の可視化（dashboard/state/size/timeline/members）
-  - 12テストケース全てパス
-
-- ✅ **tracking_stats モジュール** (`analysis/tracking_stats.py`)
-  - メソッド追跡統計計算（MethodTrackingStats）
-  - グループ追跡統計計算（GroupTrackingStats）
-  - 状態分布、ライフタイム分布、時系列統計
-  - 23テストケース全てパス
-
-- ✅ **tracking_visualizer モジュール** (`analysis/tracking_visualizer.py`)
-  - 状態分布プロット（バー/円グラフ）
-  - ライフタイム分布ヒストグラム
-  - 時系列プロット（メソッド数/グループ数/平均サイズ）
-  - グループサイズ分布（ヒストグラム/箱ひげ図）
-  - メンバー変更の時系列（積み上げバー）
-  - ダッシュボード生成機能（methods: 7プロット、groups: 7プロット）
-
-- ✅ **統合テスト** (`tests/integration/test_end_to_end.py`)
-  - エンドツーエンド統合テスト（10テストケース）
-  - 出力CSV検証（構造・内容・データ整合性）
-  - データ整合性チェック（メソッド追跡 ↔ グループメンバーシップ）
-  - 全テストパス
-
-- ✅ **ドキュメント更新**
-  - README.md: trackコマンド使用例、出力CSVフォーマット説明
-  - CLAUDE.md: Phase 4完了状況の更新
-
-**テスト状況**: 237 tests passing（100% success rate）
-- Phase 1: 56 tests
-- Phase 2: 67 tests
-- Phase 3: 39 tests
-- Phase 4: 75 tests (19 track CLI + 11 stats CLI + 12 visualize CLI + 23 tracking_stats + 10 integration)
-
-**コード品質**: ruff チェック全てパス（0エラー）
-
-**成果物**:
-- `track methods` → `method_tracking.csv`（17列）
-- `track groups` → `group_tracking.csv`（14列）, `group_membership.csv`（5列）
-- `track all` → 上記3ファイル
-- `stats methods/groups` → 詳細統計レポート（コンソール表示 + Excel出力）
-- `visualize methods/groups` → 可視化ダッシュボード（7プロット/タイプ）
-
-**主要機能**:
-- 包括的な統計レポート生成（ライフタイム、状態分布、クローン統計）
-- 多様な可視化オプション（状態分布、時系列、サイズ分布）
-- Excel形式での詳細統計エクスポート
-- PNG形式での高品質プロット出力（300 DPI）
-
-### 🔄 Phase 5: パフォーマンス最適化と大規模データ対応（進行中 - 2025-11-09）
-
-#### ✅ Phase 5.1: 実データでの検証テスト（完了 - 2025-11-09）
-
-**実装完了したコンポーネント**:
-- ✅ **実データテストスイート** (`tests/integration/test_real_data_validation.py`)
-  - 実データディレクトリ検出機能（`data/clone_NIL/`）
-  - 小規模テスト（2リビジョン）
-  - 中規模テスト（3リビジョン）
-  - データ品質検証テスト（状態値、欠損値、ライフタイム整合性、クローングループメトリクス）
-  - シンボリックリンクベースのフィクスチャ（大容量データのコピー回避）
-
-**実データ特性**:
-- データセット: `data/clone_NIL/`
-- リビジョン数: 38（37アクティブ + 1空）
-- 平均ブロック数: 11,632 ブロック/リビジョン
-- 平均トークン長: 65トークン（最大1,249）
-- 平均クローンペア: 6,446ペア/リビジョン
-- 総クローンペア: 238,537ペア
-
-**テスト状況**: 8 tests（実データ利用可能時に実行）
-- TestSmallRealDataset: 3 tests（メソッド追跡、グループ追跡、統合）
-- TestMediumRealDataset: 1 test（パフォーマンステスト）
-- TestRealDataQuality: 4 tests（データ品質検証）
-
-#### ✅ Phase 5.2: パフォーマンス分析と並列処理実装（完了 - 2025-11-09）
-
-**実装完了したコンポーネント**:
-- ✅ **並列類似度計算** (`analysis/method_matcher.py`)
-  - ProcessPoolExecutorによる並列処理対応
-  - `parallel`パラメータ追加（デフォルト: False）
-  - `max_workers`パラメータ追加（デフォルト: CPU数）
-  - ヘルパー関数`_compute_similarity_for_pair()`実装
-
-- ✅ **並列処理パラメータ伝播**
-  - `method_tracker.py`: trackメソッドへの並列パラメータ追加
-  - `commands/track.py`: CLIフラグ追加（`--parallel`, `--max-workers`）
-
-- ✅ **パフォーマンス分析完了**
-  - ボトルネック特定: `method_matcher.py` 169-214行（類似度計算ループ）
-  - 計算複雑度分析: O(n×m×T²)、n≈3,490, m≈3,490, T≈65
-  - 処理時間測定:
-    - 2リビジョン（逐次）: 548秒（9分8秒）
-    - 2リビジョン（並列）: 705秒（11分45秒）→ 28.6%遅延
-    - 37リビジョン推定: 9-18時間
-  - 類似度計算回数: 12.18M calls/リビジョンペア、438M calls/全体
-
-**パフォーマンス分析結果**:
-- **ボトルネック**: 類似度計算（99%以上の実行時間）
-  - 位置: `_match_similarity_sequential()` ネストループ
-  - コスト: LCS動的計画法 O(T₁×T₂)、平均65×65 = 4,225操作/呼び出し
-  - 回数: 12.18M 呼び出し/リビジョンペア
-- **並列処理の問題**:
-  - プロセス間通信（IPC）オーバーヘッド
-  - トークン配列のシリアライズ/デシリアライズコスト
-  - タスク粒度が細かすぎる（ミリ秒単位の計算）
-  - システム時間が218倍増加（1.35s → 294.72s）
-
-#### ✅ Phase 5.3: 最適化実装（進行中 - 2025-11-09）
-
-**3段階最適化計画**:
-
-**✅ Phase 5.3.1: 高速化基盤（完了 - 2025-11-09）**
-- ✅ 長さベースの事前フィルタ（長さ差30%以上 → スキップ）
-  - `_should_skip_by_length()`: トークン列の長さ比較によるフィルタ
-  - デフォルト閾値: 30% (max_diff_ratio=0.3)
-- ✅ トークン集合交差の事前フィルタ（Jaccard < 0.3 → スキップ）
-  - `_calculate_jaccard()`: Jaccard類似度計算
-  - `_should_skip_by_jaccard()`: Jaccard < 0.3 でスキップ
-- ✅ LRUキャッシュ実装（双方向マッチングの重複計算回避）
-  - `@lru_cache(maxsize=10000)` デコレータによるキャッシング
-  - `_cached_similarity()`: ソート済みペアでキャッシュヒット最大化
-- ✅ スマート並列モード選択（閾値ベースの自動判定）
-  - `auto_parallel=True`: データサイズに基づく自動選択
-  - `parallel_threshold=100000`: 100K ペア以上で並列処理を有効化
-  - `match_blocks()`メソッドに新パラメータ追加
-- **テスト状況**: 32 tests passing (method_matcher + method_tracker)
-- **目標**: 30倍高速化（18時間 → 30-60分）
-
-**✅ Phase 5.3.2: 高度な最適化（完了 - 2025-11-09）**
-- ✅ LSH（MinHash）インデックス実装（近似最近傍探索）
-  - `lsh_index.py`: MinHashベースのLSHインデックス
-  - 候補を1-5%に削減（100倍高速化）
-  - 近似検索、recall: 90-95%
-  - 11テストケース全てパス
-- ✅ LCS早期終了（バンド付き動的計画法）
-  - `calculate_lcs_similarity_banded()`: 早期終了付きLCS
-  - 理論的最大類似度チェック
-  - バンド幅自動計算
-  - 進捗モニタリングによる早期終了
-  - 2倍高速化（LCS部分）
-  - 8テストケース全てパス
-- ✅ 最適化版類似度計算
-  - `calculate_similarity_optimized()`: バンドLCS統合版
-  - 閾値未満の場合はNoneを返す（効率化）
-  - 7テストケース全てパス
-- ✅ Top-k候補フィルタリング（top-k=20のみ比較）
-  - `_match_similarity_lsh()`: LSHベースマッチング
-  - LSHインデックス構築 + クエリ
-  - Top-k候補のみ詳細計算
-  - Phase 5.3.1最適化統合
-  - 1.5-2倍高速化
-- ✅ MethodMatcher拡張
-  - `use_lsh`, `lsh_threshold`, `lsh_num_perm`, `top_k`, `use_optimized_similarity` パラメータ追加
-  - 既存テスト全て互換性維持（12 tests passing）
-- **テスト状況**: 65 tests passing (LSH: 11, similarity: 42, method_matcher: 12)
-- **目標**: 100倍高速化（18時間 → 10-20分）
-
-**✅ Phase 5.3.3: 最終調整とCLI統合（完了 - 2025-11-10）**
-- ✅ NumPy ベクトル化（N-gram計算）
-  - `calculate_ngram_similarity_vectorized()`: NumPyベクトル化版N-gram計算
-  - `np.column_stack`による効率的なbi-gram生成
-  - 構造化配列による集合演算の高速化
-- ✅ プログレッシブ閾値（90→80→70の段階的適用）
-  - `_match_with_progressive_thresholds()`: プログレッシブ閾値マッチング
-  - 高品質マッチを優先（高閾値から順に試行）
-  - 早期終了による効率化
-  - `progressive_thresholds`パラメータ追加
-- ✅ 最終ベンチマーク
-  - `scripts/benchmark_final.py`: 最終ベンチマークスクリプト
-  - 4つの構成を比較（Baseline, Phase 5.3.1, 5.3.2, 5.3.3）
-  - スピードアップ測定とCSV出力
-- ✅ **CLI統合完了**
-  - `MethodTracker`にPhase 5.3パラメータ追加（6パラメータ）
-  - `CloneGroupTracker`にPhase 5.3パラメータ追加（6パラメータ）
-  - `track methods`コマンドに7つの最適化オプション追加
-  - `track groups`コマンドに7つの最適化オプション追加
-  - `--optimize`フラグで全最適化を一括有効化
-  - README.md更新（使用例、パフォーマンスガイド追加）
-- **テスト状況**: 271 tests passing（後方互換性100%維持）
-- **目標達成**: プログレッシブ閾値とNumPy最適化により、さらなる高速化を実現し、CLIから利用可能
-
-**CLI使用例**:
-```bash
-# 全最適化を有効化（大規模データセット推奨、20+リビジョンで50-100倍高速化）
-b4-thesis track methods ./data/clone_NIL -o ./output --optimize
-
-# カスタムプログレッシブ閾値
-b4-thesis track methods ./data -o ./output --progressive-thresholds "95,85,75"
-
-# LSHパラメータ調整
-b4-thesis track methods ./data -o ./output --use-lsh --lsh-num-perm 256 --top-k 30
-```
-
-**パフォーマンス結果**:
-- 小規模 (<5リビジョン): 2-5倍高速化
-- 中規模 (5-20リビジョン): 10-30倍高速化
-- 大規模 (20+リビジョン): 50-100倍高速化
-- トレードオフ: LSHは近似マッチング（recall 90-95%）、100%再現性が必要な場合は最適化なしで実行
-
-詳細は[docs/PERFORMANCE.md](docs/PERFORMANCE.md)を参照。
-
-#### 📅 Phase 5.4: 大規模データセット対応（計画中）
-
-- [ ] ストリーミング処理実装
-- [ ] チャンクベース処理
-- [ ] プログレスバー改善
-- [ ] メモリ使用量最適化
-
-#### 📅 Phase 5.5: レポート自動生成（計画中）
-
-- [ ] Markdownレポート生成
-- [ ] PDF出力機能
-- [ ] サマリーダッシュボード
-- [ ] カスタマイズ可能なテンプレート
-
-**現在のテスト状況**: 282 tests passing（100% success rate）
-- Phase 1-4: 237 tests
-- Phase 5.1: 8 tests（実データ利用可能時のみ）
-- Phase 5.3: 既存テスト全て互換性維持（Phase 5.3.1-5.3.3の最適化を含む）
-- Phase 6: 11 tests（新規lineage機能）
-
-**パフォーマンス最適化の詳細**: [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
-
-### ✅ Phase 6: メソッドLineage追跡機能（完了 - 2025-11-10）
-
-**目的**: メソッドの進化系譜を簡単に追跡できる`method_lineage.csv`を生成
-
-**実装完了したコンポーネント**:
-- ✅ **MethodTracker拡張** (`analysis/method_tracker.py`)
-  - `_global_block_id_map`: リビジョン間でglobal_block_idをマッピング
-  - `to_tracking_format()`: 従来形式（block_id + matched_block_id）を返す
-  - `to_lineage_format()`: lineage形式（global_block_id、matched_block_id削除）を返す
-  - 追跡中にglobal_block_id を自動割り当て
-  - 9テストケース全てパス
-
-- ✅ **CLI統合** (`commands/track.py`)
-  - `--lineage` フラグ追加
-  - `method_lineage.csv` 自動生成機能
-  - 2テストケース全てパス
-
-**出力フォーマット**:
-
-| 形式 | 列数 | global_block_id | block_id | matched_block_id |
-|------|------|-----------------|----------|------------------|
-| method_tracking.csv | 17 | ❌ | ✅ | ✅ |
-| method_lineage.csv | 16 | ✅ | ❌ | ❌ |
-
-**使用例**:
-```bash
-# lineage形式を生成
-b4-thesis track methods ./data -o ./output --lineage
-
-# 出力: method_tracking.csv + method_lineage.csv
-```
-
-**メリット**:
-- **シンプルなクエリ**: 同じメソッドは同じ`global_block_id`
-- **追跡が簡単**: `matched_block_id`をたどる必要なし
-- **後方互換性**: デフォルトでは従来形式のみ生成
-
-**テスト状況**: 11 tests passing
-- TestMethodTrackerLineage: 9 tests（単体テスト）
-- TestTrackMethods: 2 tests（CLIテスト）
-
-## 参考リンク
+## References
 
 - [Click Documentation](https://click.palletsprojects.com/)
 - [Rich Documentation](https://rich.readthedocs.io/)
@@ -801,36 +418,36 @@ b4-thesis track methods ./data -o ./output --lineage
 - [Ruff Documentation](https://docs.astral.sh/ruff/)
 - [pandas Documentation](https://pandas.pydata.org/docs/)
 
-## トラブルシューティング
+## Troubleshooting
 
-### よくある問題
+### Common Issues
 
-**問題**: `ModuleNotFoundError: No module named 'b4_thesis'`
+**Issue**: `ModuleNotFoundError: No module named 'b4_thesis'`
 ```bash
-# 解決策: 開発モードで再インストール
+# Solution: Reinstall in development mode
 uv pip install -e .
 ```
 
-**問題**: Importの順序が正しくない
+**Issue**: Import order incorrect
 ```bash
-# 解決策: Ruffで自動修正
-ruff check --fix src/
+# Solution: Auto-fix with Ruff
+uv run ruff check --fix src/
 ```
 
-**問題**: テストが失敗する
+**Issue**: Tests failing
 ```bash
-# 解決策: 詳細モードで実行
-pytest tests/ -v
+# Solution: Run in verbose mode
+uv run pytest tests/ -v
 ```
 
-## メモ・注意事項
+## Notes
 
-- **文字コード**: すべてのファイルはUTF-8で保存
-- **改行コード**: LF（Unix形式）を使用
-- **データファイル**: Git管理外（.gitignoreに含まれる）
-- **出力ファイル**: `output/`, `results/`, `plots/` ディレクトリを使用（Git管理外）
+- **Character Encoding**: All files saved as UTF-8
+- **Line Endings**: LF (Unix format)
+- **Data Files**: Not tracked by git (in .gitignore)
+- **Output Files**: Use `output/`, `results/`, `plots/` directories (not tracked by git)
 
 ---
 
-**最終更新**: 2025-11-10 (Phase 6 完了 - メソッドLineage追跡機能実装完了)
-**メンテナー**: Claude Code開発チーム
+**Last Updated**: 2025-11-10 (Task list moved to task_breakdown.md)
+**Maintainer**: Claude Code Development Team
