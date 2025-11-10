@@ -23,13 +23,19 @@
 
 ### CLI コマンド
 
-- **track**: メソッド・クローングループの進化追跡（主要機能）
+- **track**: ✅ メソッド・クローングループの進化追跡（主要機能・完全実装済み）
   - `track methods`: メソッド進化追跡
   - `track groups`: クローングループ進化追跡
   - `track all`: メソッド・グループ両方の追跡
-- **analyze**: リポジトリやデータファイルの分析
-- **stats**: 統計メトリクスの計算
-- **visualize**: データの可視化（散布図、折れ線グラフ、ヒストグラムなど）
+- **analyze**: ⚠️ 基本実装のみ（ファイル/ディレクトリ情報表示）
+- **stats**: ✅ 統計メトリクスの計算（完全実装済み）
+  - `stats general`: 汎用統計計算
+  - `stats methods`: メソッド追跡専用統計
+  - `stats groups`: グループ追跡専用統計
+- **visualize**: ✅ データの可視化（完全実装済み）
+  - `visualize general`: 汎用プロット（散布図、折れ線、棒、ヒストグラム、ヒートマップ）
+  - `visualize methods`: メソッド追跡専用ダッシュボード（7種類のプロット）
+  - `visualize groups`: グループ追跡専用ダッシュボード（7種類のプロット）
 
 ## インストール
 
@@ -220,42 +226,206 @@ b4-thesis track all ./revision_data -o ./output --start-date 2024-06-01 --end-da
 
 #### analyze
 
-データファイルやディレクトリを分析します。
+⚠️ **注意**: このコマンドは基本実装のみです。現在はファイル/ディレクトリの基本情報（存在チェック、サイズなど）のみを表示します。
+
+データファイルやディレクトリの基本情報を分析します。
 
 ```bash
 b4-thesis analyze <input_path> [OPTIONS]
 
 Options:
-  -o, --output PATH        出力ファイルパス
-  -f, --format [json|csv|txt]  出力フォーマット (デフォルト: txt)
-  -v, --verbose           詳細な出力を表示
+  -o, --output PATH               出力ファイルパス
+  -f, --format [json|csv|txt]     出力フォーマット (デフォルト: txt)
+  -v, --verbose                   詳細な出力を表示
+```
+
+**使用例**:
+```bash
+# ファイルの基本情報を表示
+b4-thesis analyze ./data/method_tracking.csv
+
+# ディレクトリ情報を表示
+b4-thesis analyze ./revision_data --verbose
 ```
 
 #### stats
 
-CSVファイルから統計メトリクスを計算します。
+✅ **完全実装済み**: CSVファイルから統計メトリクスを計算します。サブコマンドで汎用統計と専用統計を選択できます。
+
+##### stats general
+
+任意のCSVファイルから汎用的な統計メトリクスを計算します。
 
 ```bash
-b4-thesis stats <input_file> [OPTIONS]
+b4-thesis stats general <input_file> [OPTIONS]
 
 Options:
   -m, --metrics [mean|median|std|min|max|count]  計算する統計メトリクス（複数指定可）
-  -c, --column TEXT       分析対象の列名
+  -c, --column TEXT                              分析対象の列名
+```
+
+**使用例**:
+```bash
+# 基本統計（mean, std）を計算
+b4-thesis stats general data.csv
+
+# 複数のメトリクスを指定
+b4-thesis stats general data.csv -m mean -m median -m std -m max
+
+# 特定の列のみ分析
+b4-thesis stats general data.csv -c lifetime_days -m mean -m median
+```
+
+##### stats methods
+
+メソッド追跡結果（`method_tracking.csv`）の専用統計レポートを生成します。
+
+```bash
+b4-thesis stats methods <input_file> [OPTIONS]
+
+Options:
+  -o, --output PATH    詳細統計の出力ファイル（XLSX形式）
+```
+
+**表示される統計**:
+- 概要: 総メソッド数、ユニークメソッド数、リビジョン数、平均メソッド数/リビジョン
+- 状態分布: ADDED, SURVIVED, DELETED の分布
+- クローン統計: クローン率、平均クローン数、最大クローン数
+- ライフタイム統計: 平均/中央値/最大ライフタイム（日数・リビジョン数）
+
+**使用例**:
+```bash
+# コンソールに統計レポートを表示
+b4-thesis stats methods ./output/method_tracking.csv
+
+# 詳細統計をExcelファイルに保存
+b4-thesis stats methods ./output/method_tracking.csv -o ./stats_report.xlsx
+```
+
+##### stats groups
+
+グループ追跡結果（`group_tracking.csv`）の専用統計レポートを生成します。
+
+```bash
+b4-thesis stats groups <input_file> [OPTIONS]
+
+Options:
+  -o, --output PATH    詳細統計の出力ファイル（XLSX形式）
+```
+
+**表示される統計**:
+- 概要: 総グループ数、ユニークグループ数、リビジョン数、平均グループ数/リビジョン
+- 状態分布: BORN, CONTINUED, GROWN, SHRUNK, SPLIT, MERGED, DISSOLVED の分布
+- グループサイズ統計: 平均/中央値/最大/最小グループサイズ
+- メンバー変更統計: 平均/最大追加数・削除数
+- ライフタイム統計: 平均/中央値/最大ライフタイム（日数・リビジョン数）
+
+**使用例**:
+```bash
+# コンソールに統計レポートを表示
+b4-thesis stats groups ./output/group_tracking.csv
+
+# 詳細統計をExcelファイルに保存
+b4-thesis stats groups ./output/group_tracking.csv -o ./group_stats.xlsx
 ```
 
 #### visualize
 
-データから可視化を作成します。
+✅ **完全実装済み**: データから可視化（プロット）を作成します。サブコマンドで汎用プロットと専用ダッシュボードを選択できます。
+
+##### visualize general
+
+任意のCSVファイルから汎用的な可視化を作成します。
 
 ```bash
-b4-thesis visualize <input_file> -o <output> [OPTIONS]
+b4-thesis visualize general <input_file> -o <output> [OPTIONS]
 
 Options:
-  -o, --output PATH       出力ファイルパス（必須）
-  -t, --type [scatter|line|bar|histogram|heatmap]  グラフの種類
-  --x-column TEXT         X軸の列名
-  --y-column TEXT         Y軸の列名
-  --title TEXT            グラフのタイトル
+  -o, --output PATH                               出力ファイルパス（必須）
+  -t, --type [scatter|line|bar|histogram|heatmap] グラフの種類（デフォルト: scatter）
+  --x-column TEXT                                 X軸の列名
+  --y-column TEXT                                 Y軸の列名
+  --title TEXT                                    グラフのタイトル
+```
+
+**サポートされるプロットタイプ**:
+- `scatter`: 散布図（x-column, y-column必須）
+- `line`: 折れ線グラフ（x-column, y-column必須）
+- `bar`: 棒グラフ（x-column, y-column必須）
+- `histogram`: ヒストグラム（x-column必須）
+- `heatmap`: ヒートマップ（相関行列、数値列のみ）
+
+**使用例**:
+```bash
+# 散布図を作成
+b4-thesis visualize general data.csv -o scatter.png -t scatter --x-column x --y-column y
+
+# ヒストグラムを作成
+b4-thesis visualize general data.csv -o hist.png -t histogram --x-column lifetime_days
+
+# 相関ヒートマップを作成
+b4-thesis visualize general data.csv -o heatmap.png -t heatmap --title "Correlation Matrix"
+```
+
+##### visualize methods
+
+メソッド追跡結果（`method_tracking.csv`）の専用可視化を作成します。
+
+```bash
+b4-thesis visualize methods <input_file> [OPTIONS]
+
+Options:
+  -o, --output-dir PATH                           出力ディレクトリ（デフォルト: ./plots）
+  -t, --plot-type [dashboard|state|lifetime|timeline]  プロットタイプ（デフォルト: dashboard）
+```
+
+**プロットタイプ**:
+- `dashboard`: 全7種類のプロットを一括生成（状態分布×2、ライフタイム分布×2、時系列×3）
+- `state`: 状態分布の棒グラフ
+- `lifetime`: ライフタイム分布のヒストグラム
+- `timeline`: メソッド数・クローン数の時系列プロット
+
+**使用例**:
+```bash
+# ダッシュボード（全プロット）を生成
+b4-thesis visualize methods ./output/method_tracking.csv -o ./plots
+
+# 状態分布のみを生成
+b4-thesis visualize methods ./output/method_tracking.csv -o ./plots -t state
+
+# カスタム出力ディレクトリを指定
+b4-thesis visualize methods ./output/method_tracking.csv -o ./my_analysis/plots -t dashboard
+```
+
+##### visualize groups
+
+グループ追跡結果（`group_tracking.csv`）の専用可視化を作成します。
+
+```bash
+b4-thesis visualize groups <input_file> [OPTIONS]
+
+Options:
+  -o, --output-dir PATH                                  出力ディレクトリ（デフォルト: ./plots）
+  -t, --plot-type [dashboard|state|size|timeline|members] プロットタイプ（デフォルト: dashboard）
+```
+
+**プロットタイプ**:
+- `dashboard`: 全7種類のプロットを一括生成（状態分布、サイズ分布×2、時系列×3、メンバー変更）
+- `state`: 状態分布の棒グラフ
+- `size`: グループサイズ分布（ヒストグラム＋箱ひげ図）
+- `timeline`: グループ数・平均サイズの時系列プロット
+- `members`: メンバー変更（追加・削除）の時系列プロット
+
+**使用例**:
+```bash
+# ダッシュボード（全プロット）を生成
+b4-thesis visualize groups ./output/group_tracking.csv -o ./plots
+
+# グループサイズ分布のみを生成
+b4-thesis visualize groups ./output/group_tracking.csv -o ./plots -t size
+
+# メンバー変更の時系列を生成
+b4-thesis visualize groups ./output/group_tracking.csv -o ./plots -t members
 ```
 
 ### 出力CSVフォーマット
@@ -512,3 +682,42 @@ uv run ruff check --fix src/ && uv run ruff format src/ && uv run pytest tests/
 - [ ] PDF出力機能
 - [ ] サマリーダッシュボード
 - [ ] カスタマイズ可能なテンプレート
+
+### 📅 Phase 6: `analyze`コマンド拡張（計画中）
+
+**現状**: 基本実装のみ（ファイル/ディレクトリの基本情報表示）
+
+**実装予定の機能**:
+
+#### Phase 6.1: リビジョンデータ分析
+- [ ] リビジョンディレクトリの包括的な分析
+  - リビジョン数、日付範囲、平均ブロック数
+  - データ品質チェック（欠損値、異常値検出）
+  - CSVファイルの構造検証（必須カラム存在チェック）
+- [ ] ブロック統計サマリー
+  - 平均トークン長、LOC分布
+  - 関数名の統計（最頻出、ユニーク数）
+  - ファイルパス分布
+- [ ] クローンペア統計
+  - クローンペア数の時系列変化
+  - 類似度分布（min/max/avg）
+
+#### Phase 6.2: データ品質レポート
+- [ ] データ整合性チェック
+  - `code_blocks.csv` と `clone_pairs.csv` の整合性検証
+  - block_idの一貫性チェック
+  - 日付の連続性チェック
+- [ ] 異常検出
+  - 急激なブロック数変化の検出
+  - 異常なトークン長のブロック検出
+  - クローンペア数の異常変化検出
+- [ ] レポート出力（JSON/CSV/TXT）
+
+#### Phase 6.3: Gitリポジトリ分析（オプション）
+- [ ] Gitリポジトリのメタデータ分析
+  - コミット数、ブランチ数、コントリビューター数
+  - コミット頻度の時系列分析
+  - ファイル変更履歴の統計
+- [ ] 依存: `gitpython`ライブラリの追加が必要
+
+**優先度**: 低（`track`, `stats`, `visualize`が主要機能のため）
