@@ -4,6 +4,7 @@ This module contains integration tests that use real repository data
 to validate the tool's functionality with actual production data.
 """
 
+import os
 from pathlib import Path
 import time
 
@@ -24,6 +25,11 @@ def has_real_data():
     # Check if there are at least 3 revision directories
     revision_dirs = [d for d in REAL_DATA_DIR.iterdir() if d.is_dir()]
     return len(revision_dirs) >= 3
+
+
+def is_ci():
+    """Check if running in CI environment."""
+    return os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
 
 @pytest.fixture
@@ -252,6 +258,8 @@ class TestSmallRealDataset:
 class TestMediumRealDataset:
     """Tests with medium real dataset (3 revisions)."""
 
+    @pytest.mark.ci
+    @pytest.mark.skipif(not is_ci(), reason="Performance test only runs in CI")
     def test_track_all_performance(self, runner, medium_real_data_subset, temp_output_dir):
         """Test tracking with medium dataset and measure performance."""
         # Measure execution time
@@ -259,7 +267,14 @@ class TestMediumRealDataset:
 
         result = runner.invoke(
             track,
-            ["all", str(medium_real_data_subset), "--output", str(temp_output_dir), "--verbose"],
+            [
+                "all",
+                str(medium_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+                "--verbose",
+                "--optimize",
+            ],
         )
 
         elapsed_time = time.time() - start_time
