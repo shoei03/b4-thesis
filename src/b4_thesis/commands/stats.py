@@ -185,7 +185,7 @@ def methods(input_file: str, output: str | None):
         if output:
             # Create detailed distribution tables
             state_dist = get_state_distribution(df, state_col="state")
-            detailed_dist = get_state_distribution(df, state_col="detailed_state")
+            detailed_dist = get_state_distribution(df, state_col="state_detail")
             lifetime_dist = get_lifetime_distribution(df, bins=10, column="lifetime_days")
 
             # Save to Excel

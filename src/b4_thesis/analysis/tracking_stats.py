@@ -89,10 +89,10 @@ def calculate_method_stats(df: pd.DataFrame) -> MethodTrackingStats:
         raise ValueError("DataFrame is empty")
 
     required_cols = [
-        "method_id",
+        "block_id",
         "revision",
         "state",
-        "detailed_state",
+        "state_detail",
         "clone_count",
         "lifetime_days",
         "lifetime_revisions",
@@ -104,11 +104,11 @@ def calculate_method_stats(df: pd.DataFrame) -> MethodTrackingStats:
     # Basic counts
     total_methods = len(df)
     total_revisions = df["revision"].nunique()
-    unique_methods = df["method_id"].nunique()
+    unique_methods = df["block_id"].nunique()
 
     # State distribution
     state_counts = df["state"].value_counts().to_dict()
-    detailed_state_counts = df["detailed_state"].value_counts().to_dict()
+    detailed_state_counts = df["state_detail"].value_counts().to_dict()
 
     # Clone statistics
     methods_in_clones = len(df[df["clone_count"] > 0])
@@ -116,7 +116,7 @@ def calculate_method_stats(df: pd.DataFrame) -> MethodTrackingStats:
     max_clone_count = df["clone_count"].max()
 
     # Lifetime statistics (use first appearance for each unique method)
-    unique_df = df.drop_duplicates(subset=["method_id"], keep="first")
+    unique_df = df.drop_duplicates(subset=["block_id"], keep="first")
     avg_lifetime_days = unique_df["lifetime_days"].mean()
     avg_lifetime_revisions = unique_df["lifetime_revisions"].mean()
     max_lifetime_days = unique_df["lifetime_days"].max()
@@ -171,8 +171,8 @@ def calculate_group_stats(df: pd.DataFrame) -> GroupTrackingStats:
         "revision",
         "state",
         "member_count",
-        "members_added",
-        "members_removed",
+        "member_added",
+        "member_removed",
         "lifetime_days",
         "lifetime_revisions",
     ]
@@ -195,10 +195,10 @@ def calculate_group_stats(df: pd.DataFrame) -> GroupTrackingStats:
     median_group_size = df["member_count"].median()
 
     # Member change statistics
-    avg_members_added = df["members_added"].mean()
-    avg_members_removed = df["members_removed"].mean()
-    max_members_added = df["members_added"].max()
-    max_members_removed = df["members_removed"].max()
+    avg_members_added = df["member_added"].mean()
+    avg_members_removed = df["member_removed"].mean()
+    max_members_added = df["member_added"].max()
+    max_members_removed = df["member_removed"].max()
 
     # Lifetime statistics (use first appearance for each unique group)
     unique_df = df.drop_duplicates(subset=["group_id"], keep="first")
@@ -278,7 +278,7 @@ def get_lifetime_distribution(
         return pd.DataFrame(columns=["bin", "count"])
 
     # Use unique methods/groups for lifetime distribution
-    id_col = "method_id" if "method_id" in df.columns else "group_id"
+    id_col = "block_id" if "block_id" in df.columns else "group_id"
     unique_df = df.drop_duplicates(subset=[id_col], keep="first")
 
     counts, bin_edges = pd.cut(unique_df[column], bins=bins, retbins=True, include_lowest=True)

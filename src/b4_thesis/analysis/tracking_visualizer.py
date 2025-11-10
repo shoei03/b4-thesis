@@ -30,7 +30,9 @@ def plot_state_distribution(
     counts = df[state_col].value_counts()
 
     if plot_type == "bar":
-        ax = sns.barplot(x=counts.index, y=counts.values, palette="viridis")
+        ax = sns.barplot(
+            x=counts.index, y=counts.values, hue=counts.index, palette="viridis", legend=False
+        )
         ax.set_xlabel("State")
         ax.set_ylabel("Count")
         plt.xticks(rotation=45, ha="right")
@@ -80,7 +82,7 @@ def plot_lifetime_distribution(
         raise ValueError(f"DataFrame is empty or column '{column}' not found")
 
     # Use unique methods/groups for lifetime distribution
-    id_col = "method_id" if "method_id" in df.columns else "group_id"
+    id_col = "block_id" if "block_id" in df.columns else "group_id"
     unique_df = df.drop_duplicates(subset=[id_col], keep="first")
 
     plt.figure(figsize=(10, 6))
@@ -285,13 +287,13 @@ def plot_member_changes(
     if df.empty:
         raise ValueError("DataFrame is empty")
 
-    required_cols = ["revision", "members_added", "members_removed"]
+    required_cols = ["revision", "member_added", "member_removed"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing required columns: {missing_cols}")
 
     # Aggregate by revision
-    agg = df.groupby("revision")[["members_added", "members_removed"]].sum()
+    agg = df.groupby("revision")[["member_added", "member_removed"]].sum()
 
     plt.figure(figsize=(12, 6))
 
@@ -300,7 +302,7 @@ def plot_member_changes(
 
     plt.bar(
         [i - width / 2 for i in x],
-        agg["members_added"],
+        agg["member_added"],
         width,
         label="Added",
         color="green",
@@ -308,7 +310,7 @@ def plot_member_changes(
     )
     plt.bar(
         [i + width / 2 for i in x],
-        agg["members_removed"],
+        agg["member_removed"],
         width,
         label="Removed",
         color="red",
@@ -361,7 +363,7 @@ def create_method_tracking_dashboard(
     # 2. Detailed state distribution
     plot_state_distribution(
         df,
-        state_col="detailed_state",
+        state_col="state_detail",
         output_path=output_path / "detailed_state_distribution.png",
         title="Detailed State Distribution",
         plot_type="bar",
