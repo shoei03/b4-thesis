@@ -167,22 +167,42 @@ class MatchResult:
     Attributes:
         forward_matches: Mapping from source block_id to target block_id
         backward_matches: Mapping from target block_id to source block_id
-        match_types: Type of match for each block_id ('token_hash', 'similarity', or 'none')
+        match_types: Type of match for each block_id:
+            - 'name_based': Matched by file_path + function_name (Phase 0)
+            - 'token_hash': Matched by token_hash (Phase 1, no move/rename)
+            - 'moved': Matched by token_hash, file_path changed (Phase 1)
+            - 'renamed': Matched by token_hash, function_name changed (Phase 1)
+            - 'moved_and_renamed': Matched by token_hash, both changed (Phase 1)
+            - 'similarity': Matched by similarity (Phase 2, no move/rename)
+            - 'similarity_moved': Matched by similarity, file_path changed (Phase 2)
+            - 'similarity_renamed': Matched by similarity, function_name changed (Phase 2)
+            - 'similarity_moved_and_renamed': Matched by similarity, both changed (Phase 2)
         match_similarities: Similarity score for each match (0-100)
+        signature_changes: List of signature changes for each match:
+            - ['parameters']: Parameters changed
+            - ['return_type']: Return type changed
+            - ['parameters', 'return_type']: Both changed
+            - []: No signature changes
     """
 
     forward_matches: dict[str, str]
     backward_matches: dict[str, str]
     match_types: dict[str, str]
     match_similarities: dict[str, int]
+    signature_changes: dict[str, list[str]]
 
 
 class MethodMatcher:
-    """Matches methods across revisions using token hash and similarity.
+    """Matches methods across revisions using name, token hash, and similarity.
 
-    This class implements a 2-phase matching strategy:
+    This class implements a 3-phase matching strategy:
+    Phase 0: Name-based matching (file_path + function_name) - highest priority
+             - Unconditionally matches methods with same file_path and function_name
+             - Detects signature changes (parameters, return_type)
     Phase 1: Fast token_hash-based exact matching (O(n))
+             - Detects moves (file_path changed) and renames (function_name changed)
     Phase 2: Similarity-based fuzzy matching for unmatched blocks
+             - Detects moves and renames for similar methods
 
     Phase 5.3.2 optimizations:
     - LSH indexing for candidate filtering (100x speedup)
@@ -233,8 +253,10 @@ class MethodMatcher:
         """Match code blocks from source revision to target revision.
 
         Args:
-            source_blocks: DataFrame with columns [block_id, token_hash, token_sequence, ...]
-            target_blocks: DataFrame with columns [block_id, token_hash, token_sequence, ...]
+            source_blocks: DataFrame with columns [block_id, file_path, function_name,
+                          parameters, return_type, token_hash, token_sequence, ...]
+            target_blocks: DataFrame with columns [block_id, file_path, function_name,
+                          parameters, return_type, token_hash, token_sequence, ...]
             parallel: If True, use parallel processing for similarity calculation (default: False)
             max_workers: Maximum number of worker processes for parallel processing.
                         If None, defaults to number of CPU cores.
@@ -244,25 +266,99 @@ class MethodMatcher:
                                is automatically enabled (default: 100000).
 
         Returns:
-            MatchResult containing forward matches, backward matches, types, and similarities.
+            MatchResult containing forward matches, backward matches, types, similarities,
+            and signature changes.
         """
         forward_matches = {}
         match_types = {}
         match_similarities = {}
+        signature_changes = {}
+
+        # Phase 0: Name-based matching (highest priority)
+        # Match methods with same file_path and function_name
+        # Build name-based index: (file_path, function_name) -> target block data
+        name_index = {}
+        for _, row in target_blocks.iterrows():
+            key = (row["file_path"], row["function_name"])
+            if key not in name_index:
+                name_index[key] = {
+                    "block_id": row["block_id"],
+                    "parameters": row.get("parameters", ""),
+                    "return_type": row.get("return_type", ""),
+                }
+
+        for _, source_row in source_blocks.iterrows():
+            block_id_source = source_row["block_id"]
+            key = (source_row["file_path"], source_row["function_name"])
+
+            if key in name_index:
+                target_data = name_index[key]
+                block_id_target = target_data["block_id"]
+
+                # Match found via name-based matching
+                forward_matches[block_id_source] = block_id_target
+                match_types[block_id_source] = "name_based"
+                match_similarities[block_id_source] = 100  # Assume 100 for name-based
+
+                # Detect signature changes
+                sig_changes = []
+                if source_row.get("parameters", "") != target_data["parameters"]:
+                    sig_changes.append("parameters")
+                if source_row.get("return_type", "") != target_data["return_type"]:
+                    sig_changes.append("return_type")
+                signature_changes[block_id_source] = sig_changes
 
         # Phase 1: token_hash-based fast matching
-        token_hash_index = target_blocks.set_index("token_hash")["block_id"].to_dict()
+        token_hash_index = {}
+        for _, row in target_blocks.iterrows():
+            token_hash = row["token_hash"]
+            if token_hash not in token_hash_index:
+                token_hash_index[token_hash] = {
+                    "block_id": row["block_id"],
+                    "file_path": row["file_path"],
+                    "function_name": row["function_name"],
+                }
 
-        for _, row in source_blocks.iterrows():
-            block_id_source = row["block_id"]
-            token_hash_source = row["token_hash"]
+        for _, source_row in source_blocks.iterrows():
+            block_id_source = source_row["block_id"]
+            token_hash_source = source_row["token_hash"]
+
+            # Skip if already matched in Phase 0
+            if block_id_source in forward_matches:
+                continue
 
             if token_hash_source in token_hash_index:
                 # Exact match found via token_hash
-                block_id_target = token_hash_index[token_hash_source]
+                target_data = token_hash_index[token_hash_source]
+                block_id_target = target_data["block_id"]
+
+                # Skip if target already matched in Phase 0
+                if block_id_target in {v for v in forward_matches.values()}:
+                    continue
+
+                # Detect move/rename
+                source_file_path = source_row["file_path"]
+                source_function_name = source_row["function_name"]
+                target_file_path = target_data["file_path"]
+                target_function_name = target_data["function_name"]
+
+                file_path_changed = source_file_path != target_file_path
+                function_name_changed = source_function_name != target_function_name
+
+                # Determine match type based on changes
+                if file_path_changed and function_name_changed:
+                    match_type = "moved_and_renamed"
+                elif file_path_changed:
+                    match_type = "moved"
+                elif function_name_changed:
+                    match_type = "renamed"
+                else:
+                    match_type = "token_hash"
+
                 forward_matches[block_id_source] = block_id_target
-                match_types[block_id_source] = "token_hash"
+                match_types[block_id_source] = match_type
                 match_similarities[block_id_source] = 100
+                signature_changes[block_id_source] = []  # No sig change for Phase 1
 
         # Phase 2: similarity-based matching for unmatched blocks
         # Phase 5.3.3: Progressive thresholds
@@ -275,6 +371,7 @@ class MethodMatcher:
                 forward_matches,
                 match_types,
                 match_similarities,
+                signature_changes,
                 thresholds,
                 parallel,
                 max_workers,
@@ -304,6 +401,7 @@ class MethodMatcher:
                     forward_matches,
                     match_types,
                     match_similarities,
+                    signature_changes,
                 )
             elif use_parallel:
                 # Parallel processing version
@@ -313,6 +411,7 @@ class MethodMatcher:
                     forward_matches,
                     match_types,
                     match_similarities,
+                    signature_changes,
                     max_workers,
                 )
             else:
@@ -323,6 +422,7 @@ class MethodMatcher:
                     forward_matches,
                     match_types,
                     match_similarities,
+                    signature_changes,
                 )
 
         # Create backward matches (reverse mapping)
@@ -333,6 +433,7 @@ class MethodMatcher:
             backward_matches=backward_matches,
             match_types=match_types,
             match_similarities=match_similarities,
+            signature_changes=signature_changes,
         )
 
     def bidirectional_match(
@@ -362,6 +463,7 @@ class MethodMatcher:
         forward_matches: dict[str, str],
         match_types: dict[str, str],
         match_similarities: dict[str, int],
+        signature_changes: dict[str, list[str]],
     ) -> None:
         """LSH-based similarity matching with Phase 5.3.2 optimizations.
 
@@ -377,6 +479,7 @@ class MethodMatcher:
             forward_matches: Dict to update with matches
             match_types: Dict to update with match types
             match_similarities: Dict to update with similarities
+            signature_changes: Dict to update with signature changes
         """
         # Build LSH index from target blocks
         lsh_index = LSHIndex(threshold=self.lsh_threshold, num_perm=self.lsh_num_perm)
@@ -386,7 +489,11 @@ class MethodMatcher:
         for _, row in unmatched_target.iterrows():
             block_id = row["block_id"]
             token_seq = row["token_sequence"]
-            target_lookup[block_id] = token_seq
+            target_lookup[block_id] = {
+                "token_sequence": token_seq,
+                "file_path": row["file_path"],
+                "function_name": row["function_name"],
+            }
 
             # Add to LSH index
             try:
@@ -422,7 +529,8 @@ class MethodMatcher:
             candidates = []
 
             for candidate_id in candidate_ids:
-                token_seq_target = target_lookup[candidate_id]
+                target_data = target_lookup[candidate_id]
+                token_seq_target = target_data["token_sequence"]
 
                 # Phase 5.3.1 optimization: Pre-filters
                 if _should_skip_by_length(token_seq_source, token_seq_target):
@@ -453,9 +561,31 @@ class MethodMatcher:
             if candidates:
                 # Select the best match (highest similarity)
                 best_match_id, best_similarity = max(candidates, key=lambda x: x[1])
+
+                # Detect move/rename for similarity matches
+                source_file_path = source_row["file_path"]
+                source_function_name = source_row["function_name"]
+                target_data = target_lookup[best_match_id]
+                target_file_path = target_data["file_path"]
+                target_function_name = target_data["function_name"]
+
+                file_path_changed = source_file_path != target_file_path
+                function_name_changed = source_function_name != target_function_name
+
+                # Determine match type
+                if file_path_changed and function_name_changed:
+                    match_type = "similarity_moved_and_renamed"
+                elif file_path_changed:
+                    match_type = "similarity_moved"
+                elif function_name_changed:
+                    match_type = "similarity_renamed"
+                else:
+                    match_type = "similarity"
+
                 forward_matches[block_id_source] = best_match_id
-                match_types[block_id_source] = "similarity"
+                match_types[block_id_source] = match_type
                 match_similarities[block_id_source] = best_similarity
+                signature_changes[block_id_source] = []  # No sig change for Phase 2
                 matched_targets.add(best_match_id)
 
     def _match_similarity_sequential(
@@ -465,6 +595,7 @@ class MethodMatcher:
         forward_matches: dict[str, str],
         match_types: dict[str, str],
         match_similarities: dict[str, int],
+        signature_changes: dict[str, list[str]],
     ) -> None:
         """Sequential similarity-based matching with Phase 5.3.1 optimizations.
 
@@ -479,12 +610,14 @@ class MethodMatcher:
             forward_matches: Dict to update with matches
             match_types: Dict to update with match types
             match_similarities: Dict to update with similarities
+            signature_changes: Dict to update with signature changes
         """
         for _, source_row in unmatched_source.iterrows():
             block_id_source = source_row["block_id"]
             token_seq_source = source_row["token_sequence"]
 
             candidates = []
+            target_data_map = {}  # Store target data for later move/rename detection
 
             for _, target_row in unmatched_target.iterrows():
                 block_id_target = target_row["block_id"]
@@ -506,13 +639,40 @@ class MethodMatcher:
 
                 if similarity >= self.similarity_threshold:
                     candidates.append((block_id_target, similarity))
+                    # Store target data for move/rename detection
+                    target_data_map[block_id_target] = {
+                        "file_path": target_row["file_path"],
+                        "function_name": target_row["function_name"],
+                    }
 
             if candidates:
                 # Select the best match (highest similarity)
                 best_match_id, best_similarity = max(candidates, key=lambda x: x[1])
+
+                # Detect move/rename for similarity matches
+                source_file_path = source_row["file_path"]
+                source_function_name = source_row["function_name"]
+                target_data = target_data_map[best_match_id]
+                target_file_path = target_data["file_path"]
+                target_function_name = target_data["function_name"]
+
+                file_path_changed = source_file_path != target_file_path
+                function_name_changed = source_function_name != target_function_name
+
+                # Determine match type
+                if file_path_changed and function_name_changed:
+                    match_type = "similarity_moved_and_renamed"
+                elif file_path_changed:
+                    match_type = "similarity_moved"
+                elif function_name_changed:
+                    match_type = "similarity_renamed"
+                else:
+                    match_type = "similarity"
+
                 forward_matches[block_id_source] = best_match_id
-                match_types[block_id_source] = "similarity"
+                match_types[block_id_source] = match_type
                 match_similarities[block_id_source] = best_similarity
+                signature_changes[block_id_source] = []  # No sig change for Phase 2
 
                 # Remove matched target from unmatched pool to prevent double matching
                 unmatched_target = unmatched_target[unmatched_target["block_id"] != best_match_id]
@@ -524,6 +684,7 @@ class MethodMatcher:
         forward_matches: dict[str, str],
         match_types: dict[str, str],
         match_similarities: dict[str, int],
+        signature_changes: dict[str, list[str]],
         max_workers: int | None = None,
     ) -> None:
         """Parallel similarity-based matching using ProcessPoolExecutor.
@@ -534,18 +695,33 @@ class MethodMatcher:
             forward_matches: Dict to update with matches
             match_types: Dict to update with match types
             match_similarities: Dict to update with similarities
+            signature_changes: Dict to update with signature changes
             max_workers: Maximum number of worker processes
         """
         # Prepare all source-target pairs for parallel computation
         pairs_to_compute: list[tuple[str, str, str, str, int]] = []
 
+        # Create lookup maps for move/rename detection
+        source_data_map = {}
+        target_data_map = {}
+
         for _, source_row in unmatched_source.iterrows():
             block_id_source = source_row["block_id"]
             token_seq_source = source_row["token_sequence"]
+            source_data_map[block_id_source] = {
+                "file_path": source_row["file_path"],
+                "function_name": source_row["function_name"],
+            }
 
             for _, target_row in unmatched_target.iterrows():
                 block_id_target = target_row["block_id"]
                 token_seq_target = target_row["token_sequence"]
+
+                if block_id_target not in target_data_map:
+                    target_data_map[block_id_target] = {
+                        "file_path": target_row["file_path"],
+                        "function_name": target_row["function_name"],
+                    }
 
                 pairs_to_compute.append(
                     (
@@ -583,9 +759,32 @@ class MethodMatcher:
                 if candidates:
                     # Select the best match (highest similarity)
                     best_match_id, best_similarity = max(candidates, key=lambda x: x[1])
+
+                    # Detect move/rename for similarity matches
+                    source_data = source_data_map[block_id_source]
+                    target_data = target_data_map[best_match_id]
+                    source_file_path = source_data["file_path"]
+                    source_function_name = source_data["function_name"]
+                    target_file_path = target_data["file_path"]
+                    target_function_name = target_data["function_name"]
+
+                    file_path_changed = source_file_path != target_file_path
+                    function_name_changed = source_function_name != target_function_name
+
+                    # Determine match type
+                    if file_path_changed and function_name_changed:
+                        match_type = "similarity_moved_and_renamed"
+                    elif file_path_changed:
+                        match_type = "similarity_moved"
+                    elif function_name_changed:
+                        match_type = "similarity_renamed"
+                    else:
+                        match_type = "similarity"
+
                     forward_matches[block_id_source] = best_match_id
-                    match_types[block_id_source] = "similarity"
+                    match_types[block_id_source] = match_type
                     match_similarities[block_id_source] = best_similarity
+                    signature_changes[block_id_source] = []  # No sig change for Phase 2
                     matched_targets.add(best_match_id)
 
     def _match_with_progressive_thresholds(
@@ -595,6 +794,7 @@ class MethodMatcher:
         forward_matches: dict[str, str],
         match_types: dict[str, str],
         match_similarities: dict[str, int],
+        signature_changes: dict[str, list[str]],
         thresholds: list[int],
         parallel: bool,
         max_workers: int | None,
@@ -613,6 +813,7 @@ class MethodMatcher:
             forward_matches: Dict to update with matches
             match_types: Dict to update with match types
             match_similarities: Dict to update with similarities
+            signature_changes: Dict to update with signature changes
             thresholds: List of thresholds in descending order (e.g., [90, 80, 70])
             parallel: If True, use parallel processing
             max_workers: Maximum number of worker processes
@@ -655,6 +856,7 @@ class MethodMatcher:
                     forward_matches,
                     match_types,
                     match_similarities,
+                    signature_changes,
                 )
             elif use_parallel:
                 # Parallel processing version
@@ -664,6 +866,7 @@ class MethodMatcher:
                     forward_matches,
                     match_types,
                     match_similarities,
+                    signature_changes,
                     max_workers,
                 )
             else:
@@ -674,6 +877,7 @@ class MethodMatcher:
                     forward_matches,
                     match_types,
                     match_similarities,
+                    signature_changes,
                 )
 
             # Restore original threshold
