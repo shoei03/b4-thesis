@@ -79,6 +79,7 @@ def simple_method_matches():
             "B4": 100,
             "B5": 100,
         },
+        signature_changes={},
     )
 
 
@@ -204,6 +205,7 @@ class TestGroupMatcher:
             backward_matches={"B1_new": "B1", "B2_new": "B2"},
             match_types={"B1": "token_hash", "B2": "token_hash"},
             match_similarities={"B1": 100, "B2": 100},
+            signature_changes={},
         )
 
         matches = matcher.match_groups(groups_old, groups_new, method_matches)
@@ -240,6 +242,7 @@ class TestGroupMatcher:
             backward_matches={"B1_new": "B1", "B2_new": "B2"},
             match_types={"B1": "token_hash", "B2": "token_hash"},
             match_similarities={"B1": 100, "B2": 100},
+            signature_changes={},
         )
 
         matches = matcher.match_groups(groups_old, groups_new, method_matches)
@@ -295,6 +298,7 @@ class TestGroupMatcher:
                 "B4": "token_hash",
             },
             match_similarities={"B1": 100, "B2": 100, "B3": 100, "B4": 100},
+            signature_changes={},
         )
 
         matches = matcher.match_groups(groups_old, groups_new, method_matches)
@@ -352,6 +356,7 @@ class TestGroupMatcher:
                 "B4": "token_hash",
             },
             match_similarities={"B1": 100, "B2": 100, "B3": 100, "B4": 100},
+            signature_changes={},
         )
 
         matches = matcher.match_groups(groups_old, groups_new, method_matches)
@@ -386,6 +391,7 @@ class TestGroupMatcher:
                 backward_matches={},
                 match_types={},
                 match_similarities={},
+                signature_changes={},
             ),
         )
 
@@ -435,6 +441,7 @@ class TestGroupMatcher:
                 "B5": "token_hash",
             },
             match_similarities={"B1": 100, "B2": 100, "B3": 100, "B4": 100, "B5": 100},
+            signature_changes={},
         )
 
         matches = matcher.match_groups(groups_old, groups_new, method_matches)

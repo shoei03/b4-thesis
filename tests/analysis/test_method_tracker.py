@@ -269,7 +269,19 @@ class TestMethodTrackerDataTypes:
         """Test that match_type contains valid values."""
         result = tracker.track()
 
-        valid_match_types = ["token_hash", "similarity", "none", None]
+        valid_match_types = [
+            "name_based",
+            "token_hash",
+            "moved",
+            "renamed",
+            "moved_and_renamed",
+            "similarity",
+            "similarity_moved",
+            "similarity_renamed",
+            "similarity_moved_and_renamed",
+            "none",
+            None,
+        ]
         # Allow NaN values which represent None
         assert (
             result["match_type"].isna().all() or result["match_type"].isin(valid_match_types).all()

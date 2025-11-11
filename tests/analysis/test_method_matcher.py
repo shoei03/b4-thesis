@@ -20,9 +20,12 @@ class TestMethodMatcher:
         return pd.DataFrame(
             {
                 "block_id": ["block_a", "block_b", "block_c"],
+                "file_path": ["file1.py", "file1.py", "file2.py"],
+                "function_name": ["func_a", "func_b", "func_c"],
+                "parameters": ["(x, y)", "(a, b)", "(z)"],
+                "return_type": ["int", "str", "bool"],
                 "token_hash": ["hash_1", "hash_2", "hash_3"],
                 "token_sequence": ["[1;2;3]", "[4;5;6]", "[7;8;9]"],
-                "function_name": ["func_a", "func_b", "func_c"],
             }
         )
 
@@ -32,9 +35,12 @@ class TestMethodMatcher:
         return pd.DataFrame(
             {
                 "block_id": ["block_x", "block_y", "block_z"],
+                "file_path": ["file1.py", "file1.py", "file2.py"],
+                "function_name": ["func_a", "func_b", "func_c"],
+                "parameters": ["(x, y)", "(a, b)", "(z)"],
+                "return_type": ["int", "str", "bool"],
                 "token_hash": ["hash_1", "hash_2", "hash_3"],  # Same hashes
                 "token_sequence": ["[1;2;3]", "[4;5;6]", "[7;8;9]"],
-                "function_name": ["func_a", "func_b", "func_c"],
             }
         )
 
@@ -44,20 +50,23 @@ class TestMethodMatcher:
         return pd.DataFrame(
             {
                 "block_id": ["block_x", "block_y", "block_z"],
+                "file_path": ["file1.py", "file1.py", "file3.py"],
+                "function_name": ["func_a_modified", "func_b_modified", "func_z"],
+                "parameters": ["(x, y, z)", "(a, b, c)", "(w)"],
+                "return_type": ["int", "str", "None"],
                 "token_hash": ["hash_x", "hash_y", "hash_z"],  # Different hashes
                 "token_sequence": [
                     "[1;2;3;4]",  # Similar to [1;2;3]
                     "[4;5;6;7]",  # Similar to [4;5;6]
                     "[10;11;12]",  # Not similar to [7;8;9]
                 ],
-                "function_name": ["func_a_modified", "func_b_modified", "func_z"],
             }
         )
 
     def test_exact_match_via_token_hash(
         self, matcher, sample_blocks_v1, sample_blocks_v2_exact_match
     ):
-        """Test Phase 1: Exact matching via token_hash."""
+        """Test Phase 0: Name-based matching (file_path + function_name same)."""
         result = matcher.match_blocks(sample_blocks_v1, sample_blocks_v2_exact_match)
 
         # All blocks should match exactly
@@ -66,23 +75,26 @@ class TestMethodMatcher:
         assert result.forward_matches["block_b"] == "block_y"
         assert result.forward_matches["block_c"] == "block_z"
 
-        # All matches should be token_hash type
-        assert all(match_type == "token_hash" for match_type in result.match_types.values())
+        # All matches should be name_based type (Phase 0 has priority)
+        assert all(match_type == "name_based" for match_type in result.match_types.values())
 
         # All similarities should be 100
         assert all(sim == 100 for sim in result.match_similarities.values())
 
+        # No signature changes (all parameters and return_type are same)
+        assert all(len(sig_changes) == 0 for sig_changes in result.signature_changes.values())
+
     def test_similarity_based_matching(self, matcher, sample_blocks_v1, sample_blocks_v2_similar):
-        """Test Phase 2: Similarity-based matching."""
+        """Test Phase 2: Similarity-based matching with rename detection."""
         result = matcher.match_blocks(sample_blocks_v1, sample_blocks_v2_similar)
 
         # block_a and block_b should match via similarity
         assert "block_a" in result.forward_matches
         assert "block_b" in result.forward_matches
 
-        # Match types should be similarity
-        assert result.match_types.get("block_a") == "similarity"
-        assert result.match_types.get("block_b") == "similarity"
+        # Match types should include "renamed" (function_name changed)
+        assert result.match_types.get("block_a") == "similarity_renamed"
+        assert result.match_types.get("block_b") == "similarity_renamed"
 
         # Similarities should be < 100 (not exact matches)
         if "block_a" in result.match_similarities:
@@ -95,18 +107,24 @@ class TestMethodMatcher:
         blocks_v1 = pd.DataFrame(
             {
                 "block_id": ["block_a"],
+                "file_path": ["file1.py"],
+                "function_name": ["func_a"],
+                "parameters": ["(x)"],
+                "return_type": ["int"],
                 "token_hash": ["hash_1"],
                 "token_sequence": ["[1;2;3;4;5]"],
-                "function_name": ["func_a"],
             }
         )
 
         blocks_v2 = pd.DataFrame(
             {
                 "block_id": ["block_x"],
+                "file_path": ["file2.py"],
+                "function_name": ["func_x"],
+                "parameters": ["(y)"],
+                "return_type": ["str"],
                 "token_hash": ["hash_x"],
                 "token_sequence": ["[10;20;30;40;50]"],  # Very different
-                "function_name": ["func_x"],
             }
         )
 
@@ -140,10 +158,16 @@ class TestMethodMatcher:
 
     def test_empty_source_blocks(self, matcher):
         """Test matching with empty source blocks."""
-        source = pd.DataFrame(columns=["block_id", "token_hash", "token_sequence"])
+        source = pd.DataFrame(
+            columns=["block_id", "file_path", "function_name", "parameters", "return_type", "token_hash", "token_sequence"]
+        )
         target = pd.DataFrame(
             {
                 "block_id": ["block_x"],
+                "file_path": ["file1.py"],
+                "function_name": ["func_x"],
+                "parameters": ["(x)"],
+                "return_type": ["int"],
                 "token_hash": ["hash_x"],
                 "token_sequence": ["[1;2;3]"],
             }
@@ -159,11 +183,17 @@ class TestMethodMatcher:
         source = pd.DataFrame(
             {
                 "block_id": ["block_a"],
+                "file_path": ["file1.py"],
+                "function_name": ["func_a"],
+                "parameters": ["(x)"],
+                "return_type": ["int"],
                 "token_hash": ["hash_1"],
                 "token_sequence": ["[1;2;3]"],
             }
         )
-        target = pd.DataFrame(columns=["block_id", "token_hash", "token_sequence"])
+        target = pd.DataFrame(
+            columns=["block_id", "file_path", "function_name", "parameters", "return_type", "token_hash", "token_sequence"]
+        )
 
         result = matcher.match_blocks(source, target)
 
@@ -174,22 +204,28 @@ class TestMethodMatcher:
         source = pd.DataFrame(
             {
                 "block_id": ["block_a"],
+                "file_path": ["file1.py"],
+                "function_name": ["func_a"],
+                "parameters": ["(x)"],
+                "return_type": ["int"],
                 "token_hash": ["hash_1"],
                 "token_sequence": ["[1;2;3;4;5]"],
-                "function_name": ["func_a"],
             }
         )
 
         target = pd.DataFrame(
             {
                 "block_id": ["block_x", "block_y", "block_z"],
+                "file_path": ["file2.py", "file3.py", "file4.py"],
+                "function_name": ["func_x", "func_y", "func_z"],
+                "parameters": ["(y)", "(z)", "(w)"],
+                "return_type": ["str", "bool", "None"],
                 "token_hash": ["hash_x", "hash_y", "hash_z"],
                 "token_sequence": [
                     "[1;2;3;4]",  # High similarity
                     "[1;2;3;4;5;6]",  # Medium similarity
                     "[10;20;30]",  # Low similarity
                 ],
-                "function_name": ["func_x", "func_y", "func_z"],
             }
         )
 
@@ -206,18 +242,24 @@ class TestMethodMatcher:
         source = pd.DataFrame(
             {
                 "block_id": ["block_a", "block_b"],
+                "file_path": ["file1.py", "file1.py"],
+                "function_name": ["func_a", "func_b"],
+                "parameters": ["(x)", "(y)"],
+                "return_type": ["int", "str"],
                 "token_hash": ["hash_1", "hash_2"],
                 "token_sequence": ["[1;2;3]", "[1;2;3;4]"],
-                "function_name": ["func_a", "func_b"],
             }
         )
 
         target = pd.DataFrame(
             {
                 "block_id": ["block_x"],
+                "file_path": ["file2.py"],
+                "function_name": ["func_x"],
+                "parameters": ["(z)"],
+                "return_type": ["bool"],
                 "token_hash": ["hash_x"],
                 "token_sequence": ["[1;2;3;4;5]"],  # Similar to both
-                "function_name": ["func_x"],
             }
         )
 
@@ -232,18 +274,24 @@ class TestMethodMatcher:
         source = pd.DataFrame(
             {
                 "block_id": ["block_a"],
+                "file_path": ["file1.py"],
+                "function_name": ["func_a"],
+                "parameters": ["(x)"],
+                "return_type": ["int"],
                 "token_hash": ["hash_1"],
                 "token_sequence": ["invalid"],  # Invalid format
-                "function_name": ["func_a"],
             }
         )
 
         target = pd.DataFrame(
             {
                 "block_id": ["block_x"],
+                "file_path": ["file2.py"],
+                "function_name": ["func_x"],
+                "parameters": ["(y)"],
+                "return_type": ["str"],
                 "token_hash": ["hash_x"],
                 "token_sequence": ["[1;2;3]"],
-                "function_name": ["func_x"],
             }
         )
 
@@ -264,6 +312,10 @@ class TestMethodMatcher:
         source = pd.DataFrame(
             {
                 "block_id": ["block_a"],
+                "file_path": ["file1.py"],
+                "function_name": ["func_a"],
+                "parameters": ["(x)"],
+                "return_type": ["int"],
                 "token_hash": ["hash_1"],
                 "token_sequence": ["[1;2;3;4]"],
             }
@@ -272,6 +324,10 @@ class TestMethodMatcher:
         target = pd.DataFrame(
             {
                 "block_id": ["block_x"],
+                "file_path": ["file2.py"],
+                "function_name": ["func_x"],
+                "parameters": ["(y)"],
+                "return_type": ["str"],
                 "token_hash": ["hash_x"],
                 "token_sequence": ["[1;2;3;4;5;6]"],  # Medium similarity
             }
@@ -297,9 +353,12 @@ class TestMatchResult:
             backward_matches={"x": "a", "y": "b"},
             match_types={"a": "token_hash", "b": "similarity"},
             match_similarities={"a": 100, "b": 85},
+            signature_changes={"a": [], "b": ["parameters"]},
         )
 
         assert len(result.forward_matches) == 2
         assert result.forward_matches["a"] == "x"
         assert result.match_types["a"] == "token_hash"
         assert result.match_similarities["b"] == 85
+        assert result.signature_changes["a"] == []
+        assert result.signature_changes["b"] == ["parameters"]
