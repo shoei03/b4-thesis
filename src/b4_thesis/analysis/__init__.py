@@ -8,7 +8,7 @@ This package provides core analysis functionality including:
 """
 
 from b4_thesis.analysis.group_detector import CloneGroup, GroupDetector
-from b4_thesis.analysis.method_matcher import MatchResult, MethodMatcher
+from b4_thesis.analysis.matching import MatchResult, MethodMatcher
 from b4_thesis.analysis.similarity import (
     calculate_lcs_similarity,
     calculate_ngram_similarity,
@@ -16,6 +16,13 @@ from b4_thesis.analysis.similarity import (
     parse_token_sequence,
 )
 from b4_thesis.analysis.union_find import UnionFind
+
+# Backward compatibility: re-export from old locations
+# This allows existing code to keep using:
+#   from b4_thesis.analysis.method_matcher import MethodMatcher
+# while new code can use:
+#   from b4_thesis.analysis.matching import MethodMatcher
+method_matcher = None  # Lazy import to avoid circular dependency
 
 __all__ = [
     "UnionFind",
