@@ -7,8 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from b4_thesis.analysis.group_detector import CloneGroup, GroupDetector
-from b4_thesis.analysis.matching_constants import MatchingDefaults
-from b4_thesis.analysis.method_matcher import MethodMatcher
+from b4_thesis.analysis.matching import MatchingDefaults, MethodMatcher
 from b4_thesis.analysis.state_classifier import StateClassifier
 from b4_thesis.core.revision_manager import RevisionInfo, RevisionManager
 

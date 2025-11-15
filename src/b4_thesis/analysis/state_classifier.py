@@ -4,7 +4,7 @@ from enum import Enum
 
 from b4_thesis.analysis.group_detector import CloneGroup
 from b4_thesis.analysis.group_matcher import GroupMatch
-from b4_thesis.analysis.method_matcher import MatchResult
+from b4_thesis.analysis.matching import MatchResult
 
 
 class MethodState(Enum):
