@@ -275,8 +275,8 @@ class MethodMatcher:
                 if block_id_target in set(context.forward_matches.values()):
                     continue
 
-                # Detect move/rename using common method
-                match_type = self._detect_match_type(
+                # Detect move/rename
+                match_type = _detect_match_type(
                     source_row["file_path"],
                     source_row["function_name"],
                     target_data["file_path"],
@@ -412,33 +412,3 @@ class MethodMatcher:
         new_to_old = self.match_blocks(blocks_new, blocks_old)
 
         return old_to_new, new_to_old
-
-    def _detect_match_type(
-        self,
-        source_file_path: str,
-        source_function_name: str,
-        target_file_path: str,
-        target_function_name: str,
-        base_type: str,
-    ) -> str:
-        """Detect match type based on file_path and function_name changes.
-
-        This method is a wrapper around the standalone function for backward compatibility.
-
-        Args:
-            source_file_path: File path in source revision
-            source_function_name: Function name in source revision
-            target_file_path: File path in target revision
-            target_function_name: Function name in target revision
-            base_type: Base match type ("token_hash" or "similarity")
-
-        Returns:
-            Match type string
-        """
-        return _detect_match_type(
-            source_file_path,
-            source_function_name,
-            target_file_path,
-            target_function_name,
-            base_type,
-        )
