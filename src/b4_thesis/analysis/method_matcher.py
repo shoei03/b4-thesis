@@ -10,16 +10,9 @@ Performance optimizations:
 - Phase 5.3.2: LSH index, banded LCS, top-k filtering
 """
 
-from concurrent.futures import ProcessPoolExecutor
 
 import pandas as pd
 
-from b4_thesis.analysis.match_filters import (
-    _cached_similarity,
-    _compute_similarity_for_pair,
-    _should_skip_by_jaccard,
-    _should_skip_by_length,
-)
 from b4_thesis.analysis.match_strategies import (
     _detect_match_type,
     _match_similarity_lsh,
