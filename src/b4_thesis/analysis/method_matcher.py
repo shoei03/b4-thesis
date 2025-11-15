@@ -429,24 +429,14 @@ class MethodMatcher:
                 if block_id_target in set(context.forward_matches.values()):
                     continue
 
-                # Detect move/rename
-                source_file_path = source_row["file_path"]
-                source_function_name = source_row["function_name"]
-                target_file_path = target_data["file_path"]
-                target_function_name = target_data["function_name"]
-
-                file_path_changed = source_file_path != target_file_path
-                function_name_changed = source_function_name != target_function_name
-
-                # Determine match type based on changes
-                if file_path_changed and function_name_changed:
-                    match_type = "moved_and_renamed"
-                elif file_path_changed:
-                    match_type = "moved"
-                elif function_name_changed:
-                    match_type = "renamed"
-                else:
-                    match_type = "token_hash"
+                # Detect move/rename using common method
+                match_type = self._detect_match_type(
+                    source_row["file_path"],
+                    source_row["function_name"],
+                    target_data["file_path"],
+                    target_data["function_name"],
+                    "token_hash",
+                )
 
                 context.forward_matches[block_id_source] = block_id_target
                 context.match_types[block_id_source] = match_type
@@ -564,6 +554,50 @@ class MethodMatcher:
 
         return old_to_new, new_to_old
 
+    def _detect_match_type(
+        self,
+        source_file_path: str,
+        source_function_name: str,
+        target_file_path: str,
+        target_function_name: str,
+        base_type: str,
+    ) -> str:
+        """Detect match type based on file_path and function_name changes.
+
+        Args:
+            source_file_path: File path in source revision
+            source_function_name: Function name in source revision
+            target_file_path: File path in target revision
+            target_function_name: Function name in target revision
+            base_type: Base match type ("token_hash" or "similarity")
+
+        Returns:
+            Match type string:
+            - For "token_hash": "token_hash", "moved", "renamed", "moved_and_renamed"
+            - For "similarity": "similarity", "similarity_moved", "similarity_renamed",
+                               "similarity_moved_and_renamed"
+        """
+        file_path_changed = source_file_path != target_file_path
+        function_name_changed = source_function_name != target_function_name
+
+        if not file_path_changed and not function_name_changed:
+            # No move/rename detected
+            return base_type
+
+        # Determine the type of change
+        if file_path_changed and function_name_changed:
+            suffix = "moved_and_renamed"
+        elif file_path_changed:
+            suffix = "moved"
+        else:  # function_name_changed
+            suffix = "renamed"
+
+        # Construct the match type string
+        if base_type == "token_hash":
+            return suffix
+        else:  # base_type == "similarity"
+            return f"similarity_{suffix}"
+
     def _match_similarity_lsh(
         self,
         unmatched_source: pd.DataFrame,
@@ -670,25 +704,15 @@ class MethodMatcher:
                 # Select the best match (highest similarity)
                 best_match_id, best_similarity = max(candidates, key=lambda x: x[1])
 
-                # Detect move/rename for similarity matches
-                source_file_path = source_row["file_path"]
-                source_function_name = source_row["function_name"]
+                # Detect move/rename using common method
                 target_data = target_lookup[best_match_id]
-                target_file_path = target_data["file_path"]
-                target_function_name = target_data["function_name"]
-
-                file_path_changed = source_file_path != target_file_path
-                function_name_changed = source_function_name != target_function_name
-
-                # Determine match type
-                if file_path_changed and function_name_changed:
-                    match_type = "similarity_moved_and_renamed"
-                elif file_path_changed:
-                    match_type = "similarity_moved"
-                elif function_name_changed:
-                    match_type = "similarity_renamed"
-                else:
-                    match_type = "similarity"
+                match_type = self._detect_match_type(
+                    source_row["file_path"],
+                    source_row["function_name"],
+                    target_data["file_path"],
+                    target_data["function_name"],
+                    "similarity",
+                )
 
                 forward_matches[block_id_source] = best_match_id
                 match_types[block_id_source] = match_type
@@ -757,25 +781,15 @@ class MethodMatcher:
                 # Select the best match (highest similarity)
                 best_match_id, best_similarity = max(candidates, key=lambda x: x[1])
 
-                # Detect move/rename for similarity matches
-                source_file_path = source_row["file_path"]
-                source_function_name = source_row["function_name"]
+                # Detect move/rename using common method
                 target_data = target_data_map[best_match_id]
-                target_file_path = target_data["file_path"]
-                target_function_name = target_data["function_name"]
-
-                file_path_changed = source_file_path != target_file_path
-                function_name_changed = source_function_name != target_function_name
-
-                # Determine match type
-                if file_path_changed and function_name_changed:
-                    match_type = "similarity_moved_and_renamed"
-                elif file_path_changed:
-                    match_type = "similarity_moved"
-                elif function_name_changed:
-                    match_type = "similarity_renamed"
-                else:
-                    match_type = "similarity"
+                match_type = self._detect_match_type(
+                    source_row["file_path"],
+                    source_row["function_name"],
+                    target_data["file_path"],
+                    target_data["function_name"],
+                    "similarity",
+                )
 
                 forward_matches[block_id_source] = best_match_id
                 match_types[block_id_source] = match_type
@@ -868,26 +882,16 @@ class MethodMatcher:
                     # Select the best match (highest similarity)
                     best_match_id, best_similarity = max(candidates, key=lambda x: x[1])
 
-                    # Detect move/rename for similarity matches
+                    # Detect move/rename using common method
                     source_data = source_data_map[block_id_source]
                     target_data = target_data_map[best_match_id]
-                    source_file_path = source_data["file_path"]
-                    source_function_name = source_data["function_name"]
-                    target_file_path = target_data["file_path"]
-                    target_function_name = target_data["function_name"]
-
-                    file_path_changed = source_file_path != target_file_path
-                    function_name_changed = source_function_name != target_function_name
-
-                    # Determine match type
-                    if file_path_changed and function_name_changed:
-                        match_type = "similarity_moved_and_renamed"
-                    elif file_path_changed:
-                        match_type = "similarity_moved"
-                    elif function_name_changed:
-                        match_type = "similarity_renamed"
-                    else:
-                        match_type = "similarity"
+                    match_type = self._detect_match_type(
+                        source_data["file_path"],
+                        source_data["function_name"],
+                        target_data["file_path"],
+                        target_data["function_name"],
+                        "similarity",
+                    )
 
                     forward_matches[block_id_source] = best_match_id
                     match_types[block_id_source] = match_type
