@@ -161,6 +161,41 @@ def _compute_similarity_for_pair(
 
 
 @dataclass
+class MatchContext:
+    """Internal context for tracking matching state during processing.
+
+    This class encapsulates the mutable state that gets updated during
+    the matching process, reducing the number of parameters passed between methods.
+
+    Attributes:
+        forward_matches: Mapping from source block_id to target block_id
+        match_types: Type of match for each block_id
+        match_similarities: Similarity score for each match (0-100)
+        signature_changes: List of signature changes for each match
+    """
+
+    forward_matches: dict[str, str]
+    match_types: dict[str, str]
+    match_similarities: dict[str, int]
+    signature_changes: dict[str, list[str]]
+
+    def to_match_result(self) -> "MatchResult":
+        """Convert to MatchResult with backward matches computed.
+
+        Returns:
+            MatchResult with forward and backward matches.
+        """
+        backward_matches = {v: k for k, v in self.forward_matches.items()}
+        return MatchResult(
+            forward_matches=self.forward_matches,
+            backward_matches=backward_matches,
+            match_types=self.match_types,
+            match_similarities=self.match_similarities,
+            signature_changes=self.signature_changes,
+        )
+
+
+@dataclass
 class MatchResult:
     """Result of method matching between two revisions.
 
@@ -252,6 +287,11 @@ class MethodMatcher:
     ) -> MatchResult:
         """Match code blocks from source revision to target revision.
 
+        This method orchestrates a 3-phase matching strategy:
+        1. Phase 0: Name-based matching (file_path + function_name)
+        2. Phase 1: Token hash-based exact matching
+        3. Phase 2: Similarity-based fuzzy matching
+
         Args:
             source_blocks: DataFrame with columns [block_id, file_path, function_name,
                           parameters, return_type, token_hash, token_sequence, ...]
@@ -269,13 +309,50 @@ class MethodMatcher:
             MatchResult containing forward matches, backward matches, types, similarities,
             and signature changes.
         """
-        forward_matches = {}
-        match_types = {}
-        match_similarities = {}
-        signature_changes = {}
+        # Initialize matching context
+        context = MatchContext(
+            forward_matches={},
+            match_types={},
+            match_similarities={},
+            signature_changes={},
+        )
 
         # Phase 0: Name-based matching (highest priority)
-        # Match methods with same file_path and function_name
+        self._match_phase0_name_based(source_blocks, target_blocks, context)
+
+        # Phase 1: Token hash-based fast matching
+        self._match_phase1_token_hash(source_blocks, target_blocks, context)
+
+        # Phase 2: Similarity-based matching for unmatched blocks
+        self._match_phase2_similarity(
+            source_blocks,
+            target_blocks,
+            context,
+            parallel,
+            max_workers,
+            auto_parallel,
+            parallel_threshold,
+        )
+
+        return context.to_match_result()
+
+    def _match_phase0_name_based(
+        self,
+        source_blocks: pd.DataFrame,
+        target_blocks: pd.DataFrame,
+        context: MatchContext,
+    ) -> None:
+        """Phase 0: Name-based matching (file_path + function_name).
+
+        Match methods with same file_path and function_name.
+        This is the highest priority matching as it assumes methods
+        that keep their location and name are the same method.
+
+        Args:
+            source_blocks: Source blocks DataFrame
+            target_blocks: Target blocks DataFrame
+            context: Matching context to update
+        """
         # Build name-based index: (file_path, function_name) -> target block data
         name_index = {}
         for _, row in target_blocks.iterrows():
@@ -296,9 +373,9 @@ class MethodMatcher:
                 block_id_target = target_data["block_id"]
 
                 # Match found via name-based matching
-                forward_matches[block_id_source] = block_id_target
-                match_types[block_id_source] = "name_based"
-                match_similarities[block_id_source] = 100  # Assume 100 for name-based
+                context.forward_matches[block_id_source] = block_id_target
+                context.match_types[block_id_source] = "name_based"
+                context.match_similarities[block_id_source] = 100  # Assume 100 for name-based
 
                 # Detect signature changes
                 sig_changes = []
@@ -306,9 +383,25 @@ class MethodMatcher:
                     sig_changes.append("parameters")
                 if source_row.get("return_type", "") != target_data["return_type"]:
                     sig_changes.append("return_type")
-                signature_changes[block_id_source] = sig_changes
+                context.signature_changes[block_id_source] = sig_changes
 
-        # Phase 1: token_hash-based fast matching
+    def _match_phase1_token_hash(
+        self,
+        source_blocks: pd.DataFrame,
+        target_blocks: pd.DataFrame,
+        context: MatchContext,
+    ) -> None:
+        """Phase 1: Token hash-based fast matching.
+
+        Match methods with identical token_hash (exact code match).
+        Detects moves (file_path changed) and renames (function_name changed).
+
+        Args:
+            source_blocks: Source blocks DataFrame
+            target_blocks: Target blocks DataFrame
+            context: Matching context to update
+        """
+        # Build token_hash index
         token_hash_index = {}
         for _, row in target_blocks.iterrows():
             token_hash = row["token_hash"]
@@ -324,7 +417,7 @@ class MethodMatcher:
             token_hash_source = source_row["token_hash"]
 
             # Skip if already matched in Phase 0
-            if block_id_source in forward_matches:
+            if block_id_source in context.forward_matches:
                 continue
 
             if token_hash_source in token_hash_index:
@@ -333,7 +426,7 @@ class MethodMatcher:
                 block_id_target = target_data["block_id"]
 
                 # Skip if target already matched in Phase 0
-                if block_id_target in {v for v in forward_matches.values()}:
+                if block_id_target in set(context.forward_matches.values()):
                     continue
 
                 # Detect move/rename
@@ -355,12 +448,38 @@ class MethodMatcher:
                 else:
                     match_type = "token_hash"
 
-                forward_matches[block_id_source] = block_id_target
-                match_types[block_id_source] = match_type
-                match_similarities[block_id_source] = 100
-                signature_changes[block_id_source] = []  # No sig change for Phase 1
+                context.forward_matches[block_id_source] = block_id_target
+                context.match_types[block_id_source] = match_type
+                context.match_similarities[block_id_source] = 100
+                context.signature_changes[block_id_source] = []  # No sig change for Phase 1
 
-        # Phase 2: similarity-based matching for unmatched blocks
+    def _match_phase2_similarity(
+        self,
+        source_blocks: pd.DataFrame,
+        target_blocks: pd.DataFrame,
+        context: MatchContext,
+        parallel: bool,
+        max_workers: int | None,
+        auto_parallel: bool,
+        parallel_threshold: int,
+    ) -> None:
+        """Phase 2: Similarity-based matching for unmatched blocks.
+
+        Uses fuzzy matching based on token sequence similarity for blocks
+        that weren't matched in Phase 0 or Phase 1. Supports multiple strategies:
+        - Progressive thresholds (try high thresholds first)
+        - LSH indexing for candidate filtering
+        - Sequential or parallel processing
+
+        Args:
+            source_blocks: Source blocks DataFrame
+            target_blocks: Target blocks DataFrame
+            context: Matching context to update
+            parallel: If True, use parallel processing
+            max_workers: Maximum number of worker processes
+            auto_parallel: If True, automatically select parallel mode
+            parallel_threshold: Threshold for auto-parallel selection
+        """
         # Phase 5.3.3: Progressive thresholds
         if self.progressive_thresholds:
             # Use progressive thresholds (high to low)
@@ -368,10 +487,10 @@ class MethodMatcher:
             self._match_with_progressive_thresholds(
                 source_blocks,
                 target_blocks,
-                forward_matches,
-                match_types,
-                match_similarities,
-                signature_changes,
+                context.forward_matches,
+                context.match_types,
+                context.match_similarities,
+                context.signature_changes,
                 thresholds,
                 parallel,
                 max_workers,
@@ -381,9 +500,9 @@ class MethodMatcher:
         else:
             # Single threshold matching
             unmatched_source = source_blocks[
-                ~source_blocks["block_id"].isin(forward_matches.keys())
+                ~source_blocks["block_id"].isin(context.forward_matches.keys())
             ]
-            matched_target_ids = set(forward_matches.values())
+            matched_target_ids = set(context.forward_matches.values())
             unmatched_target = target_blocks[~target_blocks["block_id"].isin(matched_target_ids)]
 
             # Phase 5.3.1: Smart parallel mode selection
@@ -398,20 +517,20 @@ class MethodMatcher:
                 self._match_similarity_lsh(
                     unmatched_source,
                     unmatched_target,
-                    forward_matches,
-                    match_types,
-                    match_similarities,
-                    signature_changes,
+                    context.forward_matches,
+                    context.match_types,
+                    context.match_similarities,
+                    context.signature_changes,
                 )
             elif use_parallel:
                 # Parallel processing version
                 self._match_similarity_parallel(
                     unmatched_source,
                     unmatched_target,
-                    forward_matches,
-                    match_types,
-                    match_similarities,
-                    signature_changes,
+                    context.forward_matches,
+                    context.match_types,
+                    context.match_similarities,
+                    context.signature_changes,
                     max_workers,
                 )
             else:
@@ -419,22 +538,11 @@ class MethodMatcher:
                 self._match_similarity_sequential(
                     unmatched_source,
                     unmatched_target,
-                    forward_matches,
-                    match_types,
-                    match_similarities,
-                    signature_changes,
+                    context.forward_matches,
+                    context.match_types,
+                    context.match_similarities,
+                    context.signature_changes,
                 )
-
-        # Create backward matches (reverse mapping)
-        backward_matches = {v: k for k, v in forward_matches.items()}
-
-        return MatchResult(
-            forward_matches=forward_matches,
-            backward_matches=backward_matches,
-            match_types=match_types,
-            match_similarities=match_similarities,
-            signature_changes=signature_changes,
-        )
 
     def bidirectional_match(
         self, blocks_old: pd.DataFrame, blocks_new: pd.DataFrame
