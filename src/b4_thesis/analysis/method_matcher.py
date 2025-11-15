@@ -17,6 +17,12 @@ from functools import lru_cache
 import pandas as pd
 
 from b4_thesis.analysis.lsh_index import LSHIndex
+from b4_thesis.analysis.matching_constants import (
+    CacheConfig,
+    FilterThresholds,
+    MatchingDefaults,
+    ParallelConfig,
+)
 from b4_thesis.analysis.similarity import (
     calculate_similarity,
     calculate_similarity_optimized,
@@ -24,13 +30,17 @@ from b4_thesis.analysis.similarity import (
 )
 
 
-def _should_skip_by_length(token_seq_1: str, token_seq_2: str, max_diff_ratio: float = 0.3) -> bool:
+def _should_skip_by_length(
+    token_seq_1: str,
+    token_seq_2: str,
+    max_diff_ratio: float = FilterThresholds.MAX_LENGTH_DIFF_RATIO,
+) -> bool:
     """Check if two sequences should be skipped based on length difference.
 
     Args:
         token_seq_1: First token sequence string
         token_seq_2: Second token sequence string
-        max_diff_ratio: Maximum allowed length difference ratio (default: 0.3 = 30%)
+        max_diff_ratio: Maximum allowed length difference ratio
 
     Returns:
         True if length difference is too large and should skip, False otherwise.
@@ -85,13 +95,17 @@ def _calculate_jaccard(token_seq_1: str, token_seq_2: str) -> float:
     return intersection / union
 
 
-def _should_skip_by_jaccard(token_seq_1: str, token_seq_2: str, min_jaccard: float = 0.3) -> bool:
+def _should_skip_by_jaccard(
+    token_seq_1: str,
+    token_seq_2: str,
+    min_jaccard: float = FilterThresholds.MIN_JACCARD_SIMILARITY,
+) -> bool:
     """Check if two sequences should be skipped based on Jaccard similarity.
 
     Args:
         token_seq_1: First token sequence string
         token_seq_2: Second token sequence string
-        min_jaccard: Minimum required Jaccard similarity (default: 0.3)
+        min_jaccard: Minimum required Jaccard similarity
 
     Returns:
         True if Jaccard similarity is too low and should skip, False otherwise.
@@ -100,7 +114,7 @@ def _should_skip_by_jaccard(token_seq_1: str, token_seq_2: str, min_jaccard: flo
     return jaccard < min_jaccard
 
 
-@lru_cache(maxsize=10000)
+@lru_cache(maxsize=CacheConfig.SIMILARITY_CACHE_SIZE)
 def _cached_similarity(
     token_seq_1: str, token_seq_2: str, use_optimized: bool = False
 ) -> int | None:
@@ -247,23 +261,23 @@ class MethodMatcher:
 
     def __init__(
         self,
-        similarity_threshold: int = 70,
+        similarity_threshold: int = MatchingDefaults.SIMILARITY_THRESHOLD,
         use_lsh: bool = False,
-        lsh_threshold: float = 0.7,
-        lsh_num_perm: int = 128,
-        top_k: int = 20,
+        lsh_threshold: float = MatchingDefaults.LSH_THRESHOLD,
+        lsh_num_perm: int = MatchingDefaults.LSH_NUM_PERM,
+        top_k: int = MatchingDefaults.TOP_K_CANDIDATES,
         use_optimized_similarity: bool = False,
         progressive_thresholds: list[int] | None = None,
     ) -> None:
         """Initialize MethodMatcher.
 
         Args:
-            similarity_threshold: Minimum similarity score (0-100) for fuzzy matching (default: 70).
-            use_lsh: Enable LSH indexing for candidate filtering (default: False).
-            lsh_threshold: LSH similarity threshold 0.0-1.0 (default: 0.7).
-            lsh_num_perm: Number of LSH permutations (default: 128).
-            top_k: Number of top candidates to consider per source block (default: 20).
-            use_optimized_similarity: Use optimized similarity with banded LCS (default: False).
+            similarity_threshold: Minimum similarity score (0-100) for fuzzy matching.
+            use_lsh: Enable LSH indexing for candidate filtering.
+            lsh_threshold: LSH similarity threshold 0.0-1.0.
+            lsh_num_perm: Number of LSH permutations.
+            top_k: Number of top candidates to consider per source block.
+            use_optimized_similarity: Use optimized similarity with banded LCS.
             progressive_thresholds: List of thresholds to try progressively
                                    (e.g., [90, 80, 70]). If None, uses single threshold.
                                    Higher thresholds are tried first.
@@ -283,7 +297,7 @@ class MethodMatcher:
         parallel: bool = False,
         max_workers: int | None = None,
         auto_parallel: bool = True,
-        parallel_threshold: int = 100000,
+        parallel_threshold: int = ParallelConfig.AUTO_PARALLEL_THRESHOLD,
     ) -> MatchResult:
         """Match code blocks from source revision to target revision.
 
@@ -300,10 +314,10 @@ class MethodMatcher:
             parallel: If True, use parallel processing for similarity calculation (default: False)
             max_workers: Maximum number of worker processes for parallel processing.
                         If None, defaults to number of CPU cores.
-            auto_parallel: If True, automatically select parallel mode based on data size
-                          (default: True). This overrides the 'parallel' parameter.
+            auto_parallel: If True, automatically select parallel mode based on data size.
+                          This overrides the 'parallel' parameter.
             parallel_threshold: Number of unmatched pairs above which parallel processing
-                               is automatically enabled (default: 100000).
+                               is automatically enabled.
 
         Returns:
             MatchResult containing forward matches, backward matches, types, similarities,

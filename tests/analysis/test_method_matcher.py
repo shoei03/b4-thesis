@@ -3,6 +3,7 @@
 import pandas as pd
 import pytest
 
+from b4_thesis.analysis.matching_constants import MatchingDefaults
 from b4_thesis.analysis.method_matcher import MatchResult, MethodMatcher
 
 
@@ -12,7 +13,7 @@ class TestMethodMatcher:
     @pytest.fixture
     def matcher(self):
         """Create MethodMatcher instance with default threshold."""
-        return MethodMatcher(similarity_threshold=70)
+        return MethodMatcher(similarity_threshold=MatchingDefaults.SIMILARITY_THRESHOLD)
 
     @pytest.fixture
     def sample_blocks_v1(self):

@@ -8,6 +8,7 @@ import pandas as pd
 
 from b4_thesis.analysis.group_detector import CloneGroup, GroupDetector
 from b4_thesis.analysis.group_matcher import GroupMatcher
+from b4_thesis.analysis.matching_constants import MatchingDefaults
 from b4_thesis.analysis.method_matcher import MatchResult, MethodMatcher
 from b4_thesis.analysis.state_classifier import StateClassifier
 from b4_thesis.core.revision_manager import RevisionInfo, RevisionManager
@@ -50,12 +51,12 @@ class CloneGroupTracker:
     def __init__(
         self,
         data_dir: Path,
-        similarity_threshold: int = 70,
+        similarity_threshold: int = MatchingDefaults.SIMILARITY_THRESHOLD,
         overlap_threshold: float = 0.5,
         use_lsh: bool = False,
-        lsh_threshold: float = 0.7,
-        lsh_num_perm: int = 128,
-        top_k: int = 20,
+        lsh_threshold: float = MatchingDefaults.LSH_THRESHOLD,
+        lsh_num_perm: int = MatchingDefaults.LSH_NUM_PERM,
+        top_k: int = MatchingDefaults.TOP_K_CANDIDATES,
         use_optimized_similarity: bool = False,
         progressive_thresholds: list[int] | None = None,
     ) -> None:
