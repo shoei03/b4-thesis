@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from b4_thesis.analysis.matching import MatchResult, MatchingDefaults, MethodMatcher
+from b4_thesis.analysis.matching import MatchingDefaults, MatchResult, MethodMatcher
 
 
 class TestMethodMatcher:
