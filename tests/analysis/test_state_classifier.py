@@ -30,6 +30,7 @@ def test_deleted_isolated(classifier):
         backward_matches={},
         match_types={},
         match_similarities={},
+        signature_changes={},
     )
 
     state, detail = classifier.classify_method_state(
@@ -52,6 +53,7 @@ def test_deleted_from_group(classifier):
         backward_matches={},
         match_types={},
         match_similarities={},
+        signature_changes={},
     )
 
     group_old = CloneGroup(
@@ -78,6 +80,7 @@ def test_deleted_last_member(classifier):
         backward_matches={},
         match_types={},
         match_similarities={},
+        signature_changes={},
     )
 
     group_old = CloneGroup(group_id="group1", members=["block1"], similarities={})
@@ -102,6 +105,7 @@ def test_survived_unchanged(classifier):
         backward_matches={"block2": "block1"},
         match_types={"block1": "token_hash"},
         match_similarities={"block1": 100},
+        signature_changes={"block1": []},
     )
 
     group_old = CloneGroup(group_id="group1", members=["block1", "block3"], similarities={})
@@ -126,6 +130,7 @@ def test_survived_modified(classifier):
         backward_matches={"block2": "block1"},
         match_types={"block1": "similarity"},
         match_similarities={"block1": 85},
+        signature_changes={"block1": []},
     )
 
     group_old = CloneGroup(group_id="group1", members=["block1", "block3"], similarities={})
@@ -150,6 +155,7 @@ def test_survived_clone_gained(classifier):
         backward_matches={"block2": "block1"},
         match_types={"block1": "token_hash"},
         match_similarities={"block1": 100},
+        signature_changes={"block1": []},
     )
 
     # Was isolated, now in a group
@@ -175,6 +181,7 @@ def test_survived_clone_lost(classifier):
         backward_matches={"block2": "block1"},
         match_types={"block1": "token_hash"},
         match_similarities={"block1": 100},
+        signature_changes={"block1": []},
     )
 
     # Was in group, now isolated
@@ -200,6 +207,7 @@ def test_added_isolated(classifier):
         backward_matches={},
         match_types={},
         match_similarities={},
+        signature_changes={},
     )
 
     # New method, no group
@@ -222,6 +230,7 @@ def test_added_to_group(classifier):
         backward_matches={},
         match_types={},
         match_similarities={},
+        signature_changes={},
     )
 
     # New method, added to existing group (size > 2 suggests it existed before)
@@ -249,6 +258,7 @@ def test_added_new_group(classifier):
         backward_matches={},
         match_types={},
         match_similarities={},
+        signature_changes={},
     )
 
     # New method in a new group
