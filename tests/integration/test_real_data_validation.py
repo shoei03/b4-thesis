@@ -149,9 +149,9 @@ class TestSmallRealDataset:
         assert "state" in df.columns
 
         # Verify we have data from 2 revisions
-        assert (
-            df["revision"].nunique() == 2
-        ), f"Expected 2 revisions, got {df['revision'].nunique()}"
+        assert df["revision"].nunique() == 2, (
+            f"Expected 2 revisions, got {df['revision'].nunique()}"
+        )
 
         # Verify data types
         assert df["block_id"].dtype == object
@@ -203,9 +203,9 @@ class TestSmallRealDataset:
             total_member_count = groups_in_rev["member_count"].sum()
             actual_members = len(members_in_rev)
 
-            assert (
-                total_member_count == actual_members
-            ), f"Member count mismatch in {revision}: {total_member_count} vs {actual_members}"
+            assert total_member_count == actual_members, (
+                f"Member count mismatch in {revision}: {total_member_count} vs {actual_members}"
+            )
 
     def test_track_all_with_real_data(self, runner, small_real_data_subset, temp_output_dir):
         """Test tracking both methods and groups with small real dataset."""
@@ -249,9 +249,9 @@ class TestSmallRealDataset:
                     (df_methods["revision"] == revision) & (df_methods["block_id"] == block_id)
                 ).any()
 
-                assert (
-                    method_exists
-                ), f"Block {block_id} in group not found in method tracking for {revision}"
+                assert method_exists, (
+                    f"Block {block_id} in group not found in method tracking for {revision}"
+                )
 
 
 @pytest.mark.skipif(not has_real_data(), reason="Real data not available")
@@ -357,9 +357,9 @@ class TestRealDataQuality:
 
         for col in critical_columns:
             missing_count = df_methods[col].isna().sum()
-            assert (
-                missing_count == 0
-            ), f"Column '{col}' has {missing_count} missing values (should be 0)"
+            assert missing_count == 0, (
+                f"Column '{col}' has {missing_count} missing values (should be 0)"
+            )
 
     def test_lifetime_consistency(self, runner, small_real_data_subset, temp_output_dir):
         """Test that lifetime values are consistent and reasonable."""
@@ -381,9 +381,9 @@ class TestRealDataQuality:
         # Test 3: For survived methods, lifetime should be >= 2
         survived_methods = df[df["state"].str.contains("survived", case=False)]
         if len(survived_methods) > 0:
-            assert (
-                survived_methods["lifetime_revisions"].min() >= 2
-            ), "Survived methods should have lifetime >= 2"
+            assert survived_methods["lifetime_revisions"].min() >= 2, (
+                "Survived methods should have lifetime >= 2"
+            )
 
     def test_clone_group_metrics(self, runner, small_real_data_subset, temp_output_dir):
         """Test that clone group metrics are within valid ranges."""
@@ -407,17 +407,17 @@ class TestRealDataQuality:
         assert df_groups["member_count"].min() >= 1, "Groups should have at least 1 member"
 
         # Test 2: density should be between 0 and 1
-        assert (
-            df_groups["density"].min() >= 0
-        ), f"Density should be >= 0, got {df_groups['density'].min()}"
-        assert (
-            df_groups["density"].max() <= 1
-        ), f"Density should be <= 1, got {df_groups['density'].max()}"
+        assert df_groups["density"].min() >= 0, (
+            f"Density should be >= 0, got {df_groups['density'].min()}"
+        )
+        assert df_groups["density"].max() <= 1, (
+            f"Density should be <= 1, got {df_groups['density'].max()}"
+        )
 
         # Test 3: similarity values should be between 0 and 100
-        assert (
-            df_groups["avg_similarity"].min() >= 0
-        ), f"avg_similarity should be >= 0, got {df_groups['avg_similarity'].min()}"
-        assert (
-            df_groups["avg_similarity"].max() <= 100
-        ), f"avg_similarity should be <= 100, got {df_groups['avg_similarity'].max()}"
+        assert df_groups["avg_similarity"].min() >= 0, (
+            f"avg_similarity should be >= 0, got {df_groups['avg_similarity'].min()}"
+        )
+        assert df_groups["avg_similarity"].max() <= 100, (
+            f"avg_similarity should be <= 100, got {df_groups['avg_similarity'].max()}"
+        )

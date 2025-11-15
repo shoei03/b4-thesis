@@ -114,9 +114,9 @@ class TestMethodTrackerRevisionPair:
         # Verify block_c is marked as deleted
         block_c_deleted = deleted_blocks[deleted_blocks["block_id"] == "block_c"]
         assert len(block_c_deleted) == 1, "block_c should be marked as deleted"
-        assert pd.isna(
-            block_c_deleted.iloc[0]["matched_block_id"]
-        ), "Deleted block should have no match"
+        assert pd.isna(block_c_deleted.iloc[0]["matched_block_id"]), (
+            "Deleted block should have no match"
+        )
 
     def test_added_method_detected(self, tracker):
         """Test that added methods are detected."""
@@ -440,9 +440,9 @@ class TestMethodTrackerLineage:
 
             # Check if this global_block_id exists in rev1
             rev1_matching = rev1_blocks[rev1_blocks["global_block_id"] == survived_global_id]
-            assert (
-                len(rev1_matching) > 0
-            ), "Survived block should have same global_block_id as predecessor"
+            assert len(rev1_matching) > 0, (
+                "Survived block should have same global_block_id as predecessor"
+            )
 
     def test_global_block_id_first_revision(self, tracker):
         """Test that first revision's global_block_id equals original block_id."""
@@ -543,9 +543,9 @@ class TestMethodTrackerLineage:
         block_c_lineage = rev2_lineage[rev2_lineage["function_name"] == "compute"]
 
         assert len(block_c_lineage) == 1, "block_c should appear in lineage format"
-        assert (
-            block_c_lineage.iloc[0]["global_block_id"] == "block_c"
-        ), "Deleted method should retain its original global_block_id"
+        assert block_c_lineage.iloc[0]["global_block_id"] == "block_c", (
+            "Deleted method should retain its original global_block_id"
+        )
 
         # Verify that block_c in rev1 has the same global_block_id
         rev1_lineage = lineage_df[lineage_df["revision"] == "20250101_100000_hash1"]

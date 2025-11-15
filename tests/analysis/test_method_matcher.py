@@ -160,7 +160,15 @@ class TestMethodMatcher:
     def test_empty_source_blocks(self, matcher):
         """Test matching with empty source blocks."""
         source = pd.DataFrame(
-            columns=["block_id", "file_path", "function_name", "parameters", "return_type", "token_hash", "token_sequence"]
+            columns=[
+                "block_id",
+                "file_path",
+                "function_name",
+                "parameters",
+                "return_type",
+                "token_hash",
+                "token_sequence",
+            ]
         )
         target = pd.DataFrame(
             {
@@ -193,7 +201,15 @@ class TestMethodMatcher:
             }
         )
         target = pd.DataFrame(
-            columns=["block_id", "file_path", "function_name", "parameters", "return_type", "token_hash", "token_sequence"]
+            columns=[
+                "block_id",
+                "file_path",
+                "function_name",
+                "parameters",
+                "return_type",
+                "token_hash",
+                "token_sequence",
+            ]
         )
 
         result = matcher.match_blocks(source, target)

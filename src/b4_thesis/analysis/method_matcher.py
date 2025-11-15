@@ -221,9 +221,7 @@ class MethodMatcher:
         signature_changes = self._detect_signature_changes(source_row, target_data)
         context.signature_changes[block_id_source] = signature_changes
 
-    def _detect_signature_changes(
-        self, source_row: pd.Series, target_data: dict
-    ) -> list[str]:
+    def _detect_signature_changes(self, source_row: pd.Series, target_data: dict) -> list[str]:
         """Detect changes in method signature between source and target.
 
         Args:
@@ -445,5 +443,9 @@ class MethodMatcher:
             Match type string
         """
         return _detect_match_type(
-            source_file_path, source_function_name, target_file_path, target_function_name, base_type
+            source_file_path,
+            source_function_name,
+            target_file_path,
+            target_function_name,
+            base_type,
         )

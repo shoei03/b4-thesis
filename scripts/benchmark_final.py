@@ -59,9 +59,9 @@ def benchmark_configuration(
     Returns:
         Dictionary with benchmark results
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Benchmarking: {config_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     matcher = MethodMatcher(**matcher_kwargs)
 
@@ -178,9 +178,9 @@ def main():
     )
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("BENCHMARK SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     df_results = pd.DataFrame(results)
     print("\nPerformance comparison:")

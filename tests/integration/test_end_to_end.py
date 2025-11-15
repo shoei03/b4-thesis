@@ -96,9 +96,9 @@ class TestMethodTrackingEndToEnd:
             "added_isolated",
             "added_to_group",
         ]
-        assert all(
-            df["state"].isin(valid_states)
-        ), f"Invalid state values found: {df['state'].unique()}"
+        assert all(df["state"].isin(valid_states)), (
+            f"Invalid state values found: {df['state'].unique()}"
+        )
 
         # Verify lifetime calculations
         assert df["lifetime_revisions"].min() >= 1, "Lifetime revisions should be at least 1"
@@ -215,15 +215,15 @@ class TestGroupTrackingEndToEnd:
             "merged",
             "dissolved",
         ]
-        assert all(
-            df_groups["state"].isin(valid_group_states)
-        ), f"Invalid group state: {df_groups['state'].unique()}"
+        assert all(df_groups["state"].isin(valid_group_states)), (
+            f"Invalid group state: {df_groups['state'].unique()}"
+        )
 
         # Verify group metrics
         assert (df_groups["member_count"] >= 1).all(), "Groups should have at least 1 member"
-        assert (df_groups["density"] >= 0).all() and (
-            df_groups["density"] <= 1
-        ).all(), "Density should be 0-1"
+        assert (df_groups["density"] >= 0).all() and (df_groups["density"] <= 1).all(), (
+            "Density should be 0-1"
+        )
 
         # Load and verify membership CSV
         df_membership = pd.read_csv(membership_file)
@@ -250,9 +250,9 @@ class TestGroupTrackingEndToEnd:
             total_member_count = groups_in_rev["member_count"].sum()
             actual_members = len(members_in_rev)
 
-            assert (
-                total_member_count == actual_members
-            ), f"Member count mismatch in {revision}: {total_member_count} vs {actual_members}"
+            assert total_member_count == actual_members, (
+                f"Member count mismatch in {revision}: {total_member_count} vs {actual_members}"
+            )
 
     def test_group_tracking_with_thresholds(self, runner, sample_data_dir, temp_output_dir):
         """Test group tracking with custom similarity and overlap thresholds."""
@@ -371,9 +371,9 @@ class TestDataIntegrity:
         membership_revisions = set(df_membership["revision"].unique())
 
         # Group and membership revisions should match
-        assert (
-            group_revisions == membership_revisions
-        ), "Group and membership revisions should match"
+        assert group_revisions == membership_revisions, (
+            "Group and membership revisions should match"
+        )
 
         # Method revisions should include all group revisions
         # (methods exist in all revisions, but groups may not exist in all revisions)
@@ -410,9 +410,9 @@ class TestDataIntegrity:
                 method_is_clone = method_clone_count > 0
 
                 # Clone status should match
-                assert (
-                    is_clone == method_is_clone
-                ), f"Clone status mismatch for {block_id} in {revision}"
+                assert is_clone == method_is_clone, (
+                    f"Clone status mismatch for {block_id} in {revision}"
+                )
 
     def test_lifetime_tracking_correctness(self, runner, sample_data_dir, temp_output_dir):
         """Test that lifetime tracking is correct across revisions."""
