@@ -367,37 +367,82 @@ class MethodMatcher:
             target_blocks: Target blocks DataFrame
             context: Matching context to update
         """
-        # Build name-based index: (file_path, function_name) -> target block data
-        name_index = {}
-        for _, row in target_blocks.iterrows():
+        name_index = self._build_name_index(target_blocks)
+
+        for _, source_row in source_blocks.iterrows():
+            self._try_match_by_name(source_row, name_index, context)
+
+    def _build_name_index(self, blocks: pd.DataFrame) -> dict[tuple[str, str], dict]:
+        """Build index mapping (file_path, function_name) to block metadata.
+
+        Args:
+            blocks: DataFrame containing block information
+
+        Returns:
+            Dictionary mapping (file_path, function_name) to block metadata
+            containing block_id, parameters, and return_type.
+            Only the first occurrence is indexed if duplicates exist.
+        """
+        index = {}
+        for _, row in blocks.iterrows():
             key = (row["file_path"], row["function_name"])
-            if key not in name_index:
-                name_index[key] = {
+            if key not in index:
+                index[key] = {
                     "block_id": row["block_id"],
                     "parameters": row.get("parameters", ""),
                     "return_type": row.get("return_type", ""),
                 }
+        return index
 
-        for _, source_row in source_blocks.iterrows():
-            block_id_source = source_row["block_id"]
-            key = (source_row["file_path"], source_row["function_name"])
+    def _try_match_by_name(
+        self,
+        source_row: pd.Series,
+        name_index: dict[tuple[str, str], dict],
+        context: MatchContext,
+    ) -> None:
+        """Try to match a source block by name using the name index.
 
-            if key in name_index:
-                target_data = name_index[key]
-                block_id_target = target_data["block_id"]
+        Args:
+            source_row: Source block row from DataFrame
+            name_index: Pre-built name index
+            context: Matching context to update
+        """
+        block_id_source = source_row["block_id"]
+        key = (source_row["file_path"], source_row["function_name"])
 
-                # Match found via name-based matching
-                context.forward_matches[block_id_source] = block_id_target
-                context.match_types[block_id_source] = "name_based"
-                context.match_similarities[block_id_source] = 100  # Assume 100 for name-based
+        if key not in name_index:
+            return
 
-                # Detect signature changes
-                sig_changes = []
-                if source_row.get("parameters", "") != target_data["parameters"]:
-                    sig_changes.append("parameters")
-                if source_row.get("return_type", "") != target_data["return_type"]:
-                    sig_changes.append("return_type")
-                context.signature_changes[block_id_source] = sig_changes
+        target_data = name_index[key]
+        block_id_target = target_data["block_id"]
+
+        # Record the match
+        context.forward_matches[block_id_source] = block_id_target
+        context.match_types[block_id_source] = "name_based"
+        context.match_similarities[block_id_source] = 100
+
+        # Detect signature changes
+        signature_changes = self._detect_signature_changes(source_row, target_data)
+        context.signature_changes[block_id_source] = signature_changes
+
+    def _detect_signature_changes(
+        self, source_row: pd.Series, target_data: dict
+    ) -> list[str]:
+        """Detect changes in method signature between source and target.
+
+        Args:
+            source_row: Source block row
+            target_data: Target block metadata
+
+        Returns:
+            List of changed signature components: 'parameters', 'return_type', or empty list
+        """
+        changes = []
+        if source_row.get("parameters", "") != target_data["parameters"]:
+            changes.append("parameters")
+        if source_row.get("return_type", "") != target_data["return_type"]:
+            changes.append("return_type")
+        return changes
 
     def _match_phase1_token_hash(
         self,
