@@ -22,10 +22,10 @@ class TestMethodTrackingStats:
         """Sample method tracking DataFrame."""
         return pd.DataFrame(
             {
-                "method_id": ["m1", "m2", "m1", "m3", "m2"],
+                "block_id": ["m1", "m2", "m1", "m3", "m2"],
                 "revision": ["r1", "r1", "r2", "r2", "r2"],
                 "state": ["added", "added", "survived", "added", "survived"],
-                "detailed_state": [
+                "state_detail": [
                     "added_to_group",
                     "added_isolated",
                     "survived_unchanged",
@@ -84,7 +84,7 @@ class TestMethodTrackingStats:
 
     def test_calculate_method_stats_missing_columns(self):
         """Test with missing columns."""
-        df = pd.DataFrame({"method_id": ["m1"], "revision": ["r1"]})
+        df = pd.DataFrame({"block_id": ["m1"], "revision": ["r1"]})
         with pytest.raises(ValueError, match="Missing required columns"):
             calculate_method_stats(df)
 
@@ -101,8 +101,8 @@ class TestGroupTrackingStats:
                 "revision": ["r1", "r1", "r2", "r2"],
                 "state": ["born", "born", "continued", "born"],
                 "member_count": [3, 5, 4, 2],
-                "members_added": [0, 0, 1, 0],
-                "members_removed": [0, 0, 0, 0],
+                "member_added": [0, 0, 1, 0],
+                "member_removed": [0, 0, 0, 0],
                 "lifetime_days": [10, 20, 10, 5],
                 "lifetime_revisions": [2, 3, 2, 1],
             }
@@ -211,7 +211,7 @@ class TestLifetimeDistribution:
         """Test lifetime distribution."""
         df = pd.DataFrame(
             {
-                "method_id": ["m1", "m2", "m3", "m4", "m5"],
+                "block_id": ["m1", "m2", "m3", "m4", "m5"],
                 "lifetime_days": [5, 10, 15, 20, 25],
             }
         )
@@ -226,7 +226,7 @@ class TestLifetimeDistribution:
         """Test with duplicate method IDs."""
         df = pd.DataFrame(
             {
-                "method_id": ["m1", "m1", "m2", "m2"],
+                "block_id": ["m1", "m1", "m2", "m2"],
                 "lifetime_days": [10, 10, 20, 20],
             }
         )
@@ -248,7 +248,7 @@ class TestLifetimeDistribution:
         """Test with lifetime_revisions column."""
         df = pd.DataFrame(
             {
-                "method_id": ["m1", "m2", "m3"],
+                "block_id": ["m1", "m2", "m3"],
                 "lifetime_revisions": [1, 2, 3],
             }
         )
@@ -266,7 +266,7 @@ class TestRevisionTimeline:
         df = pd.DataFrame(
             {
                 "revision": ["r1", "r1", "r2", "r2", "r2"],
-                "method_id": ["m1", "m2", "m3", "m4", "m5"],
+                "block_id": ["m1", "m2", "m3", "m4", "m5"],
             }
         )
 
