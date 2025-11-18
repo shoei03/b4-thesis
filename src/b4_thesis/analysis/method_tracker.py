@@ -209,9 +209,11 @@ class MethodTracker:
             df["clone_group_size"] = df["clone_group_size"].astype(int)
             df["lifetime_revisions"] = df["lifetime_revisions"].astype(int)
             df["lifetime_days"] = df["lifetime_days"].astype(int)
-            
+
             # Sort by revision, file_path, state, state_detail
-            df = df.sort_values(["revision", "clone_group_id", "state", "state_detail", "file_path"])
+            df = df.sort_values(
+                ["revision", "clone_group_id", "state", "state_detail", "file_path"]
+            )
 
         # Store results for lineage format conversion
         self._results_df = df
