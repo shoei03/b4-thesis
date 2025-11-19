@@ -456,7 +456,12 @@ b4-thesis visualize groups ./output/group_tracking.csv -o ./plots -t members
 
 #### method_lineage.csv
 
-メソッドのlineage（系譜）を追跡するためのCSVファイル。`--lineage`フラグを指定すると生成されます。
+メソッドのlineage（系譜）を追跡するためのCSVファイル。`convert methods`コマンドで`method_tracking.csv`から生成できます。
+
+```bash
+# trackingデータからlineageフォーマットに変換
+b4-thesis convert methods ./output/method_tracking.csv --lineage -o ./output/method_lineage.csv
+```
 
 `method_tracking.csv`との違い：
 - `block_id` → `global_block_id`: リビジョン間で統一されたID
