@@ -84,8 +84,7 @@ class MethodTracker:
         self.group_detector = GroupDetector(similarity_threshold=similarity_threshold)
         self.state_classifier = StateClassifier()
 
-        # Internal state for lineage tracking
-        self._global_block_id_map: dict[tuple[str, str], str] = {}
+        # Internal state for format conversion
         self._results_df: pd.DataFrame | None = None
 
     def track(
@@ -136,9 +135,6 @@ class MethodTracker:
         all_results: list[MethodTrackingResult] = []
         lifetime_tracker: dict[str, dict] = {}
 
-        # Reset global block ID map for new tracking session
-        self._global_block_id_map = {}
-
         # Process first revision (all methods are "added")
         first_revision = revisions[0]
         code_blocks_first, clone_pairs_first = self.revision_manager.load_revision_data(
@@ -179,9 +175,6 @@ class MethodTracker:
                 "last_seen": first_revision.timestamp,
                 "revision_count": 1,
             }
-
-            # Initialize global_block_id (first revision: global_block_id = block_id)
-            self._global_block_id_map[(first_revision.revision_id, block_id)] = block_id
 
         # Process consecutive revision pairs
         for i in range(len(revisions) - 1):
@@ -280,9 +273,6 @@ class MethodTracker:
                     "last_seen": revision_new.timestamp,
                     "revision_count": 1,
                 }
-
-                # New lineage: global_block_id = block_id
-                self._global_block_id_map[(revision_new.revision_id, block_id)] = block_id
             else:
                 # Existing method (survived)
                 state = "survived"
@@ -311,14 +301,6 @@ class MethodTracker:
                         "last_seen": revision_new.timestamp,
                         "revision_count": lifetime_revisions,
                     },
-                )
-
-                # Inherit global_block_id from old block
-                old_global_block_id = self._global_block_id_map.get(
-                    (revision_old.revision_id, old_block_id), old_block_id
-                )
-                self._global_block_id_map[(revision_new.revision_id, block_id)] = (
-                    old_global_block_id
                 )
 
             # Find group membership
@@ -406,15 +388,6 @@ class MethodTracker:
                 lifetime_revisions = 1
                 lifetime_days = 0
 
-            # Inherit global_block_id from old revision
-            old_global_block_id = self._global_block_id_map.get(
-                (revision_old.revision_id, old_block_id), old_block_id
-            )
-            # Map deleted block to new revision with inherited global_block_id
-            self._global_block_id_map[(revision_new.revision_id, old_block_id)] = (
-                old_global_block_id
-            )
-
             # Create result for deleted method
             result = MethodTrackingResult(
                 revision=revision_new.revision_id,
@@ -500,52 +473,3 @@ class MethodTracker:
             raise RuntimeError("Must call track() before to_tracking_format()")
 
         return self._results_df.copy()
-
-    def to_lineage_format(self) -> pd.DataFrame:
-        """
-        Return method tracking results in lineage format.
-
-        Converts block_id to global_block_id (unified across revisions) and removes
-        matched_block_id column. Must be called after track().
-
-        Returns:
-            DataFrame with 16 columns: global_block_id replaces block_id,
-            matched_block_id is removed
-
-        Raises:
-            RuntimeError: If called before track()
-        """
-        if self._results_df is None:
-            raise RuntimeError("Must call track() before to_lineage_format()")
-
-        df = self._results_df.copy()
-
-        # Add global_block_id column by looking up in the map
-        df["global_block_id"] = df.apply(
-            lambda row: self._global_block_id_map.get(
-                (row["revision"], row["block_id"]),
-                row["block_id"],  # Fallback to block_id if not found
-            ),
-            axis=1,
-        )
-
-        # Define column order: global_block_id first, others except block_id/matched_block_id
-        columns = ["global_block_id", "revision", "function_name", "file_path"]
-        columns.extend(
-            [
-                "start_line",
-                "end_line",
-                "loc",
-                "state",
-                "state_detail",
-                "match_type",
-                "match_similarity",
-                "clone_count",
-                "clone_group_id",
-                "clone_group_size",
-                "lifetime_revisions",
-                "lifetime_days",
-            ]
-        )
-
-        return df[columns]
