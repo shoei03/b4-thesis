@@ -91,7 +91,7 @@ def _convert_to_lineage_format(df: pd.DataFrame) -> pd.DataFrame:
         df: Input DataFrame with tracking data (must have revision, block_id, matched_block_id)
 
     Returns:
-        DataFrame with lineage format (16 columns with global_block_id)
+        DataFrame with lineage format (17 columns with global_block_id)
     """
     # Build global_block_id mapping using Union-Find
     global_block_id_map = _build_global_block_id_map(df)
@@ -120,6 +120,7 @@ def _convert_to_lineage_format(df: pd.DataFrame) -> pd.DataFrame:
             "clone_count",
             "clone_group_id",
             "clone_group_size",
+            "avg_similarity_to_group",
             "lifetime_revisions",
             "lifetime_days",
         ]

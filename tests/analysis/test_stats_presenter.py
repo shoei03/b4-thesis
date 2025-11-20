@@ -32,7 +32,11 @@ class TestDisplayMethodStatsTables:
             max_methods_per_revision=15,
             min_methods_per_revision=5,
             state_counts={"added": 30, "survived": 50, "deleted": 20},
-            detailed_state_counts={"added_to_group": 20, "added_isolated": 10, "survived_unchanged": 50},
+            detailed_state_counts={
+                "added_to_group": 20,
+                "added_isolated": 10,
+                "survived_unchanged": 50,
+            },
             methods_in_clones=40,
             avg_clone_count=2.5,
             max_clone_count=5,

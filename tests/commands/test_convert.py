@@ -49,6 +49,7 @@ class TestConvertMethods:
             "clone_count": [0, 0, 0, 0, 0],
             "clone_group_id": [None, None, None, None, None],
             "clone_group_size": [1, 1, 1, 1, 1],
+            "avg_similarity_to_group": [None, None, None, None, None],
             "lifetime_revisions": [1, 1, 2, 1, 3],
             "lifetime_days": [0, 0, 1, 0, 2],
         }
@@ -81,8 +82,8 @@ class TestConvertMethods:
         # Verify output format
         df = pd.read_csv(output_file)
 
-        # Should have 16 columns
-        assert len(df.columns) == 16
+        # Should have 17 columns
+        assert len(df.columns) == 17
 
         # Should have global_block_id
         assert "global_block_id" in df.columns
@@ -189,6 +190,7 @@ class TestConvertMethods:
             "clone_count",
             "clone_group_id",
             "clone_group_size",
+            "avg_similarity_to_group",
             "lifetime_revisions",
             "lifetime_days",
         ]
@@ -252,9 +254,7 @@ class TestConvertMethods:
             assert result.exit_code == 0
             assert Path("method_lineage.csv").exists()
 
-    def test_convert_methods_preserves_data_integrity(
-        self, runner, sample_tracking_csv, tmp_path
-    ):
+    def test_convert_methods_preserves_data_integrity(self, runner, sample_tracking_csv, tmp_path):
         """Test that conversion preserves all data from original tracking."""
         output_file = tmp_path / "method_lineage.csv"
 
