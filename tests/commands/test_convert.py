@@ -1,11 +1,10 @@
 """Tests for convert command."""
 
-from datetime import datetime
 from pathlib import Path
 
+from click.testing import CliRunner
 import pandas as pd
 import pytest
-from click.testing import CliRunner
 
 from b4_thesis.cli import main
 

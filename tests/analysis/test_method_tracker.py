@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from b4_thesis.analysis.group_detector import CloneGroup
 from b4_thesis.analysis.method_tracker import MethodTracker, MethodTrackingResult
 from b4_thesis.core.revision_manager import RevisionManager
 
@@ -54,6 +55,7 @@ class TestMethodTrackerBasic:
             "clone_count",
             "clone_group_id",
             "clone_group_size",
+            "avg_similarity_to_group",
             "lifetime_revisions",
             "lifetime_days",
         ]
@@ -236,6 +238,34 @@ class TestMethodTrackerCloneTracking:
         if len(cloned) > 0:
             assert (cloned["clone_group_size"] == cloned["clone_count"] + 1).all()
 
+    def test_avg_similarity_to_group_cloned_methods(self, tracker):
+        """Test avg_similarity_to_group is calculated for cloned methods."""
+        result = tracker.track(
+            start_date=datetime(2025, 1, 1, 10, 0, 0), end_date=datetime(2025, 1, 1, 11, 0, 0)
+        )
+
+        # Methods in clone groups should have avg_similarity_to_group
+        cloned = result[result["clone_count"] > 0]
+        if len(cloned) > 0:
+            # Should have non-null avg_similarity_to_group for multi-member groups
+            multi_member = cloned[cloned["clone_group_size"] > 1]
+            if len(multi_member) > 0:
+                assert multi_member["avg_similarity_to_group"].notna().all()
+                # Similarity should be in valid range (0-100)
+                assert (multi_member["avg_similarity_to_group"] >= 0).all()
+                assert (multi_member["avg_similarity_to_group"] <= 100).all()
+
+    def test_avg_similarity_to_group_isolated_methods(self, tracker):
+        """Test avg_similarity_to_group is None for isolated methods."""
+        result = tracker.track(
+            start_date=datetime(2025, 1, 1, 10, 0, 0), end_date=datetime(2025, 1, 1, 11, 0, 0)
+        )
+
+        # Isolated methods (not in groups) should have None
+        isolated = result[result["clone_count"] == 0]
+        if len(isolated) > 0:
+            assert isolated["avg_similarity_to_group"].isna().all()
+
 
 class TestMethodTrackerDataTypes:
     """Test data types and formats."""
@@ -364,6 +394,7 @@ class TestMethodTrackingResultDataclass:
             clone_count=1,
             clone_group_id="group_1",
             clone_group_size=2,
+            avg_similarity_to_group=85,
             lifetime_revisions=2,
             lifetime_days=0,
         )
@@ -372,4 +403,112 @@ class TestMethodTrackingResultDataclass:
         assert result.block_id == "block_a"
         assert result.function_name == "calculate"
         assert result.state == "survived"
+        assert result.avg_similarity_to_group == 85
         assert result.lifetime_revisions == 2
+
+
+class TestMethodTrackerHelperMethods:
+    """Test helper methods in MethodTracker."""
+
+    @pytest.fixture
+    def sample_revisions_dir(self):
+        """Path to sample revisions fixture directory."""
+        return Path(__file__).parent.parent / "fixtures" / "sample_revisions"
+
+    @pytest.fixture
+    def tracker(self, sample_revisions_dir):
+        """Create MethodTracker instance."""
+        return MethodTracker(data_dir=sample_revisions_dir, similarity_threshold=70)
+
+    def test_calculate_avg_similarity_group_none(self, tracker):
+        """Test _calculate_avg_similarity_to_group returns None when group is None."""
+        result = tracker._calculate_avg_similarity_to_group("block_a", None)
+        assert result is None
+
+    def test_calculate_avg_similarity_group_size_one(self, tracker):
+        """Test _calculate_avg_similarity_to_group returns None for single-member group."""
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a"],
+            similarities={},
+        )
+        result = tracker._calculate_avg_similarity_to_group("block_a", group)
+        assert result is None
+
+    def test_calculate_avg_similarity_block_not_in_group(self, tracker):
+        """Test _calculate_avg_similarity_to_group returns None if block not in group."""
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a", "block_b"],
+            similarities={("block_a", "block_b"): 80},
+        )
+        result = tracker._calculate_avg_similarity_to_group("block_c", group)
+        assert result is None
+
+    def test_calculate_avg_similarity_two_members(self, tracker):
+        """Test _calculate_avg_similarity_to_group with two-member group."""
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a", "block_b"],
+            similarities={("block_a", "block_b"): 80},
+        )
+        result = tracker._calculate_avg_similarity_to_group("block_a", group)
+        assert result == 80
+
+    def test_calculate_avg_similarity_three_members(self, tracker):
+        """Test _calculate_avg_similarity_to_group with three-member group."""
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a", "block_b", "block_c"],
+            similarities={
+                ("block_a", "block_b"): 80,
+                ("block_a", "block_c"): 90,
+                ("block_b", "block_c"): 70,
+            },
+        )
+        # block_a's average: (80 + 90) / 2 = 85
+        result = tracker._calculate_avg_similarity_to_group("block_a", group)
+        assert result == 85
+
+    def test_calculate_avg_similarity_four_members(self, tracker):
+        """Test _calculate_avg_similarity_to_group with four-member group."""
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a", "block_b", "block_c", "block_d"],
+            similarities={
+                ("block_a", "block_b"): 80,
+                ("block_a", "block_c"): 90,
+                ("block_a", "block_d"): 70,
+                ("block_b", "block_c"): 85,
+                ("block_b", "block_d"): 75,
+                ("block_c", "block_d"): 95,
+            },
+        )
+        # block_a's average: (80 + 90 + 70) / 3 = 80
+        result = tracker._calculate_avg_similarity_to_group("block_a", group)
+        assert result == 80
+
+    def test_calculate_avg_similarity_missing_pairs(self, tracker):
+        """Test _calculate_avg_similarity_to_group with missing similarity pairs."""
+        # Group has 3 members but only 1 similarity (should still work)
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a", "block_b", "block_c"],
+            similarities={
+                ("block_a", "block_b"): 80,
+                # ("block_a", "block_c") is missing
+            },
+        )
+        # block_a's average: only 80 from block_b
+        result = tracker._calculate_avg_similarity_to_group("block_a", group)
+        assert result == 80
+
+    def test_calculate_avg_similarity_no_similarities(self, tracker):
+        """Test _calculate_avg_similarity_to_group when no similarities exist."""
+        group = CloneGroup(
+            group_id="group_1",
+            members=["block_a", "block_b", "block_c"],
+            similarities={},  # Empty similarities
+        )
+        result = tracker._calculate_avg_similarity_to_group("block_a", group)
+        assert result is None

@@ -31,6 +31,7 @@ class MethodTrackingResult:
     clone_count: int
     clone_group_id: str | None
     clone_group_size: int
+    avg_similarity_to_group: int | None
     lifetime_revisions: int
     lifetime_days: int
 
@@ -127,6 +128,7 @@ class MethodTracker:
                     "clone_count",
                     "clone_group_id",
                     "clone_group_size",
+                    "avg_similarity_to_group",
                     "lifetime_revisions",
                     "lifetime_days",
                 ]
@@ -146,6 +148,9 @@ class MethodTracker:
             block_id = block_row["block_id"]
             group = self._find_group_for_block(block_id, groups_first)
 
+            # Calculate average similarity to group members
+            avg_similarity = self._calculate_avg_similarity_to_group(block_id, group)
+
             result = MethodTrackingResult(
                 revision=first_revision.revision_id,
                 block_id=block_id,
@@ -164,6 +169,7 @@ class MethodTracker:
                 clone_count=group.size - 1 if group and group.is_clone else 0,
                 clone_group_id=group.group_id if group and group.is_clone else None,
                 clone_group_size=group.size if group else 1,
+                avg_similarity_to_group=avg_similarity,
                 lifetime_revisions=1,
                 lifetime_days=0,
             )
@@ -329,6 +335,9 @@ class MethodTracker:
             )
             state_detail = state_detail_enum.value
 
+            # Calculate average similarity to group members
+            avg_similarity = self._calculate_avg_similarity_to_group(block_id, group_new)
+
             # Create result
             result = MethodTrackingResult(
                 revision=revision_new.revision_id,
@@ -346,6 +355,7 @@ class MethodTracker:
                 clone_count=group_new.size - 1 if group_new and group_new.is_clone else 0,
                 clone_group_id=group_new.group_id if group_new and group_new.is_clone else None,
                 clone_group_size=group_new.size if group_new else 1,
+                avg_similarity_to_group=avg_similarity,
                 lifetime_revisions=lifetime_revisions,
                 lifetime_days=lifetime_days,
             )
@@ -388,6 +398,9 @@ class MethodTracker:
                 lifetime_revisions = 1
                 lifetime_days = 0
 
+            # Calculate average similarity to group members (using old group)
+            avg_similarity = self._calculate_avg_similarity_to_group(old_block_id, group_old)
+
             # Create result for deleted method
             result = MethodTrackingResult(
                 revision=revision_new.revision_id,
@@ -405,6 +418,7 @@ class MethodTracker:
                 clone_count=group_old.size - 1 if group_old and group_old.is_clone else 0,
                 clone_group_id=group_old.group_id if group_old and group_old.is_clone else None,
                 clone_group_size=group_old.size if group_old else 1,
+                avg_similarity_to_group=avg_similarity,
                 lifetime_revisions=lifetime_revisions,
                 lifetime_days=lifetime_days,
             )
@@ -432,6 +446,44 @@ class MethodTracker:
             if block_id in group.members:
                 return group
         return None
+
+    def _calculate_avg_similarity_to_group(
+        self, block_id: str, group: CloneGroup | None
+    ) -> int | None:
+        """
+        Calculate average similarity of a block to other group members.
+
+        Args:
+            block_id: Block ID to calculate similarity for
+            group: Clone group (None if block is not in a group)
+
+        Returns:
+            Average similarity (0-100) to other group members, or None if:
+            - group is None
+            - group size is 1 (no other members)
+            - block_id is not in the group
+        """
+        if group is None or group.size <= 1:
+            return None
+
+        if block_id not in group.members:
+            return None
+
+        # Collect similarities to all other group members
+        similarities = []
+        for member in group.members:
+            if member == block_id:
+                continue
+
+            # Create sorted tuple for lookup
+            pair = tuple(sorted([block_id, member]))
+            if pair in group.similarities:
+                similarities.append(group.similarities[pair])
+
+        if not similarities:
+            return None
+
+        return int(sum(similarities) / len(similarities))
 
     def _calculate_lifetime(
         self, block_id: str, current_revision: datetime, lifetime_tracker: dict[str, dict]
