@@ -27,6 +27,8 @@
   - `track methods`: メソッド進化追跡
   - `track groups`: クローングループ進化追跡
   - `track all`: メソッド・グループ両方の追跡
+- **convert**: ✅ データフォーマット変換（完全実装済み）
+  - `convert methods`: メソッド追跡データの形式変換（lineageフォーマット対応）
 - **analyze**: ⚠️ 基本実装のみ（ファイル/ディレクトリ情報表示）
 - **stats**: ✅ 統計メトリクスの計算（完全実装済み）
   - `stats general`: 汎用統計計算
@@ -63,6 +65,9 @@ b4-thesis track groups /path/to/revision_data -o output_dir
 
 # メソッド・グループ両方の追跡
 b4-thesis track all /path/to/revision_data -o output_dir --summary
+
+# 追跡データのlineageフォーマット変換
+b4-thesis convert methods method_tracking.csv --lineage -o method_lineage.csv
 
 # データの分析
 b4-thesis analyze <input_path> -o results.txt
@@ -222,6 +227,58 @@ b4-thesis track all ./revision_data -o ./output --summary
 
 # 期間を指定して実行
 b4-thesis track all ./revision_data -o ./output --start-date 2024-06-01 --end-date 2024-12-31
+```
+
+#### convert methods
+
+✅ **完全実装済み**: メソッド追跡データを異なる形式に変換します。特に、lineageフォーマットへの変換をサポートしています。
+
+メソッド追跡データ（`method_tracking.csv`）をlineageフォーマット（`method_lineage.csv`）に変換します。
+
+```bash
+b4-thesis convert methods <INPUT_FILE> [OPTIONS]
+
+Options:
+  --lineage / --no-lineage        Lineageフォーマットに変換（デフォルト: False）
+  -o, --output PATH               出力ファイルパス
+```
+
+**使用例**:
+```bash
+# Step 1: 追跡データを生成
+b4-thesis track methods ./data -o ./output
+
+# Step 2: Lineageフォーマットに変換
+b4-thesis convert methods ./output/method_tracking.csv --lineage -o ./output/method_lineage.csv
+```
+
+**Lineageフォーマットとは**:
+
+Lineageフォーマットは、メソッドの進化系譜を追跡しやすくするためのフォーマットです。
+
+| 特徴 | method_tracking.csv | method_lineage.csv |
+|------|---------------------|---------------------|
+| 列数 | 17列 | 16列 |
+| ID | `block_id` (リビジョンごとに異なる) | `global_block_id` (リビジョン間で統一) |
+| マッチング情報 | `matched_block_id` 列あり | `matched_block_id` 列なし |
+| クエリの簡単さ | `matched_block_id` を辿る必要あり | `global_block_id` で直接取得可能 |
+
+**利点**:
+- **クエリが簡単**: 同じメソッドは同じ `global_block_id` を持つ
+- **進化追跡が容易**: リビジョン間のマッチング関係を辿る必要なし
+- **柔軟なパイプライン**: 既存の追跡データをいつでも変換可能
+- **独立した処理**: 追跡とフォーマット変換が分離されている
+
+**クエリ例**:
+```sql
+-- 特定メソッドの進化を追跡
+SELECT * FROM method_lineage WHERE global_block_id = 'block_a';
+
+-- 長寿命メソッドの分析
+SELECT global_block_id, function_name, MAX(lifetime_days) as max_lifetime
+FROM method_lineage
+GROUP BY global_block_id
+HAVING max_lifetime > 365;
 ```
 
 #### analyze
@@ -591,6 +648,7 @@ b4-thesis/
 │       ├── commands/           # コマンド実装
 │       │   ├── __init__.py
 │       │   ├── track.py        # trackコマンド（主要機能）
+│       │   ├── convert.py      # convertコマンド
 │       │   ├── analyze.py      # analyzeコマンド
 │       │   ├── stats.py        # statsコマンド
 │       │   └── visualize.py    # visualizeコマンド
@@ -608,7 +666,7 @@ b4-thesis/
 │           ├── state_classifier.py    # 状態分類
 │           ├── method_tracker.py      # メソッド追跡
 │           └── clone_group_tracker.py # グループ追跡
-├── tests/                      # テストファイル（271 tests passing）
+├── tests/                      # テストファイル（282 tests passing）
 │   ├── analysis/               # 分析モジュールのテスト
 │   ├── core/                   # コアモジュールのテスト
 │   ├── commands/               # コマンドのテスト
