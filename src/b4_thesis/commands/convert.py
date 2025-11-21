@@ -139,23 +139,91 @@ def _build_global_block_id_map(df: pd.DataFrame) -> dict[tuple[str, str], str]:
 
     Returns:
         Dictionary mapping (revision, block_id) to global_block_id
+
+    各行の説明:
+    1. 関数定義: pandasのDataFrameを受け取り、(revision, block_id)のタプルをキーとし、
+       global_block_idを値とする辞書を返す関数を定義
+
+    2-11. docstring: 関数の概要と引数、戻り値を説明
+
+    12-13. Union-Find構造体の初期化: ブロック間の系統関係を追跡するためのデータ構造を作成
+
+    14-17. encode_key関数の定義: (revision, block_id)のタプルを、"::"で区切った文字列に変換する
+           ヘルパー関数。Union-Findで使用するために一意のキーを生成
+
+    18-21. decode_key関数の定義: encode_keyの逆変換を行うヘルパー関数。
+           "::"で区切られた文字列を(revision, block_id)のタプルに戻す
+
+    22-23. DataFrameのソート: リビジョンの順序でデータフレームをソートし、
+           時系列順にブロックを処理できるようにする
+
+    24-25. 第1パス開始: マッチしたブロック同士をUnion-Find構造で結合していく処理のループ
+
+    26-28. 各行の情報取得: DataFrameの各行から、現在のリビジョン、ブロックID、
+           マッチしたブロックIDの情報を取り出す
+
+    29. 現在のキー生成: 現在のブロックを表す一意のキーを生成
+
+    30-31. マッチ情報の確認: matched_block_idがnullや空文字でないかチェック。
+           値が存在する場合、前のリビジョンでマッチしたブロックとの結合を行う
+
+    32. 前のリビジョン一覧を取得: 現在のリビジョンより前のリビジョンをすべて抽出
+
+    33. 前のリビジョンの存在確認: 前のリビジョンが1つ以上存在するか確認
+
+    34-35. 直前のリビジョンを取得: ソートされた前のリビジョンのリストから、
+           最も新しい（最後の）リビジョンを取得
+
+    36-40. マッチしたブロックの検索: 直前のリビジョンにおいて、
+           matched_block_idと同じblock_idを持つ行を検索
+
+    41. 検索結果の確認: マッチしたブロックが見つかったか確認
+
+    42-44. ブロック同士の結合: 現在のブロックと前のリビジョンでマッチしたブロックを
+           Union-Find構造で同じグループに結合
+
+    45-47. マッチしていない場合の処理: matched_block_idが存在しない場合でも、
+           ブロックがUnion-Find構造に登録されるよう、find操作を実行
+
+    48-50. 第2パス開始: Union-Findで作成されたグループに対して、
+           各グループ内の最も古いブロックのIDをglobal_block_idとして割り当てる
+
+    51. 戻り値の辞書を初期化: (revision, block_id)からglobal_block_idへのマッピングを格納する辞書
+
+    52-53. グループの取得: Union-Find構造から、すべてのグループ（連結成分）を取得
+
+    54-55. 各グループの処理: 各グループに対して、最も古いメンバーのblock_idを
+           global_block_idとして使用する処理を実行
+
+    56-57. メンバーのデコード: グループ内のすべてのメンバー（文字列キー）を
+           (revision, block_id)のタプルに変換
+
+    58-59. リビジョン順でソート: デコードされたメンバーをリビジョンの順序でソート
+
+    60-61. global_block_idの決定: ソートされたメンバーの最初（最も古い）ブロックの
+           block_idをglobal_block_idとして採用
+
+    62-64. 全メンバーにglobal_block_idを割り当て: グループ内のすべてのメンバー
+           （異なるリビジョンの同一系統のブロック）に同じglobal_block_idを設定
+
+    65. マッピング辞書を返す: 完成した(revision, block_id) -> global_block_idのマッピングを返す
     """
-    # Create Union-Find structure
+    # Union-Find構造体を作成
     uf = UnionFind()
 
-    # Helper function to encode (revision, block_id) as string
+    # ヘルパー関数: (revision, block_id)を文字列キーにエンコード
     def encode_key(revision: str, block_id: str) -> str:
         return f"{revision}::{block_id}"
 
-    # Helper function to decode string back to (revision, block_id)
+    # ヘルパー関数: 文字列キーを(revision, block_id)にデコード
     def decode_key(key: str) -> tuple[str, str]:
         parts = key.split("::", 1)
         return (parts[0], parts[1])
 
-    # Sort by revision to process chronologically
+    # リビジョン順にソートして時系列で処理
     sorted_df = df.sort_values("revision")
 
-    # First pass: union matched blocks
+    # 第1パス: マッチしたブロック同士を結合
     for _, row in sorted_df.iterrows():
         revision = row["revision"]
         block_id = row["block_id"]
@@ -163,48 +231,48 @@ def _build_global_block_id_map(df: pd.DataFrame) -> dict[tuple[str, str], str]:
 
         current_key = encode_key(revision, block_id)
 
-        # If matched_block_id is not null/empty, find previous revision's block
+        # matched_block_idが存在する場合、前のリビジョンのブロックと結合
         if pd.notna(matched_block_id) and matched_block_id != "":
-            # Get all previous revisions
+            # 現在より前のリビジョンをすべて取得
             prev_revisions = sorted_df[sorted_df["revision"] < revision]["revision"].unique()
 
             if len(prev_revisions) > 0:
-                # Get the immediately previous revision
+                # 直前のリビジョンを取得
                 prev_revision = sorted(prev_revisions)[-1]
 
-                # Find the matched block in the previous revision
+                # 直前のリビジョンでマッチするブロックを検索
                 matched_rows = sorted_df[
                     (sorted_df["revision"] == prev_revision)
                     & (sorted_df["block_id"] == matched_block_id)
                 ]
 
                 if not matched_rows.empty:
-                    # Union current block with matched block from previous revision
+                    # 現在のブロックと前のブロックを同じグループに結合
                     prev_key = encode_key(prev_revision, matched_block_id)
                     uf.union(current_key, prev_key)
         else:
-            # Ensure the element is in the UnionFind structure even if not matched
+            # マッチしていない場合もUnion-Find構造に要素を登録
             uf.find(current_key)
 
-    # Second pass: assign global_block_id to each group
-    # Use the block_id from the earliest revision in each group as the global_block_id
+    # 第2パス: 各グループにglobal_block_idを割り当て
+    # グループ内の最も古いリビジョンのblock_idをglobal_block_idとして使用
     global_block_id_map: dict[tuple[str, str], str] = {}
 
-    # Get all groups
+    # すべてのグループを取得
     groups = uf.get_groups()
 
-    # For each group, find the earliest member and use its block_id as global_block_id
+    # 各グループについて、最も古いメンバーのblock_idをglobal_block_idとする
     for root, members in groups.items():
-        # Decode all members
+        # すべてのメンバーをデコード
         decoded_members = [decode_key(member) for member in members]
 
-        # Sort by revision to find the earliest
+        # リビジョン順にソートして最も古いものを見つける
         decoded_members.sort(key=lambda x: x[0])
 
-        # Use the block_id from the earliest member as global_block_id
+        # 最も古いメンバーのblock_idをglobal_block_idとして採用
         global_block_id = decoded_members[0][1]
 
-        # Assign to all members in the group
+        # グループ内のすべてのメンバーに同じglobal_block_idを割り当て
         for member in decoded_members:
             global_block_id_map[member] = global_block_id
 
