@@ -8,18 +8,6 @@
 
 ## 機能
 
-### 実装済み（Phase 1-3完了）
-
-- **コア分析モジュール**:
-  - `UnionFind`: グループ検出のためのUnion-Findデータ構造
-  - `SimilarityCalculator`: N-gram/LCS類似度計算（2段階アプローチ）
-  - `RevisionManager`: リビジョンデータの読み込み・管理
-  - `MethodMatcher`: メソッド間マッチング（2段階アプローチ）
-  - `GroupDetector`: クローングループ検出
-  - `GroupMatcher`: グループ間マッチング
-  - `StateClassifier`: 状態分類（メソッド・グループ）
-  - `MethodTracker`: メソッド進化追跡
-  - `CloneGroupTracker`: クローングループ進化追跡
 
 ### CLI コマンド
 
@@ -29,6 +17,11 @@
   - `track all`: メソッド・グループ両方の追跡
 - **convert**: ✅ データフォーマット変換（完全実装済み）
   - `convert methods`: メソッド追跡データの形式変換（lineageフォーマット対応）
+- **label**: ✅ 分析データへのラベル付け（完全実装済み）
+  - `label revisions`: method lineageデータにrev_statusラベルを追加
+  - `label filter`: ラベル付きデータをrev_statusでフィルタリング
+- **report**: ✅ 分析レポート生成（完全実装済み）
+  - `report clone-groups`: クローングループ比較用のMarkdownレポート生成
 - **analyze**: ⚠️ 基本実装のみ（ファイル/ディレクトリ情報表示）
 - **stats**: ✅ 統計メトリクスの計算（完全実装済み）
   - `stats general`: 汎用統計計算
@@ -51,33 +44,6 @@ uv sync --all-groups
 
 ## 使い方
 
-### 基本的な使い方
-
-```bash
-# ヘルプの表示
-b4-thesis --help
-
-# メソッド進化追跡（主要機能）
-b4-thesis track methods /path/to/revision_data -o output_dir
-
-# クローングループ進化追跡
-b4-thesis track groups /path/to/revision_data -o output_dir
-
-# メソッド・グループ両方の追跡
-b4-thesis track all /path/to/revision_data -o output_dir --summary
-
-# 追跡データのlineageフォーマット変換
-b4-thesis convert methods method_tracking.csv --lineage -o method_lineage.csv
-
-# データの分析
-b4-thesis analyze <input_path> -o results.txt
-
-# 統計情報の計算
-b4-thesis stats data.csv -m mean -m std -m median
-
-# 可視化の作成
-b4-thesis visualize data.csv -o plot.png -t scatter --x-column x --y-column y
-```
 
 ### コマンド詳細
 
@@ -86,7 +52,7 @@ b4-thesis visualize data.csv -o plot.png -t scatter --x-column x --y-column y
 メソッド単位の進化を追跡します。
 
 ```bash
-b4-thesis track methods <DATA_DIR> [OPTIONS]
+b4-thesis track methods <INPUT_DATA_DIR> [OPTIONS]
 
 Options:
   -o, --output DIRECTORY          出力ディレクトリ（デフォルト: カレントディレクトリ）
@@ -97,9 +63,7 @@ Options:
   --max-workers INTEGER           並列処理のワーカープロセス数（デフォルト: CPU数）
   -s, --summary                   サマリー統計を表示
   -v, --verbose                   詳細な出力を表示
-
-  Phase 5.3最適化オプション（大規模データセット推奨）:
-  --optimize                      全Phase 5.3最適化を一括有効化（推奨）
+  --optimize                      最適化を一括有効化（推奨）
   --use-lsh                       LSHインデックスを有効化（~100倍高速化）
   --lsh-threshold FLOAT           LSH類似度閾値 (0.0-1.0, デフォルト: 0.7)
   --lsh-num-perm INTEGER          LSH置換数 (32-256, デフォルト: 128)
@@ -116,25 +80,13 @@ Options:
 **使用例**:
 ```bash
 # 基本的な使用
-b4-thesis track methods ./revision_data -o ./output
+b4-thesis track methods ./data/cloneNIL -o ./output --optimize --verbose
 
 # 日付範囲を指定
-b4-thesis track methods ./revision_data -o ./output --start-date 2024-01-01 --end-date 2024-12-31
-
-# 類似度閾値を変更してサマリー表示
-b4-thesis track methods ./revision_data -o ./output --similarity 80 --summary
-
-# Phase 5.3最適化を有効化（大規模データセット推奨、20+リビジョンで50-100倍高速化）
-b4-thesis track methods ./revision_data -o ./output --optimize
+b4-thesis track methods ./data/cloneNIL -o ./output --start-date 2024-01-01 --end-date 2024-12-31
 
 # カスタムプログレッシブ閾値を使用
-b4-thesis track methods ./revision_data -o ./output --progressive-thresholds "95,85,75,70"
-
-# LSHパラメータを調整
-b4-thesis track methods ./revision_data -o ./output --use-lsh --lsh-num-perm 256 --top-k 30
-
-# 並列処理を有効化（実験的機能 - 小規模データでは逆に遅くなる可能性あり）
-b4-thesis track methods ./revision_data -o ./output --parallel --max-workers 4
+b4-thesis track methods ./data/cloneNIL -o ./output --progressive-thresholds "95,85,75,70"
 ```
 
 **Phase 5.3最適化について**:
@@ -148,14 +100,14 @@ b4-thesis track methods ./revision_data -o ./output --parallel --max-workers 4
 プロセス間通信のオーバーヘッドにより逆に遅くなる場合があります。大規模データセット（20+リビジョン）
 での使用を推奨します。詳細は[docs/PERFORMANCE.md](docs/PERFORMANCE.md)を参照してください。
 
-```
+
 
 #### track groups
 
 クローングループ単位の進化を追跡します。
 
 ```bash
-b4-thesis track groups <DATA_DIR> [OPTIONS]
+b4-thesis track groups <INPUT_DATA_DIR> [OPTIONS]
 
 Options:
   -o, --output DIRECTORY          出力ディレクトリ（デフォルト: カレントディレクトリ）
@@ -165,9 +117,7 @@ Options:
   --overlap FLOAT                 グループマッチングの重複閾値 (0.0-1.0, デフォルト: 0.5)
   -s, --summary                   サマリー統計を表示
   -v, --verbose                   詳細な出力を表示
-
-  Phase 5.3最適化オプション（大規模データセット推奨）:
-  --optimize                      全Phase 5.3最適化を一括有効化（推奨）
+  --optimize                      最適化を一括有効化（推奨）
   --use-lsh                       LSHインデックスを有効化（~100倍高速化）
   --lsh-threshold FLOAT           LSH類似度閾値 (0.0-1.0, デフォルト: 0.7)
   --lsh-num-perm INTEGER          LSH置換数 (32-256, デフォルト: 128)
@@ -185,13 +135,7 @@ Options:
 **使用例**:
 ```bash
 # 基本的な使用
-b4-thesis track groups ./revision_data -o ./output
-
-# カスタム閾値で実行
-b4-thesis track groups ./revision_data -o ./output --similarity 75 --overlap 0.6 --verbose
-
-# Phase 5.3最適化を有効化（大規模データセット推奨）
-b4-thesis track groups ./revision_data -o ./output --optimize
+b4-thesis track groups ./data/cloneNIL -o ./output --optimize --verbose
 ```
 
 **Phase 5.3最適化について**: track methodsと同様の最適化オプションが利用可能です。詳細は上記「track methods」セクションを参照してください。
@@ -201,7 +145,7 @@ b4-thesis track groups ./revision_data -o ./output --optimize
 メソッドとクローングループ両方の進化を追跡します。
 
 ```bash
-b4-thesis track all <DATA_DIR> [OPTIONS]
+b4-thesis track all <INPUT_DATA_DIR> [OPTIONS]
 
 Options:
   -o, --output DIRECTORY      出力ディレクトリ（デフォルト: カレントディレクトリ）
@@ -223,15 +167,12 @@ Options:
 **使用例**:
 ```bash
 # すべての追跡を実行
-b4-thesis track all ./revision_data -o ./output --summary
-
-# 期間を指定して実行
-b4-thesis track all ./revision_data -o ./output --start-date 2024-06-01 --end-date 2024-12-31
+b4-thesis track all ./data/cloneNIL -o ./output --summary --verbose
 ```
 
 #### convert methods
 
-✅ **完全実装済み**: メソッド追跡データを異なる形式に変換します。特に、lineageフォーマットへの変換をサポートしています。
+メソッド追跡データを異なる形式に変換します。特に、lineageフォーマットへの変換をサポートしています。
 
 メソッド追跡データ（`method_tracking.csv`）をlineageフォーマット（`method_lineage.csv`）に変換します。
 
@@ -269,16 +210,78 @@ Lineageフォーマットは、メソッドの進化系譜を追跡しやすく�
 - **柔軟なパイプライン**: 既存の追跡データをいつでも変換可能
 - **独立した処理**: 追跡とフォーマット変換が分離されている
 
-**クエリ例**:
-```sql
--- 特定メソッドの進化を追跡
-SELECT * FROM method_lineage WHERE global_block_id = 'block_a';
 
--- 長寿命メソッドの分析
-SELECT global_block_id, function_name, MAX(lifetime_days) as max_lifetime
-FROM method_lineage
-GROUP BY global_block_id
-HAVING max_lifetime > 365;
+#### label revisions
+
+method lineageデータにrev_statusラベルを追加します。各(clone_group_id, revision)ペアに対して削除状態を分類します。
+
+```bash
+b4-thesis label revisions <CSV_PATH> [OPTIONS]
+
+Options:
+  -o, --output PATH     出力CSVパス（デフォルト: method_lineage_labeled.csv）
+  -s, --summary         ラベル付け後にサマリー統計を表示
+  -v, --verbose         詳細な出力を表示
+```
+
+**rev_statusラベル**:
+- `all_deleted`: グループ内の全メンバーが削除された
+- `partial_deleted`: 一部のメンバーが削除された
+- `no_deleted`: メンバーが削除されていない
+
+**使用例**:
+```bash
+# 基本的な使用
+b4-thesis label revisions ./output/method_lineage.csv -o ./output/method_lineage_labeled.csv -s -v
+```
+
+#### label filter
+
+ラベル付きデータをrev_statusでフィルタリングします。
+
+```bash
+b4-thesis label filter <CSV_PATH> [OPTIONS]
+
+Options:
+  -o, --output PATH     出力CSVパス（デフォルト: output/partial_deleted.csv）
+  --status [partial_deleted|all_deleted|no_deleted]
+                        フィルタするrev_status値（デフォルト: partial_deleted）
+  -v, --verbose         詳細な出力を表示
+```
+
+**使用例**:
+```bash
+# 部分的に削除されたグループをフィルタリング
+b4-thesis label filter ./output/method_lineage_labeled.csv -o ./output/partial_deleted.csv
+
+# 全削除グループをフィルタリング
+b4-thesis label filter ./output/method_lineage_labeled.csv --status all_deleted -o ./output/all_deleted.csv
+```
+
+#### report clone-groups
+
+クローングループ比較用のMarkdownレポートを生成します。
+
+```bash
+b4-thesis report clone-groups <CSV_PATH> <REPO_PATH> [OPTIONS]
+
+Options:
+  -o, --output PATH       出力ディレクトリ（デフォルト: ./output/clone_reports）
+  -g, --group-id TEXT     処理する特定のクローングループID（複数指定可）
+  --min-members INTEGER   グループの最小メンバー数（デフォルト: 2）
+  --base-path TEXT        ファイルパスから削除するベースパスプレフィックス
+  --github-url TEXT       GitHubパーマリンクのベースURL
+  --dry-run               レポート生成せずにプレビュー
+  -v, --verbose           詳細な出力を表示
+```
+
+**CSV_PATH**: method_lineage.csvファイルへのパス
+**REPO_PATH**: Gitリポジトリへのパス（例: ../projects/pandas）
+
+**使用例**:
+```bash
+# 基本的な使用
+b4-thesis report clone-groups ./output/partial_deleted.csv ../projects/pandas -o ./output/clone_reports -v
 ```
 
 #### analyze
@@ -543,17 +546,6 @@ b4-thesis convert methods ./output/method_tracking.csv --lineage -o ./output/met
 | `lifetime_revisions` | int | ライフタイム（リビジョン数） |
 | `lifetime_days` | int | ライフタイム（日数） |
 
-**使用例**:
-```sql
--- 特定メソッドの進化を追跡
-SELECT * FROM method_lineage WHERE global_block_id = 'block_a';
-
--- 長寿命メソッドの分析
-SELECT global_block_id, function_name, lifetime_days
-FROM method_lineage
-GROUP BY global_block_id
-HAVING MAX(lifetime_days) > 365;
-```
 
 **状態の説明**:
 - `deleted`: 削除されたメソッド
@@ -649,6 +641,8 @@ b4-thesis/
 │       │   ├── __init__.py
 │       │   ├── track.py        # trackコマンド（主要機能）
 │       │   ├── convert.py      # convertコマンド
+│       │   ├── label.py        # labelコマンド
+│       │   ├── report.py       # reportコマンド
 │       │   ├── analyze.py      # analyzeコマンド
 │       │   ├── stats.py        # statsコマンド
 │       │   └── visualize.py    # visualizeコマンド
