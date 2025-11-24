@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from b4_thesis.analysis.code_extractor import CodeSnippet, ExtractRequest, GitCodeExtractor
-from b4_thesis.analysis.report_generator import CloneGroupReport, ReportGenerator
+from b4_thesis.analysis.report_generator import CloneGroupReport, MemberInfo, ReportGenerator
 
 
 class TestCloneGroupReport:
@@ -14,14 +14,34 @@ class TestCloneGroupReport:
 
     def test_create_report(self):
         """Test creating a clone group report."""
+        snippet = CodeSnippet(
+            function_name="func_a",
+            file_path="src/module.py",
+            revision="abc123",
+            start_line=10,
+            end_line=20,
+            code="def func_a():\n    pass",
+        )
         members = [
-            CodeSnippet(
+            MemberInfo(
+                global_block_id="block_a",
+                revision="abc123",
                 function_name="func_a",
                 file_path="src/module.py",
-                revision="abc123",
                 start_line=10,
                 end_line=20,
-                code="def func_a():\n    pass",
+                loc=10,
+                state="survived",
+                state_detail=None,
+                match_type="CLONE_MATCH",
+                match_similarity=95.5,
+                clone_count=2,
+                clone_group_id="abc123def456",
+                clone_group_size=2,
+                avg_similarity_to_group=95.5,
+                lifetime_revisions=5,
+                lifetime_days=100,
+                code_snippet=snippet,
             ),
         ]
 
@@ -107,8 +127,16 @@ class TestReportGenerator:
                 ],
                 "start_line": [10, 10, 20, 30],
                 "end_line": [20, 20, 35, 45],
+                "loc": [10, 10, 15, 15],
+                "state": ["survived", "survived", "deleted", "survived"],
+                "state_detail": [None, None, None, None],
                 "match_type": ["CLONE_MATCH"] * 4,
+                "match_similarity": [92.0, 93.0, 88.0, 90.0],
+                "clone_count": [3, 3, 3, 3],
+                "clone_group_size": [3, 3, 3, 3],
                 "avg_similarity_to_group": [92.0, 93.0, 88.0, 90.0],
+                "lifetime_revisions": [5, 5, 3, 4],
+                "lifetime_days": [100, 100, 50, 80],
             }
         )
 
@@ -157,6 +185,11 @@ class TestReportGenerator:
         assert report.match_type == "CLONE_MATCH"
         assert report.avg_similarity is not None
         assert len(report.members) == 3
+        # Verify members are MemberInfo objects with metadata
+        for member in report.members:
+            assert isinstance(member, MemberInfo)
+            assert member.state is not None
+            assert member.code_snippet is not None
 
     def test_generate_group_report_empty_df(self, mock_extractor):
         """Test generating report from empty DataFrame."""
@@ -169,24 +202,65 @@ class TestReportGenerator:
         """Test rendering report as Markdown."""
         generator = ReportGenerator(mock_extractor)
 
+        snippet_a = CodeSnippet(
+            function_name="func_a",
+            file_path="pandas/core/module.py",
+            revision="abc123def",
+            start_line=10,
+            end_line=20,
+            code="def func_a():\n    return 1",
+            github_url="https://github.com/pandas-dev/pandas/blob/abc123def/pandas/core/module.py#L10-L20",
+        )
+        snippet_b = CodeSnippet(
+            function_name="func_b",
+            file_path="pandas/core/other.py",
+            revision="abc123def",
+            start_line=30,
+            end_line=40,
+            code="def func_b():\n    return 2",
+            github_url="https://github.com/pandas-dev/pandas/blob/abc123def/pandas/core/other.py#L30-L40",
+        )
+
         members = [
-            CodeSnippet(
+            MemberInfo(
+                global_block_id="block_a",
+                revision="abc123def",
                 function_name="func_a",
                 file_path="pandas/core/module.py",
-                revision="abc123def",
                 start_line=10,
                 end_line=20,
-                code="def func_a():\n    return 1",
-                github_url="https://github.com/pandas-dev/pandas/blob/abc123def/pandas/core/module.py#L10-L20",
+                loc=10,
+                state="survived",
+                state_detail=None,
+                match_type="CLONE_MATCH",
+                match_similarity=92.5,
+                clone_count=2,
+                clone_group_id="test_group_123",
+                clone_group_size=2,
+                avg_similarity_to_group=92.5,
+                lifetime_revisions=5,
+                lifetime_days=100,
+                code_snippet=snippet_a,
             ),
-            CodeSnippet(
+            MemberInfo(
+                global_block_id="block_b",
+                revision="abc123def",
                 function_name="func_b",
                 file_path="pandas/core/other.py",
-                revision="abc123def",
                 start_line=30,
                 end_line=40,
-                code="def func_b():\n    return 2",
-                github_url="https://github.com/pandas-dev/pandas/blob/abc123def/pandas/core/other.py#L30-L40",
+                loc=10,
+                state="deleted",
+                state_detail=None,
+                match_type="CLONE_MATCH",
+                match_similarity=92.5,
+                clone_count=2,
+                clone_group_id="test_group_123",
+                clone_group_size=2,
+                avg_similarity_to_group=92.5,
+                lifetime_revisions=5,
+                lifetime_days=100,
+                code_snippet=snippet_b,
             ),
         ]
 
@@ -212,6 +286,9 @@ class TestReportGenerator:
         assert "`func_a`" in markdown
         assert "`func_b`" in markdown
         assert "[GitHub](" in markdown
+        # Check state column
+        assert "survived" in markdown
+        assert "deleted" in markdown
 
         # Check code blocks
         assert "```python" in markdown

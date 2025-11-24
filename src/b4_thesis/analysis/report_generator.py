@@ -10,6 +10,62 @@ from b4_thesis.analysis.code_extractor import CodeSnippet, ExtractRequest, GitCo
 
 
 @dataclass
+class MemberInfo:
+    """Metadata for a clone group member."""
+
+    global_block_id: str | None
+    revision: str
+    function_name: str
+    file_path: str
+    start_line: int
+    end_line: int
+    loc: int | None
+    state: str | None
+    state_detail: str | None
+    match_type: str | None
+    match_similarity: float | None
+    clone_count: int | None
+    clone_group_id: str | None
+    clone_group_size: int | None
+    avg_similarity_to_group: float | None
+    lifetime_revisions: int | None
+    lifetime_days: int | None
+    code_snippet: CodeSnippet | None = None
+
+    @classmethod
+    def from_row(cls, row: pd.Series, code_snippet: CodeSnippet | None = None) -> "MemberInfo":
+        """Create MemberInfo from DataFrame row."""
+        return cls(
+            global_block_id=row.get("global_block_id"),
+            revision=row["revision"],
+            function_name=row["function_name"],
+            file_path=row["file_path"],
+            start_line=int(row["start_line"]),
+            end_line=int(row["end_line"]),
+            loc=int(row["loc"]) if pd.notna(row.get("loc")) else None,
+            state=row.get("state"),
+            state_detail=row.get("state_detail"),
+            match_type=row.get("match_type"),
+            match_similarity=float(row["match_similarity"])
+            if pd.notna(row.get("match_similarity"))
+            else None,
+            clone_count=int(row["clone_count"]) if pd.notna(row.get("clone_count")) else None,
+            clone_group_id=row.get("clone_group_id"),
+            clone_group_size=int(row["clone_group_size"])
+            if pd.notna(row.get("clone_group_size"))
+            else None,
+            avg_similarity_to_group=float(row["avg_similarity_to_group"])
+            if pd.notna(row.get("avg_similarity_to_group"))
+            else None,
+            lifetime_revisions=int(row["lifetime_revisions"])
+            if pd.notna(row.get("lifetime_revisions"))
+            else None,
+            lifetime_days=int(row["lifetime_days"]) if pd.notna(row.get("lifetime_days")) else None,
+            code_snippet=code_snippet,
+        )
+
+
+@dataclass
 class CloneGroupReport:
     """Report data for a clone group."""
 
@@ -17,7 +73,7 @@ class CloneGroupReport:
     member_count: int
     match_type: str | None
     avg_similarity: float | None
-    members: list[CodeSnippet] = field(default_factory=list)
+    members: list[MemberInfo] = field(default_factory=list)
     generated_at: datetime = field(default_factory=datetime.now)
 
     @property
@@ -115,12 +171,24 @@ class ReportGenerator:
         requests = self._create_extract_requests(representative_df)
         snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
 
+        # Create MemberInfo objects with code snippets
+        members = []
+        for _, row in representative_df.iterrows():
+            # Find matching snippet (path may be cleaned)
+            snippet = None
+            for s in snippets:
+                if s.function_name == row["function_name"] and s.revision == row["revision"]:
+                    snippet = s
+                    break
+            member_info = MemberInfo.from_row(row, snippet)
+            members.append(member_info)
+
         return CloneGroupReport(
             group_id=group_id,
-            member_count=len(snippets),
+            member_count=len(members),
             match_type=match_type,
             avg_similarity=avg_similarity,
-            members=snippets,
+            members=members,
         )
 
     def render_markdown(self, report: CloneGroupReport) -> str:
@@ -155,8 +223,8 @@ class ReportGenerator:
         # Members table
         lines.append("## Members")
         lines.append("")
-        lines.append("| # | Function | File | Lines | Rev | Link |")
-        lines.append("|---|----------|------|-------|-----|------|")
+        lines.append("| # | Function | File | Lines | LOC | State | Rev | Similarity | Link |")
+        lines.append("|---|----------|------|-------|-----|-------|-----|------------|------|")
 
         for i, member in enumerate(report.members, 1):
             # Shorten path for display
@@ -165,16 +233,21 @@ class ReportGenerator:
                 short_path = "..." + short_path[-37:]
 
             line_range = f"{member.start_line}-{member.end_line}"
+            loc = str(member.loc) if member.loc is not None else "-"
+            state = member.state or "-"
             short_rev = member.revision[:7]
+            similarity = (
+                f"{member.avg_similarity_to_group:.1f}%"
+                if member.avg_similarity_to_group is not None
+                else "-"
+            )
 
-            if member.github_url:
-                link = f"[GitHub]({member.github_url})"
-            else:
-                link = "-"
+            github_url = member.code_snippet.github_url if member.code_snippet else None
+            link = f"[GitHub]({github_url})" if github_url else "-"
 
             lines.append(
                 f"| {i} | `{member.function_name}` | {short_path} | "
-                f"{line_range} | {short_rev} | {link} |"
+                f"{line_range} | {loc} | {state} | {short_rev} | {similarity} | {link} |"
             )
 
         lines.append("")
@@ -192,10 +265,15 @@ class ReportGenerator:
                 f"> {member.file_path}:{member.start_line}-{member.end_line} "
                 f"@ {member.revision[:7]}"
             )
+            if member.state:
+                lines.append(f"> State: {member.state}")
             lines.append("")
-            lines.append("```python")
-            lines.append(member.code)
-            lines.append("```")
+            if member.code_snippet:
+                lines.append("```python")
+                lines.append(member.code_snippet.code)
+                lines.append("```")
+            else:
+                lines.append("*Code not available*")
             lines.append("")
 
         # Notes section
