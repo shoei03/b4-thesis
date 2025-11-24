@@ -96,18 +96,15 @@ def _convert_to_lineage_format(df: pd.DataFrame) -> pd.DataFrame:
     # Build global_block_id mapping using Union-Find
     global_block_id_map = _build_global_block_id_map(df)
 
-    # Add global_block_id column
-    result_df = df.copy()
-    result_df["global_block_id"] = result_df.apply(
-        lambda row: global_block_id_map.get(
-            (row["revision"], row["block_id"]),
-            row["block_id"],  # Fallback to block_id if not found
-        ),
-        axis=1,
-    )
+    # Add global_block_id column using vectorized operations (much faster than apply)
+    # Create list of keys using zip (vectorized)
+    keys = list(zip(df["revision"], df["block_id"]))
+    # Use list comprehension for fast dictionary lookup with fallback
+    global_block_ids = [global_block_id_map.get(k, k[1]) for k in keys]
 
-    # Define column order: global_block_id first, others except block_id/matched_block_id
-    columns = ["global_block_id", "revision", "function_name", "file_path"]
+    # Create result DataFrame with only needed columns (avoid copying unnecessary data)
+    # Define columns to keep (exclude block_id and matched_block_id)
+    columns = ["revision", "function_name", "file_path"]
     columns.extend(
         [
             "start_line",
@@ -126,7 +123,11 @@ def _convert_to_lineage_format(df: pd.DataFrame) -> pd.DataFrame:
         ]
     )
 
-    return result_df[columns]
+    # Copy only needed columns and insert global_block_id at the beginning
+    result_df = df[columns].copy()
+    result_df.insert(0, "global_block_id", global_block_ids)
+
+    return result_df
 
 
 def _build_global_block_id_map(df: pd.DataFrame) -> dict[tuple[str, str], str]:
@@ -134,6 +135,7 @@ def _build_global_block_id_map(df: pd.DataFrame) -> dict[tuple[str, str], str]:
     Build a mapping from (revision, block_id) to global_block_id.
 
     Uses Union-Find to track lineage relationships through matched_block_id.
+    Optimized with pre-computed dictionaries for O(N) complexity instead of O(N²).
 
     Args:
         df: Input DataFrame with revision, block_id, matched_block_id columns
@@ -153,10 +155,21 @@ def _build_global_block_id_map(df: pd.DataFrame) -> dict[tuple[str, str], str]:
         parts = key.split("::", 1)
         return (parts[0], parts[1])
 
+    # Pre-compute revision order: O(R log R) where R is number of unique revisions
+    # This avoids repeated DataFrame filtering (was O(N) per row)
+    sorted_revisions = sorted(df["revision"].unique())
+    revision_to_prev: dict[str, str | None] = {}
+    for i, rev in enumerate(sorted_revisions):
+        revision_to_prev[rev] = sorted_revisions[i - 1] if i > 0 else None
+
+    # Pre-compute block existence: O(N) using vectorized pandas operations
+    # This creates a set for fast O(1) lookup (was O(N) DataFrame scan per row)
+    block_exists = set(zip(df["revision"], df["block_id"]))
+
     # Sort by revision to process chronologically
     sorted_df = df.sort_values("revision")
 
-    # First pass: union matched blocks
+    # First pass: union matched blocks - now O(N) instead of O(N²)
     for _, row in sorted_df.iterrows():
         revision = row["revision"]
         block_id = row["block_id"]
@@ -166,20 +179,12 @@ def _build_global_block_id_map(df: pd.DataFrame) -> dict[tuple[str, str], str]:
 
         # If matched_block_id is not null/empty, find previous revision's block
         if pd.notna(matched_block_id) and matched_block_id != "":
-            # Get all previous revisions
-            prev_revisions = sorted_df[sorted_df["revision"] < revision]["revision"].unique()
+            # Get the immediately previous revision: O(1) dictionary lookup
+            prev_revision = revision_to_prev.get(revision)
 
-            if len(prev_revisions) > 0:
-                # Get the immediately previous revision
-                prev_revision = sorted(prev_revisions)[-1]
-
-                # Find the matched block in the previous revision
-                matched_rows = sorted_df[
-                    (sorted_df["revision"] == prev_revision)
-                    & (sorted_df["block_id"] == matched_block_id)
-                ]
-
-                if not matched_rows.empty:
+            if prev_revision is not None:
+                # Check if the matched block exists in previous revision: O(1) set lookup
+                if (prev_revision, matched_block_id) in block_exists:
                     # Union current block with matched block from previous revision
                     prev_key = encode_key(prev_revision, matched_block_id)
                     uf.union(current_key, prev_key)
