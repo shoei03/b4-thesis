@@ -275,13 +275,32 @@ Options:
   -v, --verbose           詳細な出力を表示
 ```
 
-**CSV_PATH**: method_lineage.csvファイルへのパス
+**CSV_PATH**: partial_deleted.csvファイルへのパス（`label filter`コマンドの出力）
 **REPO_PATH**: Gitリポジトリへのパス（例: ../projects/pandas）
+
+**必須ワークフロー**:
+```bash
+# ステップ1: データをフィルタリング
+b4-thesis label filter ./output/method_lineage_labeled.csv \
+    --status partial_deleted -o ./output/partial_deleted.csv
+
+# ステップ2: レポート生成
+b4-thesis report clone-groups ./output/partial_deleted.csv \
+    ../projects/pandas -o ./output/clone_reports
+```
 
 **使用例**:
 ```bash
 # 基本的な使用
-b4-thesis report clone-groups ./output/partial_deleted.csv ../projects/pandas -o ./output/clone_reports -v
+b4-thesis report clone-groups ./output/partial_deleted.csv ../projects/pandas \
+    -o ./output/clone_reports -v
+
+# 特定のグループのみレポート生成
+b4-thesis report clone-groups ./output/partial_deleted.csv ../projects/pandas \
+    -g abc12345 -g def67890 -o ./output/selected_reports
+
+# ドライラン（プレビュー）
+b4-thesis report clone-groups ./output/partial_deleted.csv ../projects/pandas --dry-run
 ```
 
 #### analyze

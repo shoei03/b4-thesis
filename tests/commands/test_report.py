@@ -69,7 +69,7 @@ class TestReportCloneGroups:
 
     @pytest.fixture
     def sample_lineage_csv(self, tmp_path, temp_git_repo):
-        """Create a sample method_lineage.csv for testing."""
+        """Create a sample partial_deleted.csv for testing."""
         _, commit_hash = temp_git_repo
 
         data = {
@@ -90,10 +90,11 @@ class TestReportCloneGroups:
             "avg_similarity_to_group": [90.0, 90.0],
             "lifetime_revisions": [5, 5],
             "lifetime_days": [30, 30],
+            "rev_status": ["partial_deleted", "partial_deleted"],
         }
         df = pd.DataFrame(data)
 
-        csv_file = tmp_path / "method_lineage.csv"
+        csv_file = tmp_path / "partial_deleted.csv"
         df.to_csv(csv_file, index=False)
         return csv_file
 
@@ -118,6 +119,7 @@ class TestReportCloneGroups:
             "avg_similarity_to_group": [None],
             "lifetime_revisions": [1],
             "lifetime_days": [0],
+            "rev_status": ["no_deleted"],
         }
         df = pd.DataFrame(data)
 
@@ -347,3 +349,37 @@ class TestReportCloneGroups:
 
         assert result.exit_code != 0
         assert "Missing required columns" in result.output
+
+    def test_clone_groups_missing_rev_status(self, runner, temp_git_repo, tmp_path):
+        """Test with CSV missing rev_status column (shows helpful hint)."""
+        repo_path, _ = temp_git_repo
+
+        # Create CSV without rev_status column
+        data = {
+            "global_block_id": ["block_a"],
+            "revision": ["abc123"],
+            "function_name": ["func_a"],
+            "file_path": ["test.py"],
+            "start_line": [1],
+            "end_line": [5],
+            "loc": [5],
+            "clone_group_id": ["group123"],
+        }
+        df = pd.DataFrame(data)
+        csv_file = tmp_path / "no_rev_status.csv"
+        df.to_csv(csv_file, index=False)
+
+        result = runner.invoke(
+            main,
+            [
+                "report",
+                "clone-groups",
+                str(csv_file),
+                str(repo_path),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Missing required columns" in result.output
+        assert "rev_status" in result.output
+        assert "label filter" in result.output

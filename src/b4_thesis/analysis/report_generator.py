@@ -31,9 +31,15 @@ class MemberInfo:
     lifetime_revisions: int | None
     lifetime_days: int | None
     code_snippet: CodeSnippet | None = None
+    previous_code_snippet: CodeSnippet | None = None
 
     @classmethod
-    def from_row(cls, row: pd.Series, code_snippet: CodeSnippet | None = None) -> "MemberInfo":
+    def from_row(
+        cls,
+        row: pd.Series,
+        code_snippet: CodeSnippet | None = None,
+        previous_code_snippet: CodeSnippet | None = None,
+    ) -> "MemberInfo":
         """Create MemberInfo from DataFrame row."""
         return cls(
             global_block_id=row.get("global_block_id"),
@@ -62,6 +68,7 @@ class MemberInfo:
             else None,
             lifetime_days=int(row["lifetime_days"]) if pd.notna(row.get("lifetime_days")) else None,
             code_snippet=code_snippet,
+            previous_code_snippet=previous_code_snippet,
         )
 
 
@@ -85,37 +92,51 @@ class CloneGroupReport:
 class ReportGenerator:
     """Generate Markdown reports for clone groups."""
 
-    def __init__(
-        self,
-        extractor: GitCodeExtractor,
-        use_latest_revision: bool = True,
-    ) -> None:
+    def __init__(self, extractor: GitCodeExtractor) -> None:
         """
         Initialize ReportGenerator.
 
         Args:
             extractor: GitCodeExtractor instance for code extraction
-            use_latest_revision: Use latest revision for each method (default True)
         """
         self.extractor = extractor
-        self.use_latest_revision = use_latest_revision
 
-    def _select_representative_records(self, group_df: pd.DataFrame) -> pd.DataFrame:
-        """Select representative record for each method in the group.
+    def _match_previous_revisions(
+        self, group_df: pd.DataFrame
+    ) -> dict[tuple[str, str], pd.Series | None]:
+        """Match each method to its previous revision in the same DataFrame.
 
-        For each global_block_id, selects the record with the latest revision.
+        For partial_deleted.csv format, the label filter command has already included
+        previous revisions in the same DataFrame. This method simply matches them by
+        finding the chronologically previous row for each (clone_group_id, global_block_id).
 
         Args:
-            group_df: DataFrame with clone group members
+            group_df: DataFrame with method records including rev_status column
 
         Returns:
-            DataFrame with one record per unique method
+            Dict mapping (global_block_id, revision) to the previous revision's record (or None)
         """
-        if self.use_latest_revision:
-            # Sort by revision (descending) and take first for each global_block_id
-            sorted_df = group_df.sort_values("revision", ascending=False)
-            return sorted_df.drop_duplicates(subset=["global_block_id"], keep="first")
-        return group_df.drop_duplicates(subset=["global_block_id"], keep="first")
+        prev_map: dict[tuple[str, str], pd.Series | None] = {}
+
+        if "global_block_id" not in group_df.columns or "clone_group_id" not in group_df.columns:
+            return prev_map
+
+        # Group by (clone_group_id, global_block_id) and sort by revision
+        for (_, global_bid), group in group_df.groupby(["clone_group_id", "global_block_id"]):
+            sorted_group = group.sort_values("revision", ascending=True)
+            rows = list(sorted_group.iterrows())
+
+            for i, (_, row) in enumerate(rows):
+                revision = row["revision"]
+
+                if i == 0:
+                    # First revision has no previous
+                    prev_map[(str(global_bid), revision)] = None
+                else:
+                    # Previous revision is the row before this one
+                    prev_map[(str(global_bid), revision)] = rows[i - 1][1]
+
+        return prev_map
 
     def _create_extract_requests(self, df: pd.DataFrame) -> list[ExtractRequest]:
         """Create extraction requests from DataFrame.
@@ -144,13 +165,23 @@ class ReportGenerator:
         """Generate report for a single clone group.
 
         Args:
-            group_df: DataFrame containing all records for a clone group
+            group_df: DataFrame containing all records for a clone group (from partial_deleted.csv)
 
         Returns:
             CloneGroupReport with extracted code snippets
+
+        Raises:
+            ValueError: If DataFrame is empty or missing required columns
         """
         if group_df.empty:
             raise ValueError("Cannot generate report from empty DataFrame")
+
+        # Validate required column
+        if "rev_status" not in group_df.columns:
+            raise ValueError(
+                "Missing 'rev_status' column. "
+                "Input must be from 'label filter' command (partial_deleted.csv format)."
+            )
 
         # Get group metadata from first row
         first_row = group_df.iloc[0]
@@ -164,23 +195,68 @@ class ReportGenerator:
             if not similarities.empty:
                 avg_similarity = float(similarities.mean())
 
-        # Select representative records
-        representative_df = self._select_representative_records(group_df)
+        # Get the latest revision for each unique method (global_block_id)
+        # Sort by revision descending and take first occurrence
+        sorted_df = group_df.sort_values("revision", ascending=False)
+        representative_df = sorted_df.drop_duplicates(subset=["global_block_id"], keep="first")
 
-        # Extract code
+        # Match previous revisions from the same DataFrame
+        prev_revision_map = self._match_previous_revisions(group_df)
+
+        # Extract code for current revisions
         requests = self._create_extract_requests(representative_df)
         snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
+
+        # Collect previous revision requests
+        prev_requests: list[ExtractRequest] = []
+        prev_request_keys: list[tuple[str, str]] = []  # (global_block_id, current_revision)
+
+        for _, row in representative_df.iterrows():
+            global_block_id = str(row.get("global_block_id", ""))
+            revision = row["revision"]
+            prev_record = prev_revision_map.get((global_block_id, revision))
+
+            if prev_record is not None:
+                prev_requests.append(
+                    ExtractRequest(
+                        function_name=prev_record["function_name"],
+                        file_path=prev_record["file_path"],
+                        revision=prev_record["revision"],
+                        start_line=int(prev_record["start_line"]),
+                        end_line=int(prev_record["end_line"]),
+                        global_block_id=global_block_id,
+                    )
+                )
+                prev_request_keys.append((global_block_id, revision))
+
+        # Extract previous revision code
+        prev_snippets: list[CodeSnippet] = []
+        if prev_requests:
+            prev_snippets = self.extractor.batch_extract(prev_requests, sort_by_revision=True)
+
+        # Build map for quick lookup of previous snippets
+        prev_snippet_map: dict[tuple[str, str], CodeSnippet] = {}
+        for i, (global_block_id, current_revision) in enumerate(prev_request_keys):
+            if i < len(prev_snippets):
+                prev_snippet_map[(global_block_id, current_revision)] = prev_snippets[i]
 
         # Create MemberInfo objects with code snippets
         members = []
         for _, row in representative_df.iterrows():
-            # Find matching snippet (path may be cleaned)
+            global_block_id = str(row.get("global_block_id", ""))
+            revision = row["revision"]
+
+            # Find matching current snippet
             snippet = None
             for s in snippets:
-                if s.function_name == row["function_name"] and s.revision == row["revision"]:
+                if s.function_name == row["function_name"] and s.revision == revision:
                     snippet = s
                     break
-            member_info = MemberInfo.from_row(row, snippet)
+
+            # Find matching previous snippet
+            prev_snippet = prev_snippet_map.get((global_block_id, revision))
+
+            member_info = MemberInfo.from_row(row, snippet, prev_snippet)
             members.append(member_info)
 
         return CloneGroupReport(
@@ -268,6 +344,10 @@ class ReportGenerator:
             if member.state:
                 lines.append(f"> State: {member.state}")
             lines.append("")
+
+            # Current revision code
+            lines.append(f"#### Current (revision: {member.revision[:7]})")
+            lines.append("")
             if member.code_snippet:
                 lines.append("```python")
                 lines.append(member.code_snippet.code)
@@ -275,6 +355,25 @@ class ReportGenerator:
             else:
                 lines.append("*Code not available*")
             lines.append("")
+
+            # Previous revision code
+            if member.previous_code_snippet:
+                prev_snippet = member.previous_code_snippet
+                lines.append(f"#### Previous (revision: {prev_snippet.revision[:7]})")
+                lines.append("")
+                lines.append(
+                    f"> {prev_snippet.file_path}:{prev_snippet.start_line}-{prev_snippet.end_line}"
+                )
+                lines.append("")
+                lines.append("```python")
+                lines.append(prev_snippet.code)
+                lines.append("```")
+                lines.append("")
+            else:
+                lines.append("#### Previous")
+                lines.append("")
+                lines.append("*No previous revision available*")
+                lines.append("")
 
         # Notes section
         lines.append("---")
@@ -333,7 +432,7 @@ def generate_reports_from_csv(
     """Convenience function to generate reports from CSV file.
 
     Args:
-        csv_path: Path to method_lineage.csv
+        csv_path: Path to partial_deleted.csv (output from 'label filter' command)
         repo_path: Path to Git repository
         output_dir: Output directory for reports
         base_path_prefix: Prefix to remove from file paths
@@ -343,9 +442,20 @@ def generate_reports_from_csv(
 
     Returns:
         List of paths to generated report files
+
+    Raises:
+        ValueError: If input CSV is missing rev_status column
     """
     # Read CSV
     df = pd.read_csv(csv_path)
+
+    # Validate rev_status column exists
+    if "rev_status" not in df.columns:
+        raise ValueError(
+            "Missing 'rev_status' column. "
+            "Input must be from 'label filter' command. "
+            "Run: b4-thesis label filter <input.csv> -o <output.csv>"
+        )
 
     # Filter for records with clone_group_id
     df = df[df["clone_group_id"].notna()]
@@ -376,7 +486,7 @@ def generate_reports_from_csv(
 
     # Generate reports
     output_paths = []
-    for group_id, group_df in valid_groups:
+    for _, group_df in valid_groups:
         report = generator.generate_group_report(group_df)
         output_path = generator.save_report(report, output_dir)
         output_paths.append(output_path)

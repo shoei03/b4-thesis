@@ -112,7 +112,7 @@ class TestReportGenerator:
 
     @pytest.fixture
     def sample_group_df(self):
-        """Create a sample DataFrame for a clone group."""
+        """Create a sample DataFrame for a clone group (partial_deleted.csv format)."""
         return pd.DataFrame(
             {
                 "clone_group_id": ["group123"] * 4,
@@ -137,6 +137,12 @@ class TestReportGenerator:
                 "avg_similarity_to_group": [92.0, 93.0, 88.0, 90.0],
                 "lifetime_revisions": [5, 5, 3, 4],
                 "lifetime_days": [100, 100, 50, 80],
+                "rev_status": [
+                    "no_deleted",
+                    "partial_deleted",
+                    "partial_deleted",
+                    "partial_deleted",
+                ],
             }
         )
 
@@ -145,21 +151,6 @@ class TestReportGenerator:
         generator = ReportGenerator(mock_extractor)
 
         assert generator.extractor == mock_extractor
-        assert generator.use_latest_revision is True
-
-    def test_select_representative_records(self, mock_extractor, sample_group_df):
-        """Test selecting representative records."""
-        generator = ReportGenerator(mock_extractor)
-
-        result = generator._select_representative_records(sample_group_df)
-
-        # Should have 3 unique global_block_ids
-        assert len(result) == 3
-        assert set(result["global_block_id"]) == {"block_a", "block_b", "block_c"}
-
-        # For block_a, should select latest revision (rev2)
-        block_a_row = result[result["global_block_id"] == "block_a"].iloc[0]
-        assert block_a_row["revision"] == "rev2"
 
     def test_create_extract_requests(self, mock_extractor, sample_group_df):
         """Test creating extraction requests from DataFrame."""
@@ -197,6 +188,28 @@ class TestReportGenerator:
 
         with pytest.raises(ValueError, match="empty DataFrame"):
             generator.generate_group_report(pd.DataFrame())
+
+    def test_generate_group_report_missing_rev_status(self, mock_extractor):
+        """Test generating report without rev_status column."""
+        generator = ReportGenerator(mock_extractor)
+
+        # Create DataFrame without rev_status column
+        df = pd.DataFrame(
+            {
+                "clone_group_id": ["group123"],
+                "global_block_id": ["block_a"],
+                "revision": ["rev1"],
+                "function_name": ["func_a"],
+                "file_path": ["pandas/core/a.py"],
+                "start_line": [10],
+                "end_line": [20],
+                "loc": [10],
+                "state": ["survived"],
+            }
+        )
+
+        with pytest.raises(ValueError, match="rev_status"):
+            generator.generate_group_report(df)
 
     def test_render_markdown(self, mock_extractor):
         """Test rendering report as Markdown."""

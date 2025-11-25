@@ -75,16 +75,21 @@ def clone_groups(
 ):
     """Generate Markdown reports for clone group comparison.
 
-    Reads method lineage data from CSV_PATH, extracts code from REPO_PATH,
-    and generates comparison reports for each clone group.
+    Reads filtered method lineage data from CSV_PATH (output from 'label filter' command),
+    extracts code from REPO_PATH, and generates comparison reports for each clone group.
 
     \b
-    CSV_PATH: Path to method_lineage.csv file
+    CSV_PATH: Path to partial_deleted.csv file (from 'label filter' command)
     REPO_PATH: Path to the Git repository (e.g., ../projects/pandas)
 
     \b
-    Example:
-        b4-thesis report clone-groups output/method_lineage.csv \\
+    Required workflow:
+        # Step 1: Filter data with label filter command
+        b4-thesis label filter output/method_lineage_labeled.csv \\
+            --status partial_deleted -o output/partial_deleted.csv
+
+        # Step 2: Generate reports
+        b4-thesis report clone-groups output/partial_deleted.csv \\
             ../projects/pandas -o ./output/clone_reports
     """
     csv_path = Path(csv_path)
@@ -109,10 +114,17 @@ def clone_groups(
         "file_path",
         "start_line",
         "end_line",
+        "rev_status",  # Required for partial_deleted.csv format
     ]
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         console.print(f"[red]Error:[/red] Missing required columns: {missing_columns}")
+        if "rev_status" in missing_columns:
+            console.print()
+            console.print("[yellow]Hint:[/yellow] Input must be from 'label filter' command.")
+            console.print(
+                "  Run: b4-thesis label filter <input.csv> --status partial_deleted -o <output.csv>"
+            )
         raise click.Abort()
 
     # Filter for records with clone_group_id
