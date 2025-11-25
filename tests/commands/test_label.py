@@ -343,7 +343,9 @@ class TestLabelFilter:
 
         assert result.exit_code == 0
         assert "Total records" in result.output
-        assert "Filtered records" in result.output
+        assert "Target status" in result.output
+        assert "Previous revision rows" in result.output
+        assert "Total filtered" in result.output
 
     def test_filter_missing_rev_status(self, runner, tmp_path):
         """Test error handling for missing rev_status column."""
@@ -391,3 +393,111 @@ class TestLabelFilter:
         # All columns should be present
         for col in original_df.columns:
             assert col in filtered_df.columns
+
+    def test_filter_with_previous_revision(self, runner, tmp_path):
+        """Test that filter includes previous revision rows."""
+        # Create test data with multiple revisions
+        data = {
+            "global_block_id": ["gb1", "gb1", "gb2", "gb3", "gb3"],
+            "clone_group_id": ["g1", "g1", "g2", "g3", "g3"],
+            "revision": ["r0", "r1", "r1", "r0", "r1"],
+            "state": ["survived", "deleted", "deleted", "survived", "survived"],
+            "rev_status": [
+                "no_deleted",  # g1@r0: gb1
+                "partial_deleted",  # g1@r1: gb1 (target - should include r0's gb1)
+                "partial_deleted",  # g2@r1: gb2 (target - no previous revision)
+                "no_deleted",  # g3@r0: gb3
+                "no_deleted",  # g3@r1: gb3 (not target)
+            ],
+            "function_name": ["f1", "f1", "f2", "f3", "f3"],
+        }
+        df = pd.DataFrame(data)
+
+        csv_file = tmp_path / "test_data.csv"
+        df.to_csv(csv_file, index=False)
+
+        output_file = tmp_path / "filtered.csv"
+
+        result = runner.invoke(
+            main,
+            [
+                "label",
+                "filter",
+                str(csv_file),
+                "-o",
+                str(output_file),
+                "--status",
+                "partial_deleted",
+            ],
+        )
+
+        assert result.exit_code == 0
+
+        filtered_df = pd.read_csv(output_file)
+
+        # Should include:
+        # - gb1@r1 (partial_deleted)
+        # - gb1@r0 (previous revision of gb1)
+        # - gb2@r1 (partial_deleted, no previous)
+        assert len(filtered_df) == 3
+
+        # Verify gb1@r0 is included (previous revision)
+        gb1_r0 = filtered_df[
+            (filtered_df["global_block_id"] == "gb1") & (filtered_df["revision"] == "r0")
+        ]
+        assert len(gb1_r0) == 1
+
+        # Verify gb1@r1 is included (target)
+        gb1_r1 = filtered_df[
+            (filtered_df["global_block_id"] == "gb1") & (filtered_df["revision"] == "r1")
+        ]
+        assert len(gb1_r1) == 1
+
+        # Verify gb2@r1 is included (target, no previous)
+        gb2_r1 = filtered_df[
+            (filtered_df["global_block_id"] == "gb2") & (filtered_df["revision"] == "r1")
+        ]
+        assert len(gb2_r1) == 1
+
+        # Verify gb3 rows are NOT included
+        gb3_rows = filtered_df[filtered_df["global_block_id"] == "gb3"]
+        assert len(gb3_rows) == 0
+
+        # Verify original order is maintained (sorted by index)
+        assert filtered_df.index.is_monotonic_increasing
+
+    def test_filter_with_previous_revision_verbose(self, runner, tmp_path):
+        """Test filter with previous revision in verbose mode."""
+        data = {
+            "global_block_id": ["gb1", "gb1"],
+            "clone_group_id": ["g1", "g1"],
+            "revision": ["r0", "r1"],
+            "state": ["survived", "deleted"],
+            "rev_status": ["no_deleted", "partial_deleted"],
+            "function_name": ["f1", "f1"],
+        }
+        df = pd.DataFrame(data)
+
+        csv_file = tmp_path / "test_data.csv"
+        df.to_csv(csv_file, index=False)
+
+        output_file = tmp_path / "filtered.csv"
+
+        result = runner.invoke(
+            main,
+            [
+                "label",
+                "filter",
+                str(csv_file),
+                "-o",
+                str(output_file),
+                "-v",
+            ],
+        )
+
+        assert result.exit_code == 0
+
+        # Verbose output should show breakdown
+        assert "Target status" in result.output
+        assert "Previous revision" in result.output
+        assert "Total" in result.output

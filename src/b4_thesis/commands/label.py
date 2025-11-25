@@ -185,7 +185,9 @@ def filter_cmd(
     """Filter labeled data by rev_status.
 
     Reads labeled method lineage data from CSV_PATH and extracts rows
-    matching the specified rev_status value.
+    matching the specified rev_status value. For each extracted row,
+    also includes the previous revision of the same global_block_id
+    within the same clone_group_id (if exists).
 
     \b
     CSV_PATH: Path to method_lineage_labeled.csv file
@@ -220,12 +222,47 @@ def filter_cmd(
         console.print(f"  Total records: {len(df)}")
 
     # Filter by status
-    filtered_df = df[df["rev_status"] == status]
+    target_rows = df[df["rev_status"] == status].copy()
 
     if verbose:
-        console.print(f"  Filtered records ({status}): {len(filtered_df)}")
+        console.print(f"  Target status ({status}): {len(target_rows)} records")
+
+    # Find previous revision rows for each target row
+    previous_revision_indices = []
+
+    for (clone_group_id, global_block_id), group in target_rows.groupby(
+        ["clone_group_id", "global_block_id"]
+    ):
+        # Sort by revision to process in chronological order
+        group_sorted = group.sort_values("revision")
+
+        for idx in group_sorted.index:
+            current_revision = df.loc[idx, "revision"]
+
+            # Find rows with same clone_group_id and global_block_id, but earlier revision
+            same_block = df[
+                (df["clone_group_id"] == clone_group_id)
+                & (df["global_block_id"] == global_block_id)
+                & (df["revision"] < current_revision)
+            ]
+
+            if not same_block.empty:
+                # Get the most recent previous revision
+                prev_row = same_block.sort_values("revision", ascending=False).iloc[0]
+                previous_revision_indices.append(prev_row.name)
+
+    # Combine target rows and previous revision rows (remove duplicates, keep original order)
+    all_indices = list(target_rows.index) + previous_revision_indices
+    filtered_df = df.loc[sorted(set(all_indices))].copy()
+
+    if verbose:
+        console.print(f"  Previous revision rows: {len(set(previous_revision_indices))} records")
+        console.print(f"  Total filtered: {len(filtered_df)} records")
 
     # Save output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     filtered_df.to_csv(output_path, index=False)
-    console.print(f"[green]Saved:[/green] {output_path} ({len(filtered_df)} records)")
+    console.print(f"[green]Saved:[/green] {output_path}")
+    console.print(f"  Target status ({status}): {len(target_rows)} records")
+    console.print(f"  Previous revision: {len(set(previous_revision_indices))} records")
+    console.print(f"  Total: {len(filtered_df)} records")
