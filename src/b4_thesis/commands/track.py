@@ -1,4 +1,24 @@
-"""Track command for method and clone group evolution tracking."""
+"""Track command for method and clone group evolution tracking.
+
+This module provides commands for tracking evolution of methods and clone groups
+across software revisions. It includes:
+
+Commands:
+    - track methods: Track individual method evolution
+    - track groups: Track clone group evolution
+
+Helper Functions:
+    - _setup_paths(): Setup and validate input/output paths
+    - _parse_progressive_thresholds(): Parse and validate progressive thresholds
+    - _apply_optimization_defaults(): Apply optimization defaults
+    - _log_basic_config(): Log basic configuration
+    - _log_optimization_settings(): Log optimization settings
+    - _build_status_message(): Build status message for tracking progress
+
+Decorators:
+    - common_tracking_options: Common CLI options (input, output, dates, etc.)
+    - optimization_options: Optimization-related CLI options (LSH, banded LCS, etc.)
+"""
 
 from datetime import datetime
 from pathlib import Path
@@ -325,11 +345,35 @@ def methods(
     use_optimized_similarity: bool,
     progressive_thresholds: str | None,
     optimize: bool,
-):
+) -> None:
     """Track method evolution across revisions.
 
+    Analyzes method evolution by tracking individual methods across revisions,
+    identifying state transitions (new, modified, deleted, unchanged), and
+    detecting clone relationships.
+
+    Args:
+        input: Input directory containing revision subdirectories
+        output: Output directory for CSV files
+        start_date: Start date for filtering revisions (optional)
+        end_date: End date for filtering revisions (optional)
+        similarity: Similarity threshold for method matching (0-100)
+        summary: Whether to display summary statistics
+        verbose: Enable verbose output
+        parallel: Enable parallel processing for similarity calculation
+        max_workers: Maximum number of worker processes (optional)
+        use_lsh: Enable LSH indexing for candidate filtering
+        lsh_threshold: LSH similarity threshold (0.0-1.0)
+        lsh_num_perm: Number of LSH permutations (32-256)
+        top_k: Number of top candidates per source block
+        use_optimized_similarity: Use optimized similarity with banded LCS
+        progressive_thresholds: Progressive thresholds (comma-separated)
+        optimize: Enable all optimizations with recommended defaults
+
     Outputs:
-    - method_tracking.csv: Method tracking results with state classification
+        - method_tracking.csv: Method tracking results with state classification
+          Columns: revision, block_id, file_path, method_name, state,
+                   clone_count, matched_to, similarity_score, etc.
     """
     # Setup paths
     data_path, output_path = _setup_paths(input, output)
@@ -448,12 +492,35 @@ def groups(
     use_optimized_similarity: bool,
     progressive_thresholds: str | None,
     optimize: bool,
-):
+) -> None:
     """Track clone group evolution across revisions.
 
+    Analyzes clone group evolution by tracking groups of similar methods across
+    revisions, identifying state transitions (new, modified, deleted, unchanged),
+    and recording membership changes.
+
+    Args:
+        input: Input directory containing revision subdirectories
+        output: Output directory for CSV files
+        start_date: Start date for filtering revisions (optional)
+        end_date: End date for filtering revisions (optional)
+        similarity: Similarity threshold for group detection (0-100)
+        overlap: Overlap threshold for group matching (0.0-1.0)
+        summary: Whether to display summary statistics
+        verbose: Enable verbose output
+        use_lsh: Enable LSH indexing for method matching
+        lsh_threshold: LSH similarity threshold (0.0-1.0)
+        lsh_num_perm: Number of LSH permutations (32-256)
+        top_k: Number of top candidates
+        use_optimized_similarity: Use optimized similarity with banded LCS
+        progressive_thresholds: Progressive thresholds (comma-separated)
+        optimize: Enable all optimizations with recommended defaults
+
     Outputs:
-    - group_tracking.csv: Group tracking results with state classification
-    - group_membership.csv: Group membership snapshots for each revision
+        - group_tracking.csv: Group tracking results with state classification
+          Columns: group_id, revision, state, member_count, matched_to, etc.
+        - group_membership.csv: Group membership snapshots for each revision
+          Columns: group_id, revision, block_id, file_path, method_name, etc.
     """
     # Setup paths
     data_path, output_path = _setup_paths(input, output)
