@@ -187,6 +187,96 @@ def _build_status_message(entity_type: str, optimized: bool, parallel: bool = Fa
     return "".join(parts)
 
 
+# Common option decorators
+
+
+def common_tracking_options(f):
+    """Apply common tracking options to a command.
+
+    Adds: --input, --output, --start-date, --end-date, --summary, --verbose
+    """
+    f = click.option("--verbose", "-v", is_flag=True, help="Verbose output")(f)
+    f = click.option(
+        "--summary",
+        "-s",
+        is_flag=True,
+        help="Display summary statistics",
+    )(f)
+    f = click.option(
+        "--end-date",
+        type=click.DateTime(formats=["%Y-%m-%d"]),
+        help="End date for filtering revisions (YYYY-MM-DD)",
+    )(f)
+    f = click.option(
+        "--start-date",
+        type=click.DateTime(formats=["%Y-%m-%d"]),
+        help="Start date for filtering revisions (YYYY-MM-DD)",
+    )(f)
+    f = click.option(
+        "--output",
+        "-o",
+        type=click.Path(file_okay=False, dir_okay=True),
+        required=True,
+        help="Output directory for CSV files",
+    )(f)
+    f = click.option(
+        "--input",
+        "-i",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        required=True,
+        help="Input directory containing revision subdirectories",
+    )(f)
+    return f
+
+
+def optimization_options(f):
+    """Apply optimization-related options to a command.
+
+    Adds: --use-lsh, --lsh-threshold, --lsh-num-perm, --top-k,
+          --use-optimized-similarity, --progressive-thresholds, --optimize
+    """
+    f = click.option(
+        "--optimize",
+        is_flag=True,
+        help="Enable all optimizations with recommended defaults",
+    )(f)
+    f = click.option(
+        "--progressive-thresholds",
+        type=str,
+        default=None,
+        help='Progressive thresholds as comma-separated values (e.g., "90,80,70")',
+    )(f)
+    f = click.option(
+        "--use-optimized-similarity",
+        is_flag=True,
+        help="Use optimized similarity with banded LCS (Phase 5.3.2 optimization)",
+    )(f)
+    f = click.option(
+        "--top-k",
+        type=click.IntRange(1),
+        default=20,
+        help="Number of top candidates per source block (default: 20)",
+    )(f)
+    f = click.option(
+        "--lsh-num-perm",
+        type=click.IntRange(32, 256),
+        default=128,
+        help="Number of LSH permutations (32-256, default: 128)",
+    )(f)
+    f = click.option(
+        "--lsh-threshold",
+        type=click.FloatRange(0.0, 1.0),
+        default=0.7,
+        help="LSH similarity threshold (0.0-1.0, default: 0.7)",
+    )(f)
+    f = click.option(
+        "--use-lsh",
+        is_flag=True,
+        help="Enable LSH indexing for candidate filtering (Phase 5.3.2 optimization)",
+    )(f)
+    return f
+
+
 @click.group()
 def track():
     """Track method and clone group evolution across revisions.
@@ -199,43 +289,12 @@ def track():
 
 
 @track.command()
+@optimization_options
 @click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    required=True,
-    help="Input directory containing revision subdirectories",
+    "--max-workers",
+    type=click.IntRange(1),
+    help="Maximum number of worker processes (default: number of CPU cores)",
 )
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=False, dir_okay=True),
-    required=True,
-    help="Output directory for CSV files",
-)
-@click.option(
-    "--start-date",
-    type=click.DateTime(formats=["%Y-%m-%d"]),
-    help="Start date for filtering revisions (YYYY-MM-DD)",
-)
-@click.option(
-    "--end-date",
-    type=click.DateTime(formats=["%Y-%m-%d"]),
-    help="End date for filtering revisions (YYYY-MM-DD)",
-)
-@click.option(
-    "--similarity",
-    type=click.IntRange(0, 100),
-    default=70,
-    help="Similarity threshold for method matching (0-100, default: 70)",
-)
-@click.option(
-    "--summary",
-    "-s",
-    is_flag=True,
-    help="Display summary statistics",
-)
-@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option(
     "--parallel",
     "-p",
@@ -243,49 +302,12 @@ def track():
     help="Enable parallel processing for similarity calculation",
 )
 @click.option(
-    "--max-workers",
-    type=click.IntRange(1),
-    help="Maximum number of worker processes (default: number of CPU cores)",
+    "--similarity",
+    type=click.IntRange(0, 100),
+    default=70,
+    help="Similarity threshold for method matching (0-100, default: 70)",
 )
-@click.option(
-    "--use-lsh",
-    is_flag=True,
-    help="Enable LSH indexing for candidate filtering (Phase 5.3.2 optimization, ~100x speedup)",
-)
-@click.option(
-    "--lsh-threshold",
-    type=click.FloatRange(0.0, 1.0),
-    default=0.7,
-    help="LSH similarity threshold (0.0-1.0, default: 0.7). Only used with --use-lsh.",
-)
-@click.option(
-    "--lsh-num-perm",
-    type=click.IntRange(32, 256),
-    default=128,
-    help="Number of LSH permutations (32-256, default: 128). Only used with --use-lsh.",
-)
-@click.option(
-    "--top-k",
-    type=click.IntRange(1),
-    default=20,
-    help="Number of top candidates per source block (default: 20). Only used with --use-lsh.",
-)
-@click.option(
-    "--use-optimized-similarity",
-    is_flag=True,
-    help="Use optimized similarity with banded LCS (Phase 5.3.2 optimization, ~2x speedup)",
-)
-@click.option(
-    "--progressive-thresholds",
-    type=str,
-    default=None,
-    help='Progressive thresholds as comma-separated values (e.g., "90,80,70"). Phase 5.3.3.',
-)
-@click.option(
-    "--optimize",
-    is_flag=True,
-    help="Enable all optimizations with recommended defaults",
-)
+@common_tracking_options
 def methods(
     input: str,
     output: str,
@@ -396,36 +418,7 @@ def methods(
 
 
 @track.command()
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    required=True,
-    help="Input directory containing revision subdirectories",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=False, dir_okay=True),
-    required=True,
-    help="Output directory for CSV files",
-)
-@click.option(
-    "--start-date",
-    type=click.DateTime(formats=["%Y-%m-%d"]),
-    help="Start date for filtering revisions (YYYY-MM-DD)",
-)
-@click.option(
-    "--end-date",
-    type=click.DateTime(formats=["%Y-%m-%d"]),
-    help="End date for filtering revisions (YYYY-MM-DD)",
-)
-@click.option(
-    "--similarity",
-    type=click.IntRange(0, 100),
-    default=70,
-    help="Similarity threshold for group detection (0-100, default: 70)",
-)
+@optimization_options
 @click.option(
     "--overlap",
     type=click.FloatRange(0.0, 1.0),
@@ -433,51 +426,12 @@ def methods(
     help="Overlap threshold for group matching (0.0-1.0, default: 0.5)",
 )
 @click.option(
-    "--summary",
-    "-s",
-    is_flag=True,
-    help="Display summary statistics",
+    "--similarity",
+    type=click.IntRange(0, 100),
+    default=70,
+    help="Similarity threshold for group detection (0-100, default: 70)",
 )
-@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-@click.option(
-    "--use-lsh",
-    is_flag=True,
-    help="Enable LSH indexing for method matching (Phase 5.3.2 optimization)",
-)
-@click.option(
-    "--lsh-threshold",
-    type=click.FloatRange(0.0, 1.0),
-    default=0.7,
-    help="LSH similarity threshold (0.0-1.0, default: 0.7)",
-)
-@click.option(
-    "--lsh-num-perm",
-    type=click.IntRange(32, 256),
-    default=128,
-    help="Number of LSH permutations (default: 128)",
-)
-@click.option(
-    "--top-k",
-    type=click.IntRange(1),
-    default=20,
-    help="Number of top candidates (default: 20)",
-)
-@click.option(
-    "--use-optimized-similarity",
-    is_flag=True,
-    help="Use optimized similarity (Phase 5.3.2)",
-)
-@click.option(
-    "--progressive-thresholds",
-    type=str,
-    default=None,
-    help='Progressive thresholds (e.g., "90,80,70")',
-)
-@click.option(
-    "--optimize",
-    is_flag=True,
-    help="Enable all Phase 5.3 optimizations",
-)
+@common_tracking_options
 def groups(
     input: str,
     output: str,
