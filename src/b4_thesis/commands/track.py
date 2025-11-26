@@ -13,6 +13,81 @@ from b4_thesis.analysis.method_tracker import MethodTracker
 console = Console()
 
 
+# Helper functions for configuration and path management
+
+
+def _setup_paths(input_path: str, output_path: str) -> tuple[Path, Path]:
+    """Setup and validate input/output paths.
+
+    Args:
+        input_path: Input directory path
+        output_path: Output directory path
+
+    Returns:
+        Tuple of (data_path, output_path) as Path objects
+    """
+    data_path = Path(input_path)
+    output_path_obj = Path(output_path)
+    output_path_obj.mkdir(parents=True, exist_ok=True)
+    return data_path, output_path_obj
+
+
+def _parse_progressive_thresholds(thresholds_str: str | None) -> list[int] | None:
+    """Parse and validate progressive thresholds.
+
+    Args:
+        thresholds_str: Comma-separated threshold values (e.g., "90,80,70")
+
+    Returns:
+        Sorted list of threshold values (high to low), or None if not provided
+
+    Raises:
+        ValueError: If thresholds are invalid
+    """
+    if not thresholds_str:
+        return None
+
+    try:
+        parsed = [int(t.strip()) for t in thresholds_str.split(",")]
+    except ValueError as e:
+        raise ValueError("Progressive thresholds must be comma-separated integers") from e
+
+    # Validate range
+    invalid = [t for t in parsed if not 0 <= t <= 100]
+    if invalid:
+        raise ValueError(f"Progressive thresholds must be between 0 and 100, got: {invalid}")
+
+    # Sort in descending order (high to low)
+    return sorted(parsed, reverse=True)
+
+
+def _apply_optimization_defaults(
+    optimize: bool,
+    use_lsh: bool,
+    use_optimized_similarity: bool,
+    progressive_thresholds: str | None,
+) -> tuple[bool, bool, str]:
+    """Apply optimization defaults if --optimize flag is set.
+
+    Args:
+        optimize: Whether --optimize flag is set
+        use_lsh: Current use_lsh value
+        use_optimized_similarity: Current use_optimized_similarity value
+        progressive_thresholds: Current progressive_thresholds value
+
+    Returns:
+        Tuple of (use_lsh, use_optimized_similarity, progressive_thresholds)
+    """
+    if not optimize:
+        return use_lsh, use_optimized_similarity, progressive_thresholds or ""
+
+    return (
+        True,  # use_lsh
+        True,  # use_optimized_similarity
+        progressive_thresholds or "90,80,70",
+    )
+
+
 @click.group()
 def track():
     """Track method and clone group evolution across revisions.
@@ -135,12 +210,16 @@ def methods(
     Outputs:
     - method_tracking.csv: Method tracking results with state classification
     """
-    data_path = Path(input)
-    output_path = Path(output)
-    output_path.mkdir(parents=True, exist_ok=True)
-
+    # Setup paths
+    data_path, output_path = _setup_paths(input, output)
     console.print(f"[bold blue]Tracking methods:[/bold blue] {data_path}")
 
+    # Apply optimization defaults
+    use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
+        optimize, use_lsh, use_optimized_similarity, progressive_thresholds
+    )
+
+    # Log basic configuration
     if verbose:
         console.print(f"[dim]Similarity threshold: {similarity}[/dim]")
         console.print(f"[dim]Output directory: {output_path}[/dim]")
@@ -151,39 +230,17 @@ def methods(
         if parallel:
             workers = max_workers if max_workers else "auto (CPU cores)"
             console.print(f"[dim]Parallel processing: enabled (workers: {workers})[/dim]")
-
-    # Phase 5.3.2/5.3.3: Handle --optimize flag
-    if optimize:
-        use_lsh = True
-        use_optimized_similarity = True
-        if progressive_thresholds is None:
-            progressive_thresholds = "90,80,70"
-        if verbose:
+        if optimize:
             console.print("[dim]Optimization mode: enabled (all Phase 5.3 optimizations)[/dim]")
 
     # Parse progressive thresholds
-    parsed_progressive_thresholds = None
-    if progressive_thresholds:
-        try:
-            parsed_progressive_thresholds = [
-                int(t.strip()) for t in progressive_thresholds.split(",")
-            ]
-            # Validate thresholds
-            for t in parsed_progressive_thresholds:
-                if not 0 <= t <= 100:
-                    console.print(
-                        f"[red]Error:[/red] Progressive threshold {t} must be between 0 and 100"
-                    )
-                    raise click.Abort()
-            # Sort in descending order (high to low)
-            parsed_progressive_thresholds = sorted(parsed_progressive_thresholds, reverse=True)
-        except ValueError:
-            console.print(
-                "[red]Error:[/red] Progressive thresholds must be comma-separated integers"
-            )
-            raise click.Abort()
+    try:
+        parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise click.Abort()
 
-    # Phase 5.3.2/5.3.3: Display optimization settings
+    # Display optimization settings
     if verbose:
         if use_lsh:
             console.print(
@@ -354,12 +411,16 @@ def groups(
     - group_tracking.csv: Group tracking results with state classification
     - group_membership.csv: Group membership snapshots for each revision
     """
-    data_path = Path(input)
-    output_path = Path(output)
-    output_path.mkdir(parents=True, exist_ok=True)
-
+    # Setup paths
+    data_path, output_path = _setup_paths(input, output)
     console.print(f"[bold blue]Tracking clone groups:[/bold blue] {data_path}")
 
+    # Apply optimization defaults
+    use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
+        optimize, use_lsh, use_optimized_similarity, progressive_thresholds
+    )
+
+    # Log basic configuration
     if verbose:
         console.print(f"[dim]Similarity threshold: {similarity}[/dim]")
         console.print(f"[dim]Overlap threshold: {overlap}[/dim]")
@@ -368,39 +429,17 @@ def groups(
             console.print(f"[dim]Start date: {start_date.strftime('%Y-%m-%d')}[/dim]")
         if end_date:
             console.print(f"[dim]End date: {end_date.strftime('%Y-%m-%d')}[/dim]")
-
-    # Phase 5.3.2/5.3.3: Handle --optimize flag
-    if optimize:
-        use_lsh = True
-        use_optimized_similarity = True
-        if progressive_thresholds is None:
-            progressive_thresholds = "90,80,70"
-        if verbose:
+        if optimize:
             console.print("[dim]Optimization mode: enabled (all Phase 5.3 optimizations)[/dim]")
 
     # Parse progressive thresholds
-    parsed_progressive_thresholds = None
-    if progressive_thresholds:
-        try:
-            parsed_progressive_thresholds = [
-                int(t.strip()) for t in progressive_thresholds.split(",")
-            ]
-            # Validate thresholds
-            for t in parsed_progressive_thresholds:
-                if not 0 <= t <= 100:
-                    console.print(
-                        f"[red]Error:[/red] Progressive threshold {t} must be between 0 and 100"
-                    )
-                    raise click.Abort()
-            # Sort in descending order (high to low)
-            parsed_progressive_thresholds = sorted(parsed_progressive_thresholds, reverse=True)
-        except ValueError:
-            console.print(
-                "[red]Error:[/red] Progressive thresholds must be comma-separated integers"
-            )
-            raise click.Abort()
+    try:
+        parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise click.Abort()
 
-    # Phase 5.3.2/5.3.3: Display optimization settings
+    # Display optimization settings
     if verbose:
         if use_lsh:
             console.print(
