@@ -130,6 +130,7 @@ class RevisionManager:
             Data validation warnings are logged but do not stop processing.
         """
         # Load code_blocks.csv (no header, specify column names)
+        # Explicitly convert line numbers to int to avoid type issues
         code_blocks = pd.read_csv(
             revision.code_blocks_path,
             header=None,
@@ -144,6 +145,10 @@ class RevisionManager:
                 "token_hash",
                 "token_sequence",
             ],
+            dtype={
+                "start_line": int,
+                "end_line": int,
+            },
         )
 
         # Load clone_pairs.csv (no header, specify column names)
