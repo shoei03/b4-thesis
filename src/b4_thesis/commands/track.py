@@ -88,6 +88,105 @@ def _apply_optimization_defaults(
     )
 
 
+# Helper functions for logging
+
+
+def _log_basic_config(
+    verbose: bool,
+    similarity: int,
+    output_path: Path,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    overlap: float | None = None,
+    parallel: bool = False,
+    max_workers: int | None = None,
+    optimize: bool = False,
+) -> None:
+    """Log basic configuration if verbose mode is enabled.
+
+    Args:
+        verbose: Whether verbose mode is enabled
+        similarity: Similarity threshold
+        output_path: Output directory path
+        start_date: Start date filter (optional)
+        end_date: End date filter (optional)
+        overlap: Overlap threshold for groups (optional)
+        parallel: Whether parallel processing is enabled (optional)
+        max_workers: Number of worker processes (optional)
+        optimize: Whether optimization mode is enabled (optional)
+    """
+    if not verbose:
+        return
+
+    console.print(f"[dim]Similarity threshold: {similarity}[/dim]")
+    if overlap is not None:
+        console.print(f"[dim]Overlap threshold: {overlap}[/dim]")
+    console.print(f"[dim]Output directory: {output_path}[/dim]")
+    if start_date:
+        console.print(f"[dim]Start date: {start_date.strftime('%Y-%m-%d')}[/dim]")
+    if end_date:
+        console.print(f"[dim]End date: {end_date.strftime('%Y-%m-%d')}[/dim]")
+    if parallel:
+        workers = max_workers if max_workers else "auto (CPU cores)"
+        console.print(f"[dim]Parallel processing: enabled (workers: {workers})[/dim]")
+    if optimize:
+        console.print("[dim]Optimization mode: enabled (all Phase 5.3 optimizations)[/dim]")
+
+
+def _log_optimization_settings(
+    verbose: bool,
+    use_lsh: bool,
+    lsh_threshold: float,
+    lsh_num_perm: int,
+    top_k: int,
+    use_optimized_similarity: bool,
+    parsed_progressive_thresholds: list[int] | None,
+) -> None:
+    """Log optimization settings if verbose mode is enabled.
+
+    Args:
+        verbose: Whether verbose mode is enabled
+        use_lsh: Whether LSH indexing is enabled
+        lsh_threshold: LSH similarity threshold
+        lsh_num_perm: Number of LSH permutations
+        top_k: Number of top candidates
+        use_optimized_similarity: Whether optimized similarity is enabled
+        parsed_progressive_thresholds: Parsed progressive thresholds
+    """
+    if not verbose:
+        return
+
+    if use_lsh:
+        console.print(
+            f"[dim]LSH indexing: enabled "
+            f"(threshold={lsh_threshold}, num_perm={lsh_num_perm}, top_k={top_k})[/dim]"
+        )
+    if use_optimized_similarity:
+        console.print("[dim]Optimized similarity: enabled (banded LCS)[/dim]")
+    if parsed_progressive_thresholds:
+        console.print(f"[dim]Progressive thresholds: {parsed_progressive_thresholds}[/dim]")
+
+
+def _build_status_message(entity_type: str, optimized: bool, parallel: bool = False) -> str:
+    """Build status message for tracking progress.
+
+    Args:
+        entity_type: Type of entity being tracked ("methods" or "clone groups")
+        optimized: Whether optimization is enabled
+        parallel: Whether parallel processing is enabled
+
+    Returns:
+        Formatted status message
+    """
+    parts = [f"[bold green]Analyzing {entity_type}"]
+    if optimized:
+        parts.append(" (optimized)")
+    if parallel:
+        parts.append(" (parallel)")
+    parts.append("...")
+    return "".join(parts)
+
+
 @click.group()
 def track():
     """Track method and clone group evolution across revisions.
@@ -220,18 +319,16 @@ def methods(
     )
 
     # Log basic configuration
-    if verbose:
-        console.print(f"[dim]Similarity threshold: {similarity}[/dim]")
-        console.print(f"[dim]Output directory: {output_path}[/dim]")
-        if start_date:
-            console.print(f"[dim]Start date: {start_date.strftime('%Y-%m-%d')}[/dim]")
-        if end_date:
-            console.print(f"[dim]End date: {end_date.strftime('%Y-%m-%d')}[/dim]")
-        if parallel:
-            workers = max_workers if max_workers else "auto (CPU cores)"
-            console.print(f"[dim]Parallel processing: enabled (workers: {workers})[/dim]")
-        if optimize:
-            console.print("[dim]Optimization mode: enabled (all Phase 5.3 optimizations)[/dim]")
+    _log_basic_config(
+        verbose,
+        similarity,
+        output_path,
+        start_date,
+        end_date,
+        parallel=parallel,
+        max_workers=max_workers,
+        optimize=optimize,
+    )
 
     # Parse progressive thresholds
     try:
@@ -241,16 +338,15 @@ def methods(
         raise click.Abort()
 
     # Display optimization settings
-    if verbose:
-        if use_lsh:
-            console.print(
-                f"[dim]LSH indexing: enabled "
-                f"(threshold={lsh_threshold}, num_perm={lsh_num_perm}, top_k={top_k})[/dim]"
-            )
-        if use_optimized_similarity:
-            console.print("[dim]Optimized similarity: enabled (banded LCS)[/dim]")
-        if parsed_progressive_thresholds:
-            console.print(f"[dim]Progressive thresholds: {parsed_progressive_thresholds}[/dim]")
+    _log_optimization_settings(
+        verbose,
+        use_lsh,
+        lsh_threshold,
+        lsh_num_perm,
+        top_k,
+        use_optimized_similarity,
+        parsed_progressive_thresholds,
+    )
 
     try:
         # Initialize tracker
@@ -266,13 +362,7 @@ def methods(
         )
 
         # Track methods
-        status_parts = ["[bold green]Analyzing methods"]
-        if use_lsh or use_optimized_similarity:
-            status_parts.append(" (optimized)")
-        if parallel:
-            status_parts.append(" (parallel)")
-        status_parts.append("...")
-        status_msg = "".join(status_parts)
+        status_msg = _build_status_message("methods", use_lsh or use_optimized_similarity, parallel)
         with console.status(status_msg):
             df = tracker.track(
                 start_date=start_date,
@@ -421,16 +511,15 @@ def groups(
     )
 
     # Log basic configuration
-    if verbose:
-        console.print(f"[dim]Similarity threshold: {similarity}[/dim]")
-        console.print(f"[dim]Overlap threshold: {overlap}[/dim]")
-        console.print(f"[dim]Output directory: {output_path}[/dim]")
-        if start_date:
-            console.print(f"[dim]Start date: {start_date.strftime('%Y-%m-%d')}[/dim]")
-        if end_date:
-            console.print(f"[dim]End date: {end_date.strftime('%Y-%m-%d')}[/dim]")
-        if optimize:
-            console.print("[dim]Optimization mode: enabled (all Phase 5.3 optimizations)[/dim]")
+    _log_basic_config(
+        verbose,
+        similarity,
+        output_path,
+        start_date,
+        end_date,
+        overlap=overlap,
+        optimize=optimize,
+    )
 
     # Parse progressive thresholds
     try:
@@ -440,16 +529,15 @@ def groups(
         raise click.Abort()
 
     # Display optimization settings
-    if verbose:
-        if use_lsh:
-            console.print(
-                f"[dim]LSH indexing: enabled "
-                f"(threshold={lsh_threshold}, num_perm={lsh_num_perm}, top_k={top_k})[/dim]"
-            )
-        if use_optimized_similarity:
-            console.print("[dim]Optimized similarity: enabled (banded LCS)[/dim]")
-        if parsed_progressive_thresholds:
-            console.print(f"[dim]Progressive thresholds: {parsed_progressive_thresholds}[/dim]")
+    _log_optimization_settings(
+        verbose,
+        use_lsh,
+        lsh_threshold,
+        lsh_num_perm,
+        top_k,
+        use_optimized_similarity,
+        parsed_progressive_thresholds,
+    )
 
     try:
         # Initialize tracker
@@ -466,11 +554,7 @@ def groups(
         )
 
         # Track groups
-        status_parts = ["[bold green]Analyzing clone groups"]
-        if use_lsh or use_optimized_similarity:
-            status_parts.append(" (optimized)")
-        status_parts.append("...")
-        status_msg = "".join(status_parts)
+        status_msg = _build_status_message("clone groups", use_lsh or use_optimized_similarity)
         with console.status(status_msg):
             group_df, membership_df = tracker.track(start_date=start_date, end_date=end_date)
 
