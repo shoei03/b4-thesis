@@ -9,7 +9,11 @@ import pandas as pd
 from b4_thesis.analysis.group_detector import GroupDetector
 from b4_thesis.analysis.matching import MatchingDefaults, MethodMatcher
 from b4_thesis.analysis.state_classifier import StateClassifier
-from b4_thesis.analysis.tracking import calculate_avg_similarity_to_group, find_group_for_block
+from b4_thesis.analysis.tracking import (
+    LifetimeTracker,
+    calculate_avg_similarity_to_group,
+    find_group_for_block,
+)
 from b4_thesis.core.revision_manager import RevisionInfo, RevisionManager
 
 
@@ -136,7 +140,7 @@ class MethodTracker:
             )
 
         all_results: list[MethodTrackingResult] = []
-        lifetime_tracker: dict[str, dict] = {}
+        lifetime_tracker = LifetimeTracker()
 
         # Process first revision (all methods are "added")
         first_revision = revisions[0]
@@ -177,11 +181,7 @@ class MethodTracker:
             all_results.append(result)
 
             # Initialize lifetime tracking
-            lifetime_tracker[block_id] = {
-                "first_seen": first_revision.timestamp,
-                "last_seen": first_revision.timestamp,
-                "revision_count": 1,
-            }
+            lifetime_tracker.initialize_block(block_id, first_revision.timestamp)
 
         # Process consecutive revision pairs
         for i in range(len(revisions) - 1):
@@ -224,7 +224,7 @@ class MethodTracker:
         self,
         revision_old: RevisionInfo,
         revision_new: RevisionInfo,
-        lifetime_tracker: dict[str, dict],
+        lifetime_tracker: LifetimeTracker,
         parallel: bool = False,
         max_workers: int | None = None,
     ) -> list[MethodTrackingResult]:
@@ -234,7 +234,7 @@ class MethodTracker:
         Args:
             revision_old: Previous revision
             revision_new: Current revision
-            lifetime_tracker: Dictionary tracking method lifetimes
+            lifetime_tracker: LifetimeTracker instance
             parallel: If True, use parallel processing for similarity calculation
             max_workers: Maximum number of worker processes (if parallel=True)
 
@@ -275,11 +275,7 @@ class MethodTracker:
                 lifetime_days = 0
 
                 # Initialize lifetime tracking
-                lifetime_tracker[block_id] = {
-                    "first_seen": revision_new.timestamp,
-                    "last_seen": revision_new.timestamp,
-                    "revision_count": 1,
-                }
+                lifetime_tracker.initialize_block(block_id, revision_new.timestamp)
             else:
                 # Existing method (survived)
                 state = "survived"
@@ -288,27 +284,8 @@ class MethodTracker:
                 match_similarity = match_result.match_similarities.get(old_block_id)
 
                 # Update lifetime tracking
-                if old_block_id in lifetime_tracker:
-                    lifetime_tracker[old_block_id]["last_seen"] = revision_new.timestamp
-                    lifetime_tracker[old_block_id]["revision_count"] += 1
-                    lifetime_revisions = lifetime_tracker[old_block_id]["revision_count"]
-                    lifetime_days = (
-                        revision_new.timestamp - lifetime_tracker[old_block_id]["first_seen"]
-                    ).days
-                else:
-                    # Fallback if not tracked
-                    lifetime_revisions = 2
-                    lifetime_days = (revision_new.timestamp - revision_old.timestamp).days
-
-                # Track under new ID as well
-                lifetime_tracker[block_id] = lifetime_tracker.get(
-                    old_block_id,
-                    {
-                        "first_seen": revision_old.timestamp,
-                        "last_seen": revision_new.timestamp,
-                        "revision_count": lifetime_revisions,
-                    },
-                )
+                lifetime_tracker.update_block(old_block_id, block_id, revision_new.timestamp)
+                lifetime_revisions, lifetime_days = lifetime_tracker.get_lifetime(block_id)
 
             # Find group membership
             group_old = find_group_for_block(old_block_id, groups_old) if old_block_id else None
@@ -386,16 +363,8 @@ class MethodTracker:
             state_detail = state_detail_enum.value
 
             # Calculate lifetime
-            if old_block_id in lifetime_tracker:
-                lifetime_tracker[old_block_id]["last_seen"] = revision_new.timestamp
-                lifetime_revisions = lifetime_tracker[old_block_id]["revision_count"]
-                lifetime_days = (
-                    revision_new.timestamp - lifetime_tracker[old_block_id]["first_seen"]
-                ).days
-            else:
-                # Fallback (shouldn't happen, but handle gracefully)
-                lifetime_revisions = 1
-                lifetime_days = 0
+            lifetime_tracker.update_last_seen(old_block_id, revision_new.timestamp)
+            lifetime_revisions, lifetime_days = lifetime_tracker.get_lifetime(old_block_id)
 
             # Calculate average similarity to group members (using old group)
             avg_similarity = calculate_avg_similarity_to_group(old_block_id, group_old)
@@ -424,29 +393,6 @@ class MethodTracker:
             results.append(result)
 
         return results
-
-    def _calculate_lifetime(
-        self, block_id: str, current_revision: datetime, lifetime_tracker: dict[str, dict]
-    ) -> tuple[int, int]:
-        """
-        Calculate lifetime_revisions and lifetime_days.
-
-        Args:
-            block_id: Block ID
-            current_revision: Current revision timestamp
-            lifetime_tracker: Lifetime tracking dictionary
-
-        Returns:
-            Tuple of (lifetime_revisions, lifetime_days)
-        """
-        if block_id not in lifetime_tracker:
-            return (1, 0)
-
-        track_info = lifetime_tracker[block_id]
-        lifetime_revisions = track_info["revision_count"]
-        lifetime_days = (current_revision - track_info["first_seen"]).days
-
-        return (lifetime_revisions, lifetime_days)
 
     def to_tracking_format(self) -> pd.DataFrame:
         """
