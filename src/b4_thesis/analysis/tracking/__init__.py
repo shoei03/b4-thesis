@@ -5,9 +5,11 @@ from b4_thesis.analysis.tracking.group_helper import (
     find_group_for_block,
 )
 from b4_thesis.analysis.tracking.lifetime_tracker import LifetimeTracker
+from b4_thesis.analysis.tracking.revision_pair_processor import RevisionPairProcessor
 
 __all__ = [
     "find_group_for_block",
     "calculate_avg_similarity_to_group",
     "LifetimeTracker",
+    "RevisionPairProcessor",
 ]
