@@ -20,15 +20,22 @@ b4-thesis/
 │   │   └── visualize.py    # Data visualization command
 │   ├── core/               # Core utilities
 │   │   ├── config.py       # Pydantic-based config management
-│   │   └── revision_manager.py  # Revision data management (Phase 1 ✓)
-│   └── analysis/           # Analysis modules (Phase 1-3 ✓)
+│   │   └── revision_manager.py  # Revision data management with validation
+│   └── analysis/           # Analysis modules (Phase 1-6 ✓)
+│       ├── validation/          # Data validation (Phase 6)
+│       │   └── data_validator.py  # CSV data validation
+│       ├── tracking/            # Method tracking modules (Phase 6 refactored)
+│       │   ├── group_helper.py        # Group-related helper functions
+│       │   ├── lifetime_tracker.py    # Lifetime tracking logic
+│       │   └── revision_pair_processor.py  # Revision pair processing
 │       ├── union_find.py        # Union-Find data structure (Phase 1 ✓)
 │       ├── similarity.py        # Similarity calculation (N-gram/LCS) (Phase 1 ✓)
-│       ├── method_matcher.py    # Method matching (Phase 2 ✓)
+│       ├── matching/            # Method matching modules (Phase 2 ✓)
+│       │   └── method_matcher.py    # Method matching
 │       ├── group_detector.py    # Group detection (Phase 2 ✓)
 │       ├── group_matcher.py     # Group matching (Phase 2 ✓)
 │       ├── state_classifier.py  # State classification (Phase 2 ✓)
-│       ├── method_tracker.py    # Method tracking (Phase 3 ✓)
+│       ├── method_tracker.py    # Method tracking facade (Phase 3 ✓, refactored Phase 6)
 │       └── clone_group_tracker.py  # Group tracking (Phase 3 ✓)
 ├── tests/                  # Test code (pytest, 282 tests passing)
 │   ├── analysis/           # Analysis module tests
