@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from b4_thesis.analysis.validation import DataValidator
+
 
 @dataclass
 class RevisionInfo:
@@ -51,6 +53,7 @@ class RevisionManager:
             data_dir: Path to directory containing revision subdirectories.
         """
         self.data_dir = Path(data_dir)
+        self.data_validator = DataValidator()
 
     def get_revisions(
         self, start_date: datetime | None = None, end_date: datetime | None = None
@@ -117,10 +120,14 @@ class RevisionManager:
 
         Returns:
             Tuple of (code_blocks DataFrame, clone_pairs DataFrame).
+            Both DataFrames are validated for data quality.
 
         Raises:
             FileNotFoundError: If CSV files don't exist.
             pd.errors.EmptyDataError: If CSV files are malformed.
+
+        Note:
+            Data validation warnings are logged but do not stop processing.
         """
         # Load code_blocks.csv (no header, specify column names)
         code_blocks = pd.read_csv(
@@ -152,6 +159,14 @@ class RevisionManager:
             clone_pairs = pd.DataFrame(
                 columns=["block_id_1", "block_id_2", "ngram_similarity", "lcs_similarity"]
             )
+
+        # Validate data quality
+        code_blocks = self.data_validator.validate_code_blocks(
+            code_blocks, source=str(revision.code_blocks_path)
+        )
+        clone_pairs = self.data_validator.validate_clone_pairs(
+            clone_pairs, source=str(revision.clone_pairs_path)
+        )
 
         return code_blocks, clone_pairs
 
