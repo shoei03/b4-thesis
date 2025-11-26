@@ -14,7 +14,6 @@
 - **track**: ✅ メソッド・クローングループの進化追跡（主要機能・完全実装済み）
   - `track methods`: メソッド進化追跡
   - `track groups`: クローングループ進化追跡
-  - `track all`: メソッド・グループ両方の追跡
 - **convert**: ✅ データフォーマット変換（完全実装済み）
   - `convert methods`: メソッド追跡データの形式変換（lineageフォーマット対応）
 - **label**: ✅ 分析データへのラベル付け（完全実装済み）
@@ -52,10 +51,11 @@ uv sync --all-groups
 メソッド単位の進化を追跡します。
 
 ```bash
-b4-thesis track methods <INPUT_DATA_DIR> [OPTIONS]
+b4-thesis track methods [OPTIONS]
 
 Options:
-  -o, --output DIRECTORY          出力ディレクトリ（デフォルト: カレントディレクトリ）
+  -i, --input DIRECTORY           入力ディレクトリ
+  -o, --output DIRECTORY          出力ディレクトリ
   --start-date YYYY-MM-DD         リビジョンフィルタリングの開始日
   --end-date YYYY-MM-DD           リビジョンフィルタリングの終了日
   --similarity INTEGER            メソッドマッチングの類似度閾値 (0-100, デフォルト: 70)
@@ -72,7 +72,7 @@ Options:
   --progressive-thresholds TEXT   プログレッシブ閾値（例: "90,80,70"）
 ```
 
-**DATA_DIR**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
+**入力**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
 
 **出力**:
 - `method_tracking.csv`: メソッド追跡結果（状態分類含む）
@@ -80,7 +80,7 @@ Options:
 **使用例**:
 ```bash
 # 基本的な使用
-b4-thesis track methods ./data/cloneNIL -o ./output --optimize --verbose
+b4-thesis track methods -i ./data/cloneNIL -o ./output --optimize --verbose
 
 # 日付範囲を指定
 b4-thesis track methods ./data/cloneNIL -o ./output --start-date 2024-01-01 --end-date 2024-12-31
@@ -107,10 +107,11 @@ b4-thesis track methods ./data/cloneNIL -o ./output --progressive-thresholds "95
 クローングループ単位の進化を追跡します。
 
 ```bash
-b4-thesis track groups <INPUT_DATA_DIR> [OPTIONS]
+b4-thesis track groups [OPTIONS]
 
 Options:
-  -o, --output DIRECTORY          出力ディレクトリ（デフォルト: カレントディレクトリ）
+  -i, --input DIRECTORY           入力ディレクトリ
+  -o, --output DIRECTORY          出力ディレクトリ
   --start-date YYYY-MM-DD         リビジョンフィルタリングの開始日
   --end-date YYYY-MM-DD           リビジョンフィルタリングの終了日
   --similarity INTEGER            グループ検出の類似度閾値 (0-100, デフォルト: 70)
@@ -126,7 +127,7 @@ Options:
   --progressive-thresholds TEXT   プログレッシブ閾値（例: "90,80,70"）
 ```
 
-**DATA_DIR**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
+**入力**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
 
 **出力**:
 - `group_tracking.csv`: グループ追跡結果（状態分類含む）
@@ -135,40 +136,11 @@ Options:
 **使用例**:
 ```bash
 # 基本的な使用
-b4-thesis track groups ./data/cloneNIL -o ./output --optimize --verbose
+b4-thesis track groups -i ./data/cloneNIL -o ./output --optimize --verbose
 ```
 
 **Phase 5.3最適化について**: track methodsと同様の最適化オプションが利用可能です。詳細は上記「track methods」セクションを参照してください。
 
-#### track all
-
-メソッドとクローングループ両方の進化を追跡します。
-
-```bash
-b4-thesis track all <INPUT_DATA_DIR> [OPTIONS]
-
-Options:
-  -o, --output DIRECTORY      出力ディレクトリ（デフォルト: カレントディレクトリ）
-  --start-date YYYY-MM-DD     リビジョンフィルタリングの開始日
-  --end-date YYYY-MM-DD       リビジョンフィルタリングの終了日
-  --similarity INTEGER        類似度閾値 (0-100, デフォルト: 70)
-  --overlap FLOAT             グループマッチングの重複閾値 (0.0-1.0, デフォルト: 0.5)
-  -s, --summary               サマリー統計を表示
-  -v, --verbose               詳細な出力を表示
-```
-
-**DATA_DIR**: `code_blocks.csv`と`clone_pairs.csv`を含むリビジョンサブディレクトリを持つディレクトリ
-
-**出力**:
-- `method_tracking.csv`: メソッド追跡結果
-- `group_tracking.csv`: グループ追跡結果
-- `group_membership.csv`: グループメンバーシップスナップショット
-
-**使用例**:
-```bash
-# すべての追跡を実行
-b4-thesis track all ./data/cloneNIL -o ./output --summary --verbose
-```
 
 #### convert methods
 
