@@ -20,7 +20,6 @@ def track():
     This command group provides subcommands for tracking:
     - methods: Track individual method evolution
     - groups: Track clone group evolution
-    - all: Track both methods and groups
     """
     pass
 
