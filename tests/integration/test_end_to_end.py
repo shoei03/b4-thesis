@@ -41,7 +41,14 @@ class TestMethodTrackingEndToEnd:
         # Execute track methods command
         result = runner.invoke(
             track,
-            ["methods", str(sample_data_dir), "--output", str(temp_output_dir), "--verbose"],
+            [
+                "methods",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+                "--verbose",
+            ],
         )
 
         # Verify command execution
@@ -115,6 +122,7 @@ class TestMethodTrackingEndToEnd:
             track,
             [
                 "methods",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -141,6 +149,7 @@ class TestMethodTrackingEndToEnd:
             track,
             [
                 "methods",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -165,7 +174,14 @@ class TestGroupTrackingEndToEnd:
         # Execute track groups command
         result = runner.invoke(
             track,
-            ["groups", str(sample_data_dir), "--output", str(temp_output_dir), "--verbose"],
+            [
+                "groups",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+                "--verbose",
+            ],
         )
 
         # Verify command execution
@@ -260,6 +276,7 @@ class TestGroupTrackingEndToEnd:
             track,
             [
                 "groups",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -284,80 +301,35 @@ class TestGroupTrackingEndToEnd:
         assert len(df_membership) >= 0
 
 
-class TestTrackAllEndToEnd:
-    """End-to-end tests for tracking both methods and groups."""
-
-    def test_full_track_all_workflow(self, runner, sample_data_dir, temp_output_dir):
-        """Test complete workflow tracking both methods and groups."""
-        # Execute track all command
-        result = runner.invoke(
-            track,
-            ["all", str(sample_data_dir), "--output", str(temp_output_dir), "--verbose"],
-        )
-
-        # Verify command execution
-        assert result.exit_code == 0, f"Command failed: {result.output}"
-        assert "Method tracking complete" in result.output
-        assert "Group tracking complete" in result.output
-
-        # Verify all three output files exist
-        method_file = temp_output_dir / "method_tracking.csv"
-        group_file = temp_output_dir / "group_tracking.csv"
-        membership_file = temp_output_dir / "group_membership.csv"
-
-        assert method_file.exists(), "Method tracking CSV not created"
-        assert group_file.exists(), "Group tracking CSV not created"
-        assert membership_file.exists(), "Membership CSV not created"
-
-        # Load all CSVs
-        df_methods = pd.read_csv(method_file)
-        df_groups = pd.read_csv(group_file)
-        df_membership = pd.read_csv(membership_file)
-
-        # Verify all have data
-        assert len(df_methods) > 0, "No methods data"
-        assert len(df_groups) > 0, "No groups data"
-        assert len(df_membership) > 0, "No membership data"
-
-        # Verify consistency: methods in groups should appear in method tracking
-        for _, membership_row in df_membership.iterrows():
-            revision = membership_row["revision"]
-            block_id = membership_row["block_id"]
-
-            # Check if this block appears in method tracking
-            method_exists = (
-                (df_methods["revision"] == revision) & (df_methods["block_id"] == block_id)
-            ).any()
-
-            assert method_exists, f"Block {block_id} in group not found in method tracking"
-
-    def test_track_all_with_summary(self, runner, sample_data_dir, temp_output_dir):
-        """Test track all with summary display."""
-        result = runner.invoke(
-            track,
-            ["all", str(sample_data_dir), "--output", str(temp_output_dir), "--summary"],
-        )
-
-        assert result.exit_code == 0
-        assert "Summary" in result.output or "Total" in result.output
-
-        # Verify all files created
-        assert (temp_output_dir / "method_tracking.csv").exists()
-        assert (temp_output_dir / "group_tracking.csv").exists()
-        assert (temp_output_dir / "group_membership.csv").exists()
-
-
 class TestDataIntegrity:
     """Integration tests for data integrity and consistency."""
 
     def test_revision_consistency_across_outputs(self, runner, sample_data_dir, temp_output_dir):
         """Test that revision data is consistent across all outputs."""
-        # Run track all
+        # Run track methods
         result = runner.invoke(
             track,
-            ["all", str(sample_data_dir), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
+        assert result.exit_code == 0
 
+        # Run track groups
+        result = runner.invoke(
+            track,
+            [
+                "groups",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+            ],
+        )
         assert result.exit_code == 0
 
         # Load all outputs
@@ -383,11 +355,30 @@ class TestDataIntegrity:
 
     def test_clone_group_membership_consistency(self, runner, sample_data_dir, temp_output_dir):
         """Test that clone group membership is consistent with method tracking."""
+        # Run track methods
         result = runner.invoke(
             track,
-            ["all", str(sample_data_dir), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
+        assert result.exit_code == 0
 
+        # Run track groups
+        result = runner.invoke(
+            track,
+            [
+                "groups",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+            ],
+        )
         assert result.exit_code == 0
 
         df_methods = pd.read_csv(temp_output_dir / "method_tracking.csv")
@@ -418,7 +409,13 @@ class TestDataIntegrity:
         """Test that lifetime tracking is correct across revisions."""
         result = runner.invoke(
             track,
-            ["methods", str(sample_data_dir), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         assert result.exit_code == 0

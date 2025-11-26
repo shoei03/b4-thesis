@@ -129,7 +129,13 @@ class TestSmallRealDataset:
         # Execute track methods command
         result = runner.invoke(
             track,
-            ["methods", str(small_real_data_subset), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(small_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         # Verify command execution
@@ -168,7 +174,13 @@ class TestSmallRealDataset:
         # Execute track groups command
         result = runner.invoke(
             track,
-            ["groups", str(small_real_data_subset), "--output", str(temp_output_dir)],
+            [
+                "groups",
+                "--input",
+                str(small_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         # Verify command execution
@@ -207,52 +219,6 @@ class TestSmallRealDataset:
                 f"Member count mismatch in {revision}: {total_member_count} vs {actual_members}"
             )
 
-    def test_track_all_with_real_data(self, runner, small_real_data_subset, temp_output_dir):
-        """Test tracking both methods and groups with small real dataset."""
-        # Execute track all command
-        result = runner.invoke(
-            track,
-            ["all", str(small_real_data_subset), "--output", str(temp_output_dir)],
-        )
-
-        # Verify command execution
-        assert result.exit_code == 0, f"Command failed with output:\n{result.output}"
-
-        # Verify all output files exist
-        method_file = temp_output_dir / "method_tracking.csv"
-        group_file = temp_output_dir / "group_tracking.csv"
-        membership_file = temp_output_dir / "group_membership.csv"
-
-        assert method_file.exists(), "Method tracking CSV not created"
-        assert group_file.exists(), "Group tracking CSV not created"
-        assert membership_file.exists(), "Membership CSV not created"
-
-        # Load all CSVs
-        df_methods = pd.read_csv(method_file)
-        df_groups = pd.read_csv(group_file)
-        df_membership = pd.read_csv(membership_file)
-
-        # Verify all have data
-        assert len(df_methods) > 0, "No methods data"
-        # Note: groups may be empty if no clones detected
-        assert len(df_groups) >= 0, "Groups data should be present or empty"
-        assert len(df_membership) >= 0, "Membership data should be present or empty"
-
-        # Verify consistency: methods in groups should appear in method tracking
-        if len(df_membership) > 0:
-            for _, membership_row in df_membership.iterrows():
-                revision = membership_row["revision"]
-                block_id = membership_row["block_id"]
-
-                # Check if this block appears in method tracking
-                method_exists = (
-                    (df_methods["revision"] == revision) & (df_methods["block_id"] == block_id)
-                ).any()
-
-                assert method_exists, (
-                    f"Block {block_id} in group not found in method tracking for {revision}"
-                )
-
 
 @pytest.mark.skipif(not has_real_data(), reason="Real data not available")
 class TestMediumRealDataset:
@@ -265,10 +231,12 @@ class TestMediumRealDataset:
         # Measure execution time
         start_time = time.time()
 
+        # Run track methods
         result = runner.invoke(
             track,
             [
-                "all",
+                "methods",
+                "--input",
                 str(medium_real_data_subset),
                 "--output",
                 str(temp_output_dir),
@@ -276,11 +244,24 @@ class TestMediumRealDataset:
                 "--optimize",
             ],
         )
+        assert result.exit_code == 0, f"Methods command failed with output:\n{result.output}"
+
+        # Run track groups
+        result = runner.invoke(
+            track,
+            [
+                "groups",
+                "--input",
+                str(medium_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+                "--verbose",
+                "--optimize",
+            ],
+        )
+        assert result.exit_code == 0, f"Groups command failed with output:\n{result.output}"
 
         elapsed_time = time.time() - start_time
-
-        # Verify command execution
-        assert result.exit_code == 0, f"Command failed with output:\n{result.output}"
 
         # Performance check: should complete in reasonable time
         # For 3 revisions, allow up to 3 minutes (this is generous for testing)
@@ -315,7 +296,13 @@ class TestRealDataQuality:
         """Test that all state values are valid."""
         result = runner.invoke(
             track,
-            ["methods", str(small_real_data_subset), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(small_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         assert result.exit_code == 0
@@ -345,7 +332,13 @@ class TestRealDataQuality:
         """Test that critical columns have no missing values."""
         result = runner.invoke(
             track,
-            ["all", str(small_real_data_subset), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(small_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         assert result.exit_code == 0
@@ -365,7 +358,13 @@ class TestRealDataQuality:
         """Test that lifetime values are consistent and reasonable."""
         result = runner.invoke(
             track,
-            ["methods", str(small_real_data_subset), "--output", str(temp_output_dir)],
+            [
+                "methods",
+                "--input",
+                str(small_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         assert result.exit_code == 0
@@ -389,7 +388,13 @@ class TestRealDataQuality:
         """Test that clone group metrics are within valid ranges."""
         result = runner.invoke(
             track,
-            ["groups", str(small_real_data_subset), "--output", str(temp_output_dir)],
+            [
+                "groups",
+                "--input",
+                str(small_real_data_subset),
+                "--output",
+                str(temp_output_dir),
+            ],
         )
 
         assert result.exit_code == 0

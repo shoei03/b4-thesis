@@ -40,7 +40,7 @@ class TestTrackMethods:
         """Test basic method tracking."""
         result = runner.invoke(
             track,
-            ["methods", str(sample_data_dir), "--output", str(temp_output_dir)],
+            ["methods", "--input", str(sample_data_dir), "--output", str(temp_output_dir)],
         )
 
         assert result.exit_code == 0
@@ -61,7 +61,14 @@ class TestTrackMethods:
         """Test method tracking with summary display."""
         result = runner.invoke(
             track,
-            ["methods", str(sample_data_dir), "--output", str(temp_output_dir), "--summary"],
+            [
+                "methods",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+                "--summary",
+            ],
         )
 
         assert result.exit_code == 0
@@ -73,6 +80,7 @@ class TestTrackMethods:
             track,
             [
                 "methods",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -89,19 +97,10 @@ class TestTrackMethods:
         """Test method tracking with invalid data directory."""
         result = runner.invoke(
             track,
-            ["methods", "/nonexistent/path", "--output", str(temp_output_dir)],
+            ["methods", "--input", "/nonexistent/path", "--output", str(temp_output_dir)],
         )
 
         assert result.exit_code != 0
-
-    def test_track_methods_missing_output_dir(self, runner, sample_data_dir):
-        """Test method tracking without output directory (default to current dir)."""
-        result = runner.invoke(
-            track,
-            ["methods", str(sample_data_dir)],
-        )
-
-        assert result.exit_code == 0
 
 
 class TestTrackGroups:
@@ -111,7 +110,7 @@ class TestTrackGroups:
         """Test basic group tracking."""
         result = runner.invoke(
             track,
-            ["groups", str(sample_data_dir), "--output", str(temp_output_dir)],
+            ["groups", "--input", str(sample_data_dir), "--output", str(temp_output_dir)],
         )
 
         assert result.exit_code == 0
@@ -135,7 +134,14 @@ class TestTrackGroups:
         """Test group tracking with summary display."""
         result = runner.invoke(
             track,
-            ["groups", str(sample_data_dir), "--output", str(temp_output_dir), "--summary"],
+            [
+                "groups",
+                "--input",
+                str(sample_data_dir),
+                "--output",
+                str(temp_output_dir),
+                "--summary",
+            ],
         )
 
         assert result.exit_code == 0
@@ -147,6 +153,7 @@ class TestTrackGroups:
             track,
             [
                 "groups",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -163,6 +170,7 @@ class TestTrackGroups:
             track,
             [
                 "groups",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -172,39 +180,6 @@ class TestTrackGroups:
         )
 
         assert result.exit_code == 0
-
-
-class TestTrackAll:
-    """Tests for 'track all' command."""
-
-    def test_track_all_basic(self, runner, sample_data_dir, temp_output_dir):
-        """Test tracking both methods and groups."""
-        result = runner.invoke(
-            track,
-            ["all", str(sample_data_dir), "--output", str(temp_output_dir)],
-        )
-
-        assert result.exit_code == 0
-        assert "Method tracking complete" in result.output
-        assert "Group tracking complete" in result.output
-
-        # Check all output files exist
-        method_file = temp_output_dir / "method_tracking.csv"
-        group_file = temp_output_dir / "group_tracking.csv"
-        membership_file = temp_output_dir / "group_membership.csv"
-        assert method_file.exists()
-        assert group_file.exists()
-        assert membership_file.exists()
-
-    def test_track_all_with_summary(self, runner, sample_data_dir, temp_output_dir):
-        """Test tracking all with summary display."""
-        result = runner.invoke(
-            track,
-            ["all", str(sample_data_dir), "--output", str(temp_output_dir), "--summary"],
-        )
-
-        assert result.exit_code == 0
-        assert "Summary" in result.output or "Total" in result.output
 
 
 class TestTrackCommandGroup:
@@ -217,28 +192,20 @@ class TestTrackCommandGroup:
         assert result.exit_code == 0
         assert "methods" in result.output
         assert "groups" in result.output
-        assert "all" in result.output
 
     def test_track_methods_help(self, runner):
         """Test track methods help."""
         result = runner.invoke(track, ["methods", "--help"])
 
         assert result.exit_code == 0
-        assert "DATA_DIR" in result.output or "data-dir" in result.output.lower()
+        assert "--input" in result.output.lower()
 
     def test_track_groups_help(self, runner):
         """Test track groups help."""
         result = runner.invoke(track, ["groups", "--help"])
 
         assert result.exit_code == 0
-        assert "DATA_DIR" in result.output or "data-dir" in result.output.lower()
-
-    def test_track_all_help(self, runner):
-        """Test track all help."""
-        result = runner.invoke(track, ["all", "--help"])
-
-        assert result.exit_code == 0
-        assert "DATA_DIR" in result.output or "data-dir" in result.output.lower()
+        assert "--input" in result.output.lower()
 
 
 class TestTrackErrorHandling:
@@ -248,10 +215,12 @@ class TestTrackErrorHandling:
         """Test with empty data directory."""
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
 
         result = runner.invoke(
             track,
-            ["methods", str(empty_dir)],
+            ["methods", "--input", str(empty_dir), "--output", str(output_dir)],
         )
 
         # Should handle gracefully (no revisions found)
@@ -264,6 +233,7 @@ class TestTrackErrorHandling:
             track,
             [
                 "methods",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -281,6 +251,7 @@ class TestTrackErrorHandling:
             track,
             [
                 "groups",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
@@ -297,6 +268,7 @@ class TestTrackErrorHandling:
             track,
             [
                 "groups",
+                "--input",
                 str(sample_data_dir),
                 "--output",
                 str(temp_output_dir),
