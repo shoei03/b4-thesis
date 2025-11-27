@@ -30,14 +30,14 @@ class MemberInfo:
     avg_similarity_to_group: float | None
     lifetime_revisions: int | None
     lifetime_days: int | None
-    code_snippet: CodeSnippet | None = None
+    current_code_snippet: CodeSnippet | None = None
     previous_code_snippet: CodeSnippet | None = None
 
     @classmethod
     def from_row(
         cls,
         row: pd.Series,
-        code_snippet: CodeSnippet | None = None,
+        current_code_snippet: CodeSnippet | None = None,
         previous_code_snippet: CodeSnippet | None = None,
     ) -> "MemberInfo":
         """Create MemberInfo from DataFrame row."""
@@ -67,7 +67,7 @@ class MemberInfo:
             if pd.notna(row.get("lifetime_revisions"))
             else None,
             lifetime_days=int(row["lifetime_days"]) if pd.notna(row.get("lifetime_days")) else None,
-            code_snippet=code_snippet,
+            current_code_snippet=current_code_snippet,
             previous_code_snippet=previous_code_snippet,
         )
 
@@ -217,7 +217,7 @@ class ReportGenerator:
         if not requests:
             return {}
 
-        snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
+        snippets = self.extractor.batch_extract(requests)
         return {(s.revision, s.function_name): s for s in snippets}
 
     def _extract_previous_snippets(
@@ -258,7 +258,7 @@ class ReportGenerator:
         if not requests:
             return {}
 
-        snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
+        snippets = self.extractor.batch_extract(requests)
         return {request_keys[i]: snippets[i] for i in range(len(snippets))}
 
     def _create_member_info_list(
@@ -284,12 +284,12 @@ class ReportGenerator:
             function_name = row["function_name"]
 
             # Get current snippet (None for deleted methods)
-            snippet = current_snippets.get((revision, function_name))
+            current_snippet = current_snippets.get((revision, function_name))
 
             # Get previous snippet
             prev_snippet = prev_snippets.get((global_block_id, revision))
 
-            member_info = MemberInfo.from_row(row, snippet, prev_snippet)
+            member_info = MemberInfo.from_row(row, current_snippet, prev_snippet)
             members.append(member_info)
 
         return members
@@ -407,7 +407,9 @@ class ReportGenerator:
                 else "-"
             )
 
-            github_url = member.code_snippet.github_url if member.code_snippet else None
+            github_url = (
+                member.current_code_snippet.github_url if member.current_code_snippet else None
+            )
             link = f"[GitHub]({github_url})" if github_url else "-"
 
             lines.append(
@@ -428,16 +430,17 @@ class ReportGenerator:
             lines.append("")
 
             # Current revision code (skip for deleted methods)
-            if member.state != "deleted":
-                lines.append(f"#### Current (revision: {member.revision[:8]})")
+            if member.current_code_snippet:
+                current_snippet = member.current_code_snippet
+                lines.append(f"#### Current (revision: {current_snippet.revision[:8]})")
                 lines.append("")
-                lines.append(f"> {member.file_path}:{member.start_line}-{member.end_line}")
-                if member.code_snippet:
-                    lines.append("```python")
-                    lines.append(member.code_snippet.code)
-                    lines.append("```")
-                else:
-                    lines.append("*Code not available*")
+                lines.append(
+                    f"> {current_snippet.file_path}:"
+                    f"{current_snippet.start_line}-{current_snippet.end_line}"
+                )
+                lines.append("```python")
+                lines.append(current_snippet.code)
+                lines.append("```")
                 lines.append("")
 
             # Previous revision code

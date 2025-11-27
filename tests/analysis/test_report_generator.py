@@ -41,7 +41,7 @@ class TestCloneGroupReport:
                 avg_similarity_to_group=95.5,
                 lifetime_revisions=5,
                 lifetime_days=100,
-                code_snippet=snippet,
+                current_code_snippet=snippet,
             ),
         ]
 
@@ -115,30 +115,33 @@ class TestReportGenerator:
         """Create a sample DataFrame for a clone group (partial_deleted.csv format)."""
         return pd.DataFrame(
             {
-                "clone_group_id": ["group123"] * 4,
-                "global_block_id": ["block_a", "block_a", "block_b", "block_c"],
-                "revision": ["rev1", "rev2", "rev1", "rev1"],  # block_a has 2 revisions
-                "function_name": ["func_a", "func_a", "func_b", "func_c"],
+                "clone_group_id": ["group123"] * 5,
+                "global_block_id": ["block_a", "block_a", "block_b", "block_b", "block_c"],
+                # block_a: rev1->rev2, block_b: rev0->rev1 (deleted)
+                "revision": ["rev1", "rev2", "rev0", "rev1", "rev1"],
+                "function_name": ["func_a", "func_a", "func_b", "func_b", "func_c"],
                 "file_path": [
                     "pandas/core/a.py",
                     "pandas/core/a.py",
                     "pandas/core/b.py",
+                    "pandas/core/b.py",
                     "pandas/core/c.py",
                 ],
-                "start_line": [10, 10, 20, 30],
-                "end_line": [20, 20, 35, 45],
-                "loc": [10, 10, 15, 15],
-                "state": ["survived", "survived", "deleted", "survived"],
-                "state_detail": [None, None, None, None],
-                "match_type": ["CLONE_MATCH"] * 4,
-                "match_similarity": [92.0, 93.0, 88.0, 90.0],
-                "clone_count": [3, 3, 3, 3],
-                "clone_group_size": [3, 3, 3, 3],
-                "avg_similarity_to_group": [92.0, 93.0, 88.0, 90.0],
-                "lifetime_revisions": [5, 5, 3, 4],
-                "lifetime_days": [100, 100, 50, 80],
+                "start_line": [10, 10, 20, 20, 30],
+                "end_line": [20, 20, 35, 35, 45],
+                "loc": [10, 10, 15, 15, 15],
+                "state": ["survived", "survived", "survived", "deleted", "survived"],
+                "state_detail": [None, None, None, None, None],
+                "match_type": ["CLONE_MATCH"] * 5,
+                "match_similarity": [92.0, 93.0, 88.0, 88.0, 90.0],
+                "clone_count": [3, 3, 3, 3, 3],
+                "clone_group_size": [3, 3, 3, 3, 3],
+                "avg_similarity_to_group": [92.0, 93.0, 88.0, 88.0, 90.0],
+                "lifetime_revisions": [5, 5, 3, 3, 4],
+                "lifetime_days": [100, 100, 50, 50, 80],
                 "rev_status": [
                     "no_deleted",
+                    "partial_deleted",
                     "partial_deleted",
                     "partial_deleted",
                     "partial_deleted",
@@ -180,7 +183,14 @@ class TestReportGenerator:
         for member in report.members:
             assert isinstance(member, MemberInfo)
             assert member.state is not None
-            assert member.code_snippet is not None
+            # Deleted methods should not have current code snippet
+            if member.state == "deleted":
+                assert member.current_code_snippet is None
+                # But deleted methods should have previous code snippet
+                assert member.previous_code_snippet is not None
+                assert member.previous_code_snippet.revision == "rev0"
+            else:
+                assert member.current_code_snippet is not None
 
     def test_generate_group_report_empty_df(self, mock_extractor):
         """Test generating report from empty DataFrame."""
@@ -224,14 +234,14 @@ class TestReportGenerator:
             code="def func_a():\n    return 1",
             github_url="https://github.com/pandas-dev/pandas/blob/abc123def/pandas/core/module.py#L10-L20",
         )
-        snippet_b = CodeSnippet(
+        snippet_b_prev = CodeSnippet(
             function_name="func_b",
             file_path="pandas/core/other.py",
-            revision="abc123def",
+            revision="abc000000",
             start_line=30,
             end_line=40,
             code="def func_b():\n    return 2",
-            github_url="https://github.com/pandas-dev/pandas/blob/abc123def/pandas/core/other.py#L30-L40",
+            github_url="https://github.com/pandas-dev/pandas/blob/abc000000/pandas/core/other.py#L30-L40",
         )
 
         members = [
@@ -253,7 +263,7 @@ class TestReportGenerator:
                 avg_similarity_to_group=92.5,
                 lifetime_revisions=5,
                 lifetime_days=100,
-                code_snippet=snippet_a,
+                current_code_snippet=snippet_a,
             ),
             MemberInfo(
                 global_block_id="block_b",
@@ -273,7 +283,8 @@ class TestReportGenerator:
                 avg_similarity_to_group=92.5,
                 lifetime_revisions=5,
                 lifetime_days=100,
-                code_snippet=snippet_b,
+                current_code_snippet=None,  # Deleted methods should not have current code
+                previous_code_snippet=snippet_b_prev,  # But should have previous code
             ),
         ]
 
@@ -306,7 +317,17 @@ class TestReportGenerator:
         # Check code blocks
         assert "```python" in markdown
         assert "def func_a():" in markdown
+        # Deleted methods should show previous code (not current)
         assert "def func_b():" in markdown
+        assert "#### Previous" in markdown
+        # Extract the func_b section
+        func_b_section_start = markdown.find("### 2. `func_b`")
+        func_b_section_end = markdown.find("---", func_b_section_start)
+        func_b_section = markdown[func_b_section_start:func_b_section_end]
+        # Deleted method should NOT have "#### Current" in its section
+        assert "#### Current" not in func_b_section
+        # But should have "#### Previous" in its section
+        assert "#### Previous" in func_b_section
 
         # Check notes section
         assert "## Analysis Notes" in markdown
