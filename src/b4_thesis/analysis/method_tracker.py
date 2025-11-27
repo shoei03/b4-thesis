@@ -15,6 +15,7 @@ from b4_thesis.analysis.tracking import (
     calculate_avg_similarity_to_group,
     find_group_for_block,
 )
+from b4_thesis.analysis.validation import DataValidator
 from b4_thesis.core.revision_manager import RevisionManager
 
 
@@ -90,6 +91,7 @@ class MethodTracker:
         )
         self.group_detector = GroupDetector(similarity_threshold=similarity_threshold)
         self.state_classifier = StateClassifier()
+        self.data_validator = DataValidator()
         self.pair_processor = RevisionPairProcessor(
             revision_manager=self.revision_manager,
             method_matcher=self.method_matcher,
@@ -221,6 +223,9 @@ class MethodTracker:
             df = df.sort_values(
                 ["revision", "clone_group_id", "state", "state_detail", "file_path"]
             )
+
+            # Validate method tracking data quality
+            df = self.data_validator.validate_method_tracking(df, source="method_tracking.csv")
 
         # Store results for lineage format conversion
         self._results_df = df
