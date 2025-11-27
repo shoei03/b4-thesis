@@ -138,6 +138,162 @@ class ReportGenerator:
 
         return prev_map
 
+    def _validate_group_df(self, group_df: pd.DataFrame) -> None:
+        """Validate that the DataFrame has required format.
+
+        Args:
+            group_df: DataFrame to validate
+
+        Raises:
+            ValueError: If DataFrame is invalid
+        """
+        if group_df.empty:
+            raise ValueError("Cannot generate report from empty DataFrame")
+
+        if "rev_status" not in group_df.columns:
+            raise ValueError(
+                "Missing 'rev_status' column. "
+                "Input must be from 'label filter' command (partial_deleted.csv format)."
+            )
+
+    def _get_group_metadata(self, group_df: pd.DataFrame) -> tuple[str, str | None, float | None]:
+        """Extract group metadata from DataFrame.
+
+        Args:
+            group_df: DataFrame containing group records
+
+        Returns:
+            Tuple of (group_id, match_type, avg_similarity)
+        """
+        first_row = group_df.iloc[0]
+        group_id = str(first_row["clone_group_id"])
+        match_type = first_row.get("match_type")
+
+        avg_similarity = None
+        if "avg_similarity_to_group" in group_df.columns:
+            similarities = group_df["avg_similarity_to_group"].dropna()
+            if not similarities.empty:
+                avg_similarity = float(similarities.mean())
+
+        return group_id, match_type, avg_similarity
+
+    def _get_representative_members(self, group_df: pd.DataFrame) -> pd.DataFrame:
+        """Get the latest revision for each unique method.
+
+        Args:
+            group_df: DataFrame containing all revisions
+
+        Returns:
+            DataFrame with one row per unique global_block_id (latest revision)
+        """
+        sorted_df = group_df.sort_values("revision", ascending=False)
+        return sorted_df.drop_duplicates(subset=["global_block_id"], keep="first")
+
+    def _extract_current_snippets(
+        self, representative_df: pd.DataFrame
+    ) -> dict[tuple[str, str], CodeSnippet]:
+        """Extract code snippets for current revisions.
+
+        Args:
+            representative_df: DataFrame with representative members
+
+        Returns:
+            Dict mapping (revision, function_name) to CodeSnippet
+        """
+        requests = []
+        for _, row in representative_df.iterrows():
+            if row.get("state") != "deleted":
+                requests.append(
+                    ExtractRequest(
+                        function_name=row["function_name"],
+                        file_path=row["file_path"],
+                        revision=row["revision"],
+                        start_line=int(row["start_line"]),
+                        end_line=int(row["end_line"]),
+                        global_block_id=row.get("global_block_id"),
+                    )
+                )
+
+        if not requests:
+            return {}
+
+        snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
+        return {(s.revision, s.function_name): s for s in snippets}
+
+    def _extract_previous_snippets(
+        self,
+        representative_df: pd.DataFrame,
+        prev_revision_map: dict[tuple[str, str], pd.Series | None],
+    ) -> dict[tuple[str, str], CodeSnippet]:
+        """Extract code snippets for previous revisions.
+
+        Args:
+            representative_df: DataFrame with representative members
+            prev_revision_map: Mapping from (global_block_id, revision) to previous record
+
+        Returns:
+            Dict mapping (global_block_id, current_revision) to previous CodeSnippet
+        """
+        requests = []
+        request_keys = []
+
+        for _, row in representative_df.iterrows():
+            global_block_id = str(row.get("global_block_id", ""))
+            revision = row["revision"]
+            prev_record = prev_revision_map.get((global_block_id, revision))
+
+            if prev_record is not None:
+                requests.append(
+                    ExtractRequest(
+                        function_name=prev_record["function_name"],
+                        file_path=prev_record["file_path"],
+                        revision=prev_record["revision"],
+                        start_line=int(prev_record["start_line"]),
+                        end_line=int(prev_record["end_line"]),
+                        global_block_id=global_block_id,
+                    )
+                )
+                request_keys.append((global_block_id, revision))
+
+        if not requests:
+            return {}
+
+        snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
+        return {request_keys[i]: snippets[i] for i in range(len(snippets))}
+
+    def _create_member_info_list(
+        self,
+        representative_df: pd.DataFrame,
+        current_snippets: dict[tuple[str, str], CodeSnippet],
+        prev_snippets: dict[tuple[str, str], CodeSnippet],
+    ) -> list[MemberInfo]:
+        """Create MemberInfo objects with code snippets.
+
+        Args:
+            representative_df: DataFrame with representative members
+            current_snippets: Mapping from (revision, function_name) to current snippet
+            prev_snippets: Mapping from (global_block_id, revision) to previous snippet
+
+        Returns:
+            List of MemberInfo objects
+        """
+        members = []
+        for _, row in representative_df.iterrows():
+            global_block_id = str(row.get("global_block_id", ""))
+            revision = row["revision"]
+            function_name = row["function_name"]
+
+            # Get current snippet (None for deleted methods)
+            snippet = current_snippets.get((revision, function_name))
+
+            # Get previous snippet
+            prev_snippet = prev_snippets.get((global_block_id, revision))
+
+            member_info = MemberInfo.from_row(row, snippet, prev_snippet)
+            members.append(member_info)
+
+        return members
+
     def _create_extract_requests(self, df: pd.DataFrame) -> list[ExtractRequest]:
         """Create extraction requests from DataFrame.
 
@@ -173,91 +329,24 @@ class ReportGenerator:
         Raises:
             ValueError: If DataFrame is empty or missing required columns
         """
-        if group_df.empty:
-            raise ValueError("Cannot generate report from empty DataFrame")
+        # Validate input
+        self._validate_group_df(group_df)
 
-        # Validate required column
-        if "rev_status" not in group_df.columns:
-            raise ValueError(
-                "Missing 'rev_status' column. "
-                "Input must be from 'label filter' command (partial_deleted.csv format)."
-            )
+        # Extract group metadata
+        group_id, match_type, avg_similarity = self._get_group_metadata(group_df)
 
-        # Get group metadata from first row
-        first_row = group_df.iloc[0]
-        group_id = str(first_row["clone_group_id"])
+        # Get representative members (latest revision for each method)
+        representative_df = self._get_representative_members(group_df)
 
-        # Calculate statistics
-        match_type = first_row.get("match_type")
-        avg_similarity = None
-        if "avg_similarity_to_group" in group_df.columns:
-            similarities = group_df["avg_similarity_to_group"].dropna()
-            if not similarities.empty:
-                avg_similarity = float(similarities.mean())
-
-        # Get the latest revision for each unique method (global_block_id)
-        # Sort by revision descending and take first occurrence
-        sorted_df = group_df.sort_values("revision", ascending=False)
-        representative_df = sorted_df.drop_duplicates(subset=["global_block_id"], keep="first")
-
-        # Match previous revisions from the same DataFrame
+        # Match previous revisions
         prev_revision_map = self._match_previous_revisions(group_df)
 
-        # Extract code for current revisions
-        requests = self._create_extract_requests(representative_df)
-        snippets = self.extractor.batch_extract(requests, sort_by_revision=True)
+        # Extract code snippets
+        current_snippets = self._extract_current_snippets(representative_df)
+        prev_snippets = self._extract_previous_snippets(representative_df, prev_revision_map)
 
-        # Collect previous revision requests
-        prev_requests: list[ExtractRequest] = []
-        prev_request_keys: list[tuple[str, str]] = []  # (global_block_id, current_revision)
-
-        for _, row in representative_df.iterrows():
-            global_block_id = str(row.get("global_block_id", ""))
-            revision = row["revision"]
-            prev_record = prev_revision_map.get((global_block_id, revision))
-
-            if prev_record is not None:
-                prev_requests.append(
-                    ExtractRequest(
-                        function_name=prev_record["function_name"],
-                        file_path=prev_record["file_path"],
-                        revision=prev_record["revision"],
-                        start_line=int(prev_record["start_line"]),
-                        end_line=int(prev_record["end_line"]),
-                        global_block_id=global_block_id,
-                    )
-                )
-                prev_request_keys.append((global_block_id, revision))
-
-        # Extract previous revision code
-        prev_snippets: list[CodeSnippet] = []
-        if prev_requests:
-            prev_snippets = self.extractor.batch_extract(prev_requests, sort_by_revision=True)
-
-        # Build map for quick lookup of previous snippets
-        prev_snippet_map: dict[tuple[str, str], CodeSnippet] = {}
-        for i, (global_block_id, current_revision) in enumerate(prev_request_keys):
-            if i < len(prev_snippets):
-                prev_snippet_map[(global_block_id, current_revision)] = prev_snippets[i]
-
-        # Create MemberInfo objects with code snippets
-        members = []
-        for _, row in representative_df.iterrows():
-            global_block_id = str(row.get("global_block_id", ""))
-            revision = row["revision"]
-
-            # Find matching current snippet
-            snippet = None
-            for s in snippets:
-                if s.function_name == row["function_name"] and s.revision == revision:
-                    snippet = s
-                    break
-
-            # Find matching previous snippet
-            prev_snippet = prev_snippet_map.get((global_block_id, revision))
-
-            member_info = MemberInfo.from_row(row, snippet, prev_snippet)
-            members.append(member_info)
+        # Create member info list
+        members = self._create_member_info_list(representative_df, current_snippets, prev_snippets)
 
         return CloneGroupReport(
             group_id=group_id,
@@ -299,8 +388,8 @@ class ReportGenerator:
         # Members table
         lines.append("## Members")
         lines.append("")
-        lines.append("| # | Function | File | Lines | LOC | State | Rev | Similarity | Link |")
-        lines.append("|---|----------|------|-------|-----|-------|-----|------------|------|")
+        lines.append("| # | state | Function | File | Lines | LOC | Rev | Similarity | Link |")
+        lines.append("|---|-------|----------|------|-------|-----|-----|------------|------|")
 
         for i, member in enumerate(report.members, 1):
             # Shorten path for display
@@ -311,7 +400,7 @@ class ReportGenerator:
             line_range = f"{member.start_line}-{member.end_line}"
             loc = str(member.loc) if member.loc is not None else "-"
             state = member.state or "-"
-            short_rev = member.revision[:7]
+            short_rev = member.revision[:8]
             similarity = (
                 f"{member.avg_similarity_to_group:.1f}%"
                 if member.avg_similarity_to_group is not None
@@ -322,8 +411,8 @@ class ReportGenerator:
             link = f"[GitHub]({github_url})" if github_url else "-"
 
             lines.append(
-                f"| {i} | `{member.function_name}` | {short_path} | "
-                f"{line_range} | {loc} | {state} | {short_rev} | {similarity} | {link} |"
+                f"| {i} | {state} | `{member.function_name}` | {short_path} | "
+                f"{line_range} | {loc} | {short_rev} | {similarity} | {link} |"
             )
 
         lines.append("")
@@ -337,29 +426,24 @@ class ReportGenerator:
         for i, member in enumerate(report.members, 1):
             lines.append(f"### {i}. `{member.function_name}`")
             lines.append("")
-            lines.append(
-                f"> {member.file_path}:{member.start_line}-{member.end_line} "
-                f"@ {member.revision[:7]}"
-            )
-            if member.state:
-                lines.append(f"> State: {member.state}")
-            lines.append("")
 
-            # Current revision code
-            lines.append(f"#### Current (revision: {member.revision[:7]})")
-            lines.append("")
-            if member.code_snippet:
-                lines.append("```python")
-                lines.append(member.code_snippet.code)
-                lines.append("```")
-            else:
-                lines.append("*Code not available*")
-            lines.append("")
+            # Current revision code (skip for deleted methods)
+            if member.state != "deleted":
+                lines.append(f"#### Current (revision: {member.revision[:8]})")
+                lines.append("")
+                lines.append(f"> {member.file_path}:{member.start_line}-{member.end_line}")
+                if member.code_snippet:
+                    lines.append("```python")
+                    lines.append(member.code_snippet.code)
+                    lines.append("```")
+                else:
+                    lines.append("*Code not available*")
+                lines.append("")
 
             # Previous revision code
             if member.previous_code_snippet:
                 prev_snippet = member.previous_code_snippet
-                lines.append(f"#### Previous (revision: {prev_snippet.revision[:7]})")
+                lines.append(f"#### Previous (revision: {prev_snippet.revision[:8]})")
                 lines.append("")
                 lines.append(
                     f"> {prev_snippet.file_path}:{prev_snippet.start_line}-{prev_snippet.end_line}"
