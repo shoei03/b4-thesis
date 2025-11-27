@@ -109,10 +109,10 @@ class GitCodeExtractor:
 
         return f"{self.github_base_url}{revision}/{relative_path}#L{start_line}-L{end_line}"
 
-    def extract_code(
+    def _extract_code(
         self,
-        revision: str,
-        file_path: str,
+        git_revision: str,
+        relative_path: str,
         start_line: int,
         end_line: int,
     ) -> str:
@@ -132,9 +132,6 @@ class GitCodeExtractor:
         Raises:
             RuntimeError: If git command fails
         """
-        relative_path = self._clean_path(file_path)
-        git_revision = self._parse_revision(revision)
-
         try:
             result = subprocess.run(
                 ["git", "show", f"{git_revision}:{relative_path}"],
@@ -162,7 +159,7 @@ class GitCodeExtractor:
         except subprocess.TimeoutExpired as e:
             raise RuntimeError(f"Git command timed out for {git_revision}:{relative_path}") from e
 
-    def extract_snippet(self, request: ExtractRequest) -> CodeSnippet:
+    def _extract_snippet(self, request: ExtractRequest) -> CodeSnippet:
         """Extract a code snippet based on an extraction request.
 
         Args:
@@ -172,15 +169,17 @@ class GitCodeExtractor:
             CodeSnippet with extracted code and metadata
         """
         relative_path = self._clean_path(request.file_path)
-        code = self.extract_code(
-            request.revision,
-            request.file_path,
+        git_revision = self._parse_revision(request.revision)
+
+        code = self._extract_code(
+            git_revision,
+            relative_path,
             request.start_line,
             request.end_line,
         )
 
         github_url = self._generate_github_url(
-            request.revision,
+            git_revision,
             relative_path,
             request.start_line,
             request.end_line,
@@ -199,13 +198,11 @@ class GitCodeExtractor:
     def batch_extract(
         self,
         requests: list[ExtractRequest],
-        sort_by_revision: bool = True,
     ) -> list[CodeSnippet]:
         """Extract multiple code snippets.
 
         Args:
             requests: List of extraction requests
-            sort_by_revision: Sort requests by revision to optimize git operations
 
         Returns:
             List of CodeSnippet objects (in same order as input if not sorted)
@@ -213,38 +210,15 @@ class GitCodeExtractor:
         if not requests:
             return []
 
-        # Optionally sort by revision to minimize context switches
-        if sort_by_revision:
-            indexed_requests = list(enumerate(requests))
-            indexed_requests.sort(key=lambda x: x[1].revision)
+        # sort by revision to minimize context switches
+        indexed_requests = list(enumerate(requests))
+        indexed_requests.sort(key=lambda x: x[1].revision)
 
-            results: list[tuple[int, CodeSnippet]] = []
-            for original_idx, request in indexed_requests:
-                snippet = self.extract_snippet(request)
-                results.append((original_idx, snippet))
+        results: list[tuple[int, CodeSnippet]] = []
+        for original_idx, request in indexed_requests:
+            snippet = self._extract_snippet(request)
+            results.append((original_idx, snippet))
 
-            # Restore original order
-            results.sort(key=lambda x: x[0])
-            return [snippet for _, snippet in results]
-
-        return [self.extract_snippet(req) for req in requests]
-
-    def check_revision_exists(self, revision: str) -> bool:
-        """Check if a revision exists in the repository.
-
-        Args:
-            revision: Git commit hash to check (supports 'YYYYMMDD_HHMMSS_<hash>' format)
-
-        Returns:
-            True if revision exists, False otherwise
-        """
-        git_revision = self._parse_revision(revision)
-        result = subprocess.run(
-            ["git", "cat-file", "-t", git_revision],
-            cwd=self.repo_path,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        return result.returncode == 0
+        # Restore original order
+        results.sort(key=lambda x: x[0])
+        return [snippet for _, snippet in results]
