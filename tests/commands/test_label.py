@@ -311,19 +311,30 @@ class TestLabelFilter:
         assert len(df) == 2  # gb3 and gb4
         assert (df["rev_status"] == "all_deleted").all()
 
-    def test_filter_default_output(self, runner, sample_labeled_csv):
+    def test_filter_default_output(self, runner, sample_labeled_csv, tmp_path):
         """Test default output path."""
-        result = runner.invoke(
-            main,
-            [
-                "label",
-                "filter",
-                str(sample_labeled_csv),
-            ],
-        )
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            # Copy sample CSV to isolated filesystem
+            from pathlib import Path
+            import shutil
 
-        assert result.exit_code == 0
-        assert "output/partial_deleted.csv" in result.output
+            test_csv = Path("labeled.csv")
+            shutil.copy(sample_labeled_csv, test_csv)
+
+            result = runner.invoke(
+                main,
+                [
+                    "label",
+                    "filter",
+                    str(test_csv),
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "output/partial_deleted.csv" in result.output
+
+            # Verify file was created in isolated filesystem
+            assert Path("output/partial_deleted.csv").exists()
 
     def test_filter_with_verbose(self, runner, sample_labeled_csv, tmp_path):
         """Test filter command with --verbose option."""
