@@ -201,7 +201,8 @@ class DataValidator:
                 )
 
             # Check match-related fields for survived methods
-            # For "deleted" or "added", these fields are expected to be missing
+            # For "added", these fields are expected to be missing
+            # For "deleted", matched_block_id is set to the block's own ID for lineage tracking
             if all(col in df.columns for col in ["state", "matched_block_id", "match_type"]):
                 survived_df = df[df["state"] == "survived"]
 

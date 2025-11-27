@@ -203,7 +203,7 @@ class RevisionPairProcessor:
                 loc=int(old_block_row["end_line"]) - int(old_block_row["start_line"]) + 1,
                 state="deleted",
                 state_detail=state_detail,
-                matched_block_id=None,
+                matched_block_id=old_block_id,
                 match_type="none",
                 match_similarity=None,
                 clone_count=group_old.size - 1 if group_old and group_old.is_clone else 0,

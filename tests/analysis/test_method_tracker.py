@@ -121,8 +121,8 @@ class TestMethodTrackerRevisionPair:
         # Verify block_c is marked as deleted
         block_c_deleted = deleted_blocks[deleted_blocks["block_id"] == "block_c"]
         assert len(block_c_deleted) == 1, "block_c should be marked as deleted"
-        assert pd.isna(block_c_deleted.iloc[0]["matched_block_id"]), (
-            "Deleted block should have no match"
+        assert block_c_deleted.iloc[0]["matched_block_id"] == "block_c", (
+            "Deleted block should have matched_block_id set to its own block_id"
         )
 
     def test_added_method_detected(self, tracker):
