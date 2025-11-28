@@ -76,6 +76,20 @@ class FeatureExtractor:
         if missing_columns:
             raise ValueError(f"CSV missing required columns: {missing_columns}")
 
+        # Filter out deleted methods (code doesn't exist for them)
+        original_count = len(df)
+        df = df[df["state"] != "deleted"].copy()
+        deleted_count = original_count - len(df)
+
+        if deleted_count > 0:
+            print(
+                f"Filtered out {deleted_count} deleted methods "
+                f"({original_count} -> {len(df)} methods)"
+            )
+
+        if len(df) == 0:
+            raise ValueError("No methods to process after filtering deleted methods")
+
         # Get rules to apply
         rules = get_all_rules() if rule_names is None else get_rules_by_name(rule_names)
 
