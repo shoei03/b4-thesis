@@ -3,7 +3,16 @@
 import click
 from rich.console import Console
 
-from b4_thesis.commands import analyze, convert, label, report, stats, track, visualize
+from b4_thesis.commands import (
+    analyze,
+    convert,
+    deletion,
+    label,
+    report,
+    stats,
+    track,
+    visualize,
+)
 
 console = Console()
 
@@ -22,6 +31,7 @@ def main(ctx):
 # Register commands
 main.add_command(analyze.analyze)
 main.add_command(convert.convert)
+main.add_command(deletion.deletion)
 main.add_command(label.label)
 main.add_command(report.report)
 main.add_command(stats.stats)
