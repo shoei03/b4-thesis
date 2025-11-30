@@ -58,12 +58,12 @@ class TestShortMethodRule:
     def test_comments_excluded(self, rule):
         """Test that comments are excluded from line count."""
         snippet = CodeSnippet(
-            code='''def foo():
+            code="""def foo():
     # Comment 1
     # Comment 2
     x = 1
     # Comment 3
-    return x''',
+    return x""",
             function_name="foo",
             file_path="test.py",
             start_line=1,
@@ -119,8 +119,8 @@ class TestEmptyMethodRule:
     def test_empty_with_return_none(self, rule):
         """Test detection of method with only return None."""
         snippet = CodeSnippet(
-            code='''def foo():
-    return None''',
+            code="""def foo():
+    return None""",
             function_name="foo",
             file_path="test.py",
             start_line=1,
@@ -134,9 +134,9 @@ class TestEmptyMethodRule:
     def test_non_empty_method(self, rule):
         """Test that non-empty method is not detected."""
         snippet = CodeSnippet(
-            code='''def foo():
+            code="""def foo():
     x = 1
-    return x''',
+    return x""",
             function_name="foo",
             file_path="test.py",
             start_line=1,
@@ -175,9 +175,9 @@ class TestSingleReturnRule:
     def test_multiple_statements_not_detected(self, rule):
         """Test that method with multiple statements is not detected."""
         snippet = CodeSnippet(
-            code='''def foo():
+            code="""def foo():
     x = 1
-    return x''',
+    return x""",
             function_name="foo",
             file_path="test.py",
             start_line=1,
@@ -191,8 +191,8 @@ class TestSingleReturnRule:
     def test_no_return_not_detected(self, rule):
         """Test that method without return is not detected."""
         snippet = CodeSnippet(
-            code='''def foo():
-    pass''',
+            code="""def foo():
+    pass""",
             function_name="foo",
             file_path="test.py",
             start_line=1,

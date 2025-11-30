@@ -27,10 +27,10 @@ class TestLabelGenerator:
         labels = generator.generate_labels(df)
 
         assert len(labels) == 4
-        assert labels.iloc[0] == True  # id1 deleted in next revision
-        assert labels.iloc[1] == False  # id1 last revision
-        assert labels.iloc[2] == False  # id2 survives in next revision
-        assert labels.iloc[3] == False  # id2 last revision
+        assert labels.iloc[0]  # id1 deleted in next revision
+        assert not labels.iloc[1]  # id1 last revision
+        assert not labels.iloc[2]  # id2 survives in next revision
+        assert not labels.iloc[3]  # id2 last revision
 
     def test_generate_labels_all_survive(self, generator):
         """Test label generation when all methods survive."""
@@ -60,8 +60,8 @@ class TestLabelGenerator:
         labels = generator.generate_labels(df)
 
         assert len(labels) == 2
-        assert labels.iloc[0] == True  # Deleted in next revision
-        assert labels.iloc[1] == False  # Last revision
+        assert labels.iloc[0]  # Deleted in next revision
+        assert not labels.iloc[1]  # Last revision
 
     def test_generate_labels_missing_columns(self, generator):
         """Test error handling for missing required columns."""
@@ -90,12 +90,12 @@ class TestLabelGenerator:
         labels = generator.generate_labels(df)
 
         assert len(labels) == 6
-        assert labels.iloc[0] == True  # id1 deleted next
-        assert labels.iloc[1] == False  # id1 last
-        assert labels.iloc[2] == False  # id2 survives next
-        assert labels.iloc[3] == False  # id2 last
-        assert labels.iloc[4] == True  # id3 deleted next
-        assert labels.iloc[5] == False  # id3 last
+        assert labels.iloc[0]  # id1 deleted next
+        assert not labels.iloc[1]  # id1 last
+        assert not labels.iloc[2]  # id2 survives next
+        assert not labels.iloc[3]  # id2 last
+        assert labels.iloc[4]  # id3 deleted next
+        assert not labels.iloc[5]  # id3 last
 
     def test_generate_labels_preserves_order(self, generator):
         """Test that labels are aligned with original DataFrame order."""
@@ -113,10 +113,10 @@ class TestLabelGenerator:
         # Check that labels are correctly aligned with original rows
         assert len(labels) == 4
         # id2/rev1 should be False (survives to rev2)
-        assert labels.iloc[0] == False
+        assert not labels.iloc[0]
         # id1/rev1 should be True (deleted in rev2)
-        assert labels.iloc[1] == True
+        assert labels.iloc[1]
         # id2/rev2 should be False (last revision)
-        assert labels.iloc[2] == False
+        assert not labels.iloc[2]
         # id1/rev2 should be False (last revision)
-        assert labels.iloc[3] == False
+        assert not labels.iloc[3]
