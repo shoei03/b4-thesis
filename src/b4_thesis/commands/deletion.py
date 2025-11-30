@@ -8,6 +8,7 @@ import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
+from b4_thesis.analysis.deletion_prediction.cache_manager import CacheManager
 from b4_thesis.analysis.deletion_prediction.evaluator import Evaluator
 from b4_thesis.analysis.deletion_prediction.feature_extractor import FeatureExtractor
 
@@ -42,6 +43,17 @@ def deletion():
     default="/app/Repos/pandas/",
     help="Base path prefix to remove from file paths",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(),
+    default=None,
+    help="Cache directory path (default: ~/.cache/b4-thesis/deletion-prediction)",
+)
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable caching (forces re-extraction)",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Show verbose output")
 def extract(
     input_csv: str,
@@ -49,6 +61,8 @@ def extract(
     output: str,
     rules: str | None,
     base_prefix: str,
+    cache_dir: str | None,
+    no_cache: bool,
     verbose: bool,
 ):
     """Extract deletion prediction features from method lineage CSV.
@@ -71,6 +85,18 @@ def extract(
         if rule_names:
             rule_names = [r.strip() for r in rule_names]
 
+        # Setup cache manager
+        cache_manager = None
+        if not no_cache:
+            if cache_dir:
+                cache_path = Path(cache_dir)
+            else:
+                cache_path = Path.home() / ".cache" / "b4-thesis" / "deletion-prediction"
+
+            cache_manager = CacheManager(cache_path)
+            if verbose:
+                console.print(f"[dim]Cache directory: {cache_path}[/dim]")
+
         # Initialize extractor
         console.print("[bold blue]Initializing feature extractor...[/bold blue]", highlight=False)
         extractor = FeatureExtractor(repo_path=Path(repo), base_path_prefix=base_prefix)
@@ -80,7 +106,12 @@ def extract(
             f"[bold green]Extracting features from {input_csv}...[/bold green]",
             highlight=False,
         )
-        df = extractor.extract(Path(input_csv), rule_names)
+        df = extractor.extract(
+            Path(input_csv),
+            rule_names=rule_names,
+            cache_manager=cache_manager,
+            use_cache=not no_cache,
+        )
 
         # Save results
         output_path = Path(output)

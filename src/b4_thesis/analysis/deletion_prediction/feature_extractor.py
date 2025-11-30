@@ -6,6 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from b4_thesis.analysis.code_extractor import ExtractRequest, GitCodeExtractor
+from b4_thesis.analysis.deletion_prediction.cache_manager import CacheManager
 from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
 from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet
 from b4_thesis.analysis.deletion_prediction.rules import get_all_rules, get_rules_by_name
@@ -41,12 +42,20 @@ class FeatureExtractor:
         )
         self.label_generator = LabelGenerator()
 
-    def extract(self, csv_path: Path, rule_names: list[str] | None = None) -> pd.DataFrame:
+    def extract(
+        self,
+        csv_path: Path,
+        rule_names: list[str] | None = None,
+        cache_manager: CacheManager | None = None,
+        use_cache: bool = True,
+    ) -> pd.DataFrame:
         """Extract features from method lineage CSV.
 
         Args:
             csv_path: Path to method_lineage_labeled.csv
             rule_names: List of rule names to apply (None = all rules)
+            cache_manager: CacheManager instance for caching (None = no cache)
+            use_cache: Whether to use cache (default: True)
 
         Returns:
             DataFrame with original columns + rule_XXX columns + is_deleted_next
@@ -55,6 +64,16 @@ class FeatureExtractor:
             FileNotFoundError: If CSV file not found
             ValueError: If CSV missing required columns
         """
+        # Normalize rule_names for consistent caching
+        rule_names_normalized = rule_names if rule_names else []
+
+        # Try to load from features cache first (complete result)
+        if use_cache and cache_manager:
+            features_df = cache_manager.load_features(csv_path, rule_names_normalized)
+            if features_df is not None:
+                print(f"✓ Loaded features from cache ({len(features_df)} methods)")
+                return features_df
+
         # Load CSV
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
@@ -93,30 +112,70 @@ class FeatureExtractor:
         # Get rules to apply
         rules = get_all_rules() if rule_names is None else get_rules_by_name(rule_names)
 
-        # Create extraction requests
-        requests = [
-            ExtractRequest(
-                function_name=row.function_name,
-                file_path=row.file_path,
-                revision=row.revision,
-                start_line=row.start_line,
-                end_line=row.end_line,
-                global_block_id=row.global_block_id,
+        # Try to load code snippets from cache
+        snippets_df = None
+        if use_cache and cache_manager:
+            snippets_df = cache_manager.load_snippets(csv_path)
+            if snippets_df is not None:
+                print(f"✓ Loaded code snippets from cache ({len(snippets_df)} snippets)")
+                # Merge with df to add code and github_url columns
+                df = df.merge(
+                    snippets_df,
+                    on=["global_block_id", "revision"],
+                    how="left",
+                    suffixes=("", "_cached"),
+                )
+
+        # Extract code snippets if not cached
+        if snippets_df is None:
+            # Create extraction requests
+            requests = [
+                ExtractRequest(
+                    function_name=row.function_name,
+                    file_path=row.file_path,
+                    revision=row.revision,
+                    start_line=row.start_line,
+                    end_line=row.end_line,
+                    global_block_id=row.global_block_id,
+                )
+                for row in df.itertuples()
+            ]
+
+            # Batch extract code snippets
+            print(f"Extracting {len(requests)} code snippets from repository...")
+            code_snippets_raw = self.code_extractor.batch_extract(requests)
+
+            # Create snippets DataFrame for caching
+            snippets_data = []
+            for i, snippet_raw in enumerate(code_snippets_raw):
+                row = df.iloc[i]
+                snippets_data.append(
+                    {
+                        "global_block_id": row.global_block_id,
+                        "revision": row.revision,
+                        "code": snippet_raw.code,
+                        "github_url": snippet_raw.github_url,
+                    }
+                )
+
+            snippets_df = pd.DataFrame(snippets_data)
+
+            # Save snippets to cache
+            if use_cache and cache_manager:
+                cache_manager.save_snippets(csv_path, snippets_df)
+                print("✓ Saved code snippets to cache")
+
+            # Merge with df
+            df = df.merge(
+                snippets_df, on=["global_block_id", "revision"], how="left", suffixes=("", "_new")
             )
-            for row in df.itertuples()
-        ]
 
-        # Batch extract code snippets
-        print(f"Extracting {len(requests)} code snippets from repository...")
-        code_snippets_raw = self.code_extractor.batch_extract(requests)
-
-        # Convert to CodeSnippet objects with metadata
+        # Create CodeSnippet objects from df for rule application
         code_snippets = []
-        for i, snippet_raw in enumerate(code_snippets_raw):
-            row = df.iloc[i]
+        for row in df.itertuples():
             code_snippets.append(
                 CodeSnippet(
-                    code=snippet_raw.code,
+                    code=row.code,
                     function_name=row.function_name,
                     file_path=row.file_path,
                     start_line=row.start_line,
@@ -148,5 +207,10 @@ class FeatureExtractor:
         # Generate ground truth labels
         print("Generating ground truth labels...")
         df["is_deleted_next"] = self.label_generator.generate_labels(df)
+
+        # Save features to cache
+        if use_cache and cache_manager:
+            cache_manager.save_features(csv_path, rule_names_normalized, df)
+            print("✓ Saved features to cache")
 
         return df
