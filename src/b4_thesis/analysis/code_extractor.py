@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
+from tqdm import tqdm
+
 
 @dataclass
 class CodeSnippet:
@@ -215,7 +217,7 @@ class GitCodeExtractor:
         indexed_requests.sort(key=lambda x: x[1].revision)
 
         results: list[tuple[int, CodeSnippet]] = []
-        for original_idx, request in indexed_requests:
+        for original_idx, request in tqdm(indexed_requests, desc="Extracting code snippets"):
             snippet = self._extract_snippet(request)
             results.append((original_idx, snippet))
 
