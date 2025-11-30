@@ -200,27 +200,57 @@ class GitCodeExtractor:
     def batch_extract(
         self,
         requests: list[ExtractRequest],
+        max_workers: int = 4,
     ) -> list[CodeSnippet]:
-        """Extract multiple code snippets.
+        """Extract multiple code snippets in parallel.
 
         Args:
             requests: List of extraction requests
+            max_workers: Maximum number of parallel workers (default: 4)
 
         Returns:
-            List of CodeSnippet objects (in same order as input if not sorted)
+            List of CodeSnippet objects (in same order as input)
         """
         if not requests:
             return []
 
-        # sort by revision to minimize context switches
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Create indexed requests to preserve order
         indexed_requests = list(enumerate(requests))
-        indexed_requests.sort(key=lambda x: x[1].revision)
 
-        results: list[tuple[int, CodeSnippet]] = []
-        for original_idx, request in tqdm(indexed_requests, desc="Extracting code snippets"):
-            snippet = self._extract_snippet(request)
-            results.append((original_idx, snippet))
+        # Parallel extraction with progress bar
+        results: list[tuple[int, CodeSnippet | None]] = []
+        failed_count = 0
 
-        # Restore original order
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_idx = {
+                executor.submit(self._extract_snippet, req): idx for idx, req in indexed_requests
+            }
+
+            # Process completed tasks with progress bar
+            with tqdm(total=len(requests), desc="Extracting code snippets") as pbar:
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    try:
+                        snippet = future.result()
+                        results.append((idx, snippet))
+                    except Exception as e:
+                        # Log error but continue processing
+                        failed_count += 1
+                        request = requests[idx]
+                        tqdm.write(
+                            f"Warning: Failed to extract {request.function_name} "
+                            f"({request.revision}:{request.file_path}): {e}"
+                        )
+                        results.append((idx, None))
+                    pbar.update(1)
+
+        # Report failures
+        if failed_count > 0:
+            print(f"Warning: {failed_count}/{len(requests)} extraction requests failed")
+
+        # Restore original order and filter out None
         results.sort(key=lambda x: x[0])
-        return [snippet for _, snippet in results]
+        return [snippet for _, snippet in results if snippet is not None]

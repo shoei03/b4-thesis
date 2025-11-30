@@ -161,7 +161,7 @@ class TestGitCodeExtractor:
         assert "def hello():" in snippets[0].code
         assert "print('Hello')" in snippets[0].code
 
-    def test_batch_extract_invalid_revision(self, temp_git_repo):
+    def test_batch_extract_invalid_revision(self, temp_git_repo, capsys):
         """Test batch extraction with invalid revision."""
         repo_path, _ = temp_git_repo
         extractor = GitCodeExtractor(repo_path, base_path_prefix="")
@@ -170,10 +170,17 @@ class TestGitCodeExtractor:
             ExtractRequest("test", "test.py", "invalid_revision", 1, 5),
         ]
 
-        with pytest.raises(RuntimeError, match="Failed to extract"):
-            extractor.batch_extract(requests)
+        snippets = extractor.batch_extract(requests)
 
-    def test_batch_extract_invalid_file(self, temp_git_repo):
+        # Should return empty list (failed request is filtered out)
+        assert len(snippets) == 0
+
+        # Check warning message
+        captured = capsys.readouterr()
+        assert "Warning:" in captured.out
+        assert "1/1" in captured.out or "failed" in captured.out.lower()
+
+    def test_batch_extract_invalid_file(self, temp_git_repo, capsys):
         """Test batch extraction with invalid file path."""
         repo_path, commit_hash = temp_git_repo
         extractor = GitCodeExtractor(repo_path, base_path_prefix="")
@@ -182,8 +189,15 @@ class TestGitCodeExtractor:
             ExtractRequest("test", "nonexistent.py", commit_hash, 1, 5),
         ]
 
-        with pytest.raises(RuntimeError, match="Failed to extract"):
-            extractor.batch_extract(requests)
+        snippets = extractor.batch_extract(requests)
+
+        # Should return empty list (failed request is filtered out)
+        assert len(snippets) == 0
+
+        # Check warning message
+        captured = capsys.readouterr()
+        assert "Warning:" in captured.out
+        assert "1/1" in captured.out or "failed" in captured.out.lower()
 
     def test_batch_extract(self, temp_git_repo):
         """Test batch extraction."""
@@ -259,3 +273,62 @@ class TestGitCodeExtractor:
 
         assert len(snippets) == 1
         assert snippets[0].github_url is None
+
+    def test_batch_extract_with_custom_max_workers(self, temp_git_repo):
+        """Test batch extraction with custom max_workers."""
+        repo_path, commit_hash = temp_git_repo
+        extractor = GitCodeExtractor(repo_path, base_path_prefix="")
+
+        requests = [
+            ExtractRequest("hello", "test.py", commit_hash, 3, 4),
+            ExtractRequest("world", "test.py", commit_hash, 6, 7),
+        ]
+
+        # Test with max_workers=2
+        snippets = extractor.batch_extract(requests, max_workers=2)
+
+        assert len(snippets) == 2
+        assert snippets[0].function_name == "hello"
+        assert snippets[1].function_name == "world"
+
+    def test_batch_extract_preserves_order_in_parallel(self, temp_git_repo):
+        """Test that parallel extraction preserves original request order."""
+        repo_path, commit_hash = temp_git_repo
+        extractor = GitCodeExtractor(repo_path, base_path_prefix="")
+
+        requests = [
+            ExtractRequest("hello", "test.py", commit_hash, 3, 4),
+            ExtractRequest("world", "test.py", commit_hash, 6, 7),
+            ExtractRequest("line1", "test.py", commit_hash, 1, 1),
+        ]
+
+        snippets = extractor.batch_extract(requests, max_workers=3)
+
+        # Check order is preserved
+        assert len(snippets) == 3
+        assert snippets[0].function_name == "hello"
+        assert snippets[1].function_name == "world"
+        assert snippets[2].function_name == "line1"
+
+    def test_batch_extract_partial_failure(self, temp_git_repo, capsys):
+        """Test that partial failures don't stop processing."""
+        repo_path, commit_hash = temp_git_repo
+        extractor = GitCodeExtractor(repo_path, base_path_prefix="")
+
+        requests = [
+            ExtractRequest("hello", "test.py", commit_hash, 3, 4),  # Valid
+            ExtractRequest("invalid", "nonexistent.py", commit_hash, 1, 5),  # Invalid
+            ExtractRequest("world", "test.py", commit_hash, 6, 7),  # Valid
+        ]
+
+        snippets = extractor.batch_extract(requests, max_workers=2)
+
+        # Should get 2 valid snippets (invalid one is filtered out)
+        assert len(snippets) == 2
+        assert snippets[0].function_name == "hello"
+        assert snippets[1].function_name == "world"
+
+        # Check warning message
+        captured = capsys.readouterr()
+        assert "Warning:" in captured.out
+        assert "1/3" in captured.out or "failed" in captured.out.lower()
