@@ -12,6 +12,11 @@ def get_all_rules() -> list[DeletionRule]:
         List of all rule instances
     """
     # Import here to avoid circular imports
+    from b4_thesis.analysis.deletion_prediction.rules.api_usage import (
+        UsesBothSelectLocRule,
+        UsesLocRule,
+        UsesSelectRule,
+    )
     from b4_thesis.analysis.deletion_prediction.rules.code_quality import (
         EmptyMethodRule,
         ShortMethodRule,
@@ -36,6 +41,9 @@ def get_all_rules() -> list[DeletionRule]:
         DeprecatedNamingRule(),
         TemporaryNamingRule(),
         PrivateUnusedRule(),
+        UsesSelectRule(),
+        UsesLocRule(),
+        UsesBothSelectLocRule(),
     ]
 
 
