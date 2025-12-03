@@ -21,6 +21,9 @@
   - `label filter`: ラベル付きデータをrev_statusでフィルタリング
 - **report**: ✅ 分析レポート生成（完全実装済み）
   - `report clone-groups`: クローングループ比較用のMarkdownレポート生成
+- **deletion**: ✅ 削除予測の特徴抽出・評価（完全実装済み）
+  - `deletion extract`: メソッドから削除予測特徴を抽出
+  - `deletion evaluate`: 削除予測ルールの評価（詳細追跡対応）
 - **analyze**: ⚠️ 基本実装のみ（ファイル/ディレクトリ情報表示）
 - **stats**: ✅ 統計メトリクスの計算（完全実装済み）
   - `stats general`: 汎用統計計算
@@ -477,6 +480,140 @@ b4-thesis visualize groups ./output/group_tracking.csv -o ./plots -t size
 
 # メンバー変更の時系列を生成
 b4-thesis visualize groups ./output/group_tracking.csv -o ./plots -t members
+```
+
+#### deletion
+
+✅ **完全実装済み**: メソッド削除予測のための特徴抽出と評価を行います。
+
+##### deletion extract
+
+メソッドlineageデータから削除予測特徴を抽出します。
+
+```bash
+b4-thesis deletion extract <input_csv> [OPTIONS]
+
+Options:
+  -r, --repo PATH                       Gitリポジトリへのパス（必須）
+  -o, --output PATH                     出力CSVファイルパス（必須）
+  --rules TEXT                          カンマ区切りのルール名（デフォルト: 全ルール）
+  --base-prefix TEXT                    ファイルパスから削除するベースパスプレフィックス
+  --cache-dir PATH                      キャッシュディレクトリパス
+  --no-cache                            キャッシュを無効化（強制再抽出）
+  -v, --verbose                         詳細な出力を表示
+```
+
+**処理内容**:
+1. method_lineage_labeled.csvを読み込み
+2. Gitリポジトリからコードを抽出
+3. 削除予測ルールを適用
+4. Ground truthラベル（is_deleted_next）を生成
+5. 結果をCSVに保存
+
+**使用例**:
+```bash
+# 基本的な使用
+b4-thesis deletion extract ./output/method_lineage_labeled.csv \
+    --repo ../projects/pandas \
+    --output ./output/features.csv
+
+# キャッシュなしで詳細出力
+b4-thesis deletion extract ./output/method_lineage_labeled.csv \
+    --repo ../projects/pandas \
+    --output ./output/features.csv \
+    --no-cache --verbose
+
+# 特定のルールのみ適用
+b4-thesis deletion extract ./output/method_lineage_labeled.csv \
+    --repo ../projects/pandas \
+    --output ./output/features.csv \
+    --rules "short_method,empty_method,has_todo"
+```
+
+##### deletion evaluate
+
+削除予測ルールを評価し、Precision、Recall、F1スコアを計算します。
+
+```bash
+b4-thesis deletion evaluate <input_csv> [OPTIONS]
+
+Options:
+  -o, --output PATH                     出力ファイルパス（必須）
+  -f, --format [json|csv|table]         出力フォーマット（デフォルト: table）
+  --detailed                            TP/FP/FN/TNメソッドの詳細追跡を有効化
+  --export-dir PATH                     詳細分類CSVのエクスポートディレクトリ（--detailed必須）
+```
+
+**処理内容**:
+1. 特徴CSVを読み込み（extractコマンドの出力）
+2. 各ルールのPrecision、Recall、F1を計算
+3. 評価レポートを出力
+4. （オプション）詳細分類CSVをエクスポート
+
+**使用例**:
+```bash
+# 基本的な評価（テーブル表示）
+b4-thesis deletion evaluate ./output/features.csv \
+    --output ./output/evaluation.json
+
+# JSON形式で保存
+b4-thesis deletion evaluate ./output/features.csv \
+    --output ./output/evaluation.json \
+    --format json
+
+# CSV形式で保存
+b4-thesis deletion evaluate ./output/features.csv \
+    --output ./output/evaluation.csv \
+    --format csv
+
+# 詳細追跡を有効化してCSVエクスポート
+b4-thesis deletion evaluate ./output/features.csv \
+    --output ./output/evaluation.json \
+    --detailed \
+    --export-dir ./output/classifications/
+```
+
+**詳細追跡モード（--detailed）について**:
+
+`--detailed`フラグを使用すると、各メソッドがどの分類カテゴリ（TP/FP/FN/TN）に属するかを追跡できます。
+
+- **出力**: ルールごとに1つのCSVファイル（例: `short_method_classifications.csv`）
+- **列**:
+  - `global_block_id`: メソッドの一意識別子
+  - `revision`: リビジョンタイムスタンプ
+  - `function_name`: 関数名
+  - `file_path`: ファイルパス
+  - `classification`: 分類カテゴリ（TP/FP/FN/TN）
+  - `predicted`: ルールの予測（True = 削除を予測）
+  - `actual`: Ground truth（True = 実際に削除された）
+  - `lifetime_revisions`: メソッドが出現したリビジョン数
+  - `lifetime_days`: 最初と最後の出現の間の日数
+
+**分類カテゴリの意味**:
+- **TP (True Positive)**: ルールが削除を予測し、実際に削除された
+- **FP (False Positive)**: ルールが削除を予測したが、実際には削除されなかった
+- **FN (False Negative)**: ルールが削除を予測しなかったが、実際には削除された
+- **TN (True Negative)**: ルールが削除を予測せず、実際に削除されなかった
+
+**ユースケース**:
+詳細追跡モードは、誤検出（False Positive）の原因を分析する際に特に有用です。例えば、FPメソッドの`lifetime_revisions`や`lifetime_days`を調べることで、「ルールにマッチしているが、多くのリビジョンをまたいだ後に削除される」というパターンを検証できます。
+
+```bash
+# 詳細分類CSVをエクスポート
+b4-thesis deletion evaluate ./output/features.csv \
+    --output ./output/evaluation.json \
+    --detailed \
+    --export-dir ./output/classifications/
+
+# pandasで分析
+import pandas as pd
+
+# FPメソッドを読み込み
+df = pd.read_csv("./output/classifications/short_method_classifications.csv")
+fp_methods = df[df["classification"] == "FP"]
+
+# ライフタイム分析
+print(fp_methods[["function_name", "lifetime_revisions", "lifetime_days"]].describe())
 ```
 
 ### 出力CSVフォーマット
