@@ -92,7 +92,10 @@ class Evaluator:
             f1 = f1_score(ground_truth, predictions, zero_division=0)
 
             # Calculate confusion matrix
-            tn, fp, fn, tp = confusion_matrix(ground_truth, predictions).ravel()
+            # Use labels=[False, True] to ensure 2x2 matrix even if one class is missing
+            tn, fp, fn, tp = confusion_matrix(
+                ground_truth, predictions, labels=[False, True]
+            ).ravel()
 
             results.append(
                 RuleEvaluation(
