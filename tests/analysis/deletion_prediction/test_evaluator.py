@@ -1,9 +1,15 @@
 """Tests for Evaluator."""
 
+
 import pandas as pd
 import pytest
 
-from b4_thesis.analysis.deletion_prediction.evaluator import Evaluator, RuleEvaluation
+from b4_thesis.analysis.deletion_prediction.evaluator import (
+    DetailedRuleEvaluation,
+    Evaluator,
+    MethodClassification,
+    RuleEvaluation,
+)
 
 
 class TestEvaluator:
@@ -123,3 +129,179 @@ class TestEvaluator:
         assert result_dict["precision"] == 0.6667
         assert result_dict["recall"] == 0.7692
         assert result_dict["f1"] == 0.7143
+
+    def test_evaluate_detailed_mode(self, evaluator):
+        """Test detailed evaluation mode with per-method classifications."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, True, False, False],
+                "is_deleted_next": [True, False, True, False],
+                "global_block_id": ["id1", "id2", "id3", "id4"],
+                "revision": [
+                    "20210101_120000_abc",
+                    "20210102_130000_def",
+                    "20210103_140000_ghi",
+                    "20210104_150000_jkl",
+                ],
+                "function_name": ["func1", "func2", "func3", "func4"],
+                "file_path": ["file1.py", "file2.py", "file3.py", "file4.py"],
+                "lifetime_revisions": [5, 3, 10, 2],
+                "lifetime_days": [14, 7, 30, 5],
+            }
+        )
+
+        results = evaluator.evaluate(df, detailed=True)
+
+        assert len(results) == 1
+        result = results[0]
+        assert isinstance(result, DetailedRuleEvaluation)
+        assert result.rule_name == "test"
+        assert result.tp == 1  # id1: predicted=True, actual=True
+        assert result.fp == 1  # id2: predicted=True, actual=False
+        assert result.fn == 1  # id3: predicted=False, actual=True
+        assert result.tn == 1  # id4: predicted=False, actual=False
+
+        # Check classifications
+        assert result.classifications is not None
+        assert len(result.classifications) == 4
+
+        # Verify classification types
+        tp_methods = result.get_tp_methods()
+        fp_methods = result.get_fp_methods()
+        fn_methods = result.get_fn_methods()
+        tn_methods = result.get_tn_methods()
+
+        assert len(tp_methods) == 1
+        assert len(fp_methods) == 1
+        assert len(fn_methods) == 1
+        assert len(tn_methods) == 1
+
+        # Check TP method details
+        assert tp_methods[0].global_block_id == "id1"
+        assert tp_methods[0].function_name == "func1"
+        assert tp_methods[0].classification == "TP"
+        assert tp_methods[0].predicted is True
+        assert tp_methods[0].actual is True
+        assert tp_methods[0].lifetime_revisions == 5
+        assert tp_methods[0].lifetime_days == 14
+
+    def test_evaluate_detailed_missing_columns(self, evaluator):
+        """Test error handling when detailed mode is missing required columns."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False],
+                "is_deleted_next": [True, False],
+                # Missing: global_block_id, revision, etc.
+            }
+        )
+
+        with pytest.raises(ValueError, match="Missing columns required for detailed mode"):
+            evaluator.evaluate(df, detailed=True)
+
+    def test_method_classification_to_dict(self):
+        """Test MethodClassification.to_dict() method."""
+        classification = MethodClassification(
+            global_block_id="test_id",
+            revision="20210101_120000_abc",
+            function_name="test_func",
+            file_path="test/file.py",
+            classification="TP",
+            predicted=True,
+            actual=True,
+            lifetime_revisions=5,
+            lifetime_days=14,
+        )
+
+        result_dict = classification.to_dict()
+
+        assert result_dict["global_block_id"] == "test_id"
+        assert result_dict["revision"] == "20210101_120000_abc"
+        assert result_dict["function_name"] == "test_func"
+        assert result_dict["file_path"] == "test/file.py"
+        assert result_dict["classification"] == "TP"
+        assert result_dict["predicted"] is True
+        assert result_dict["actual"] is True
+        assert result_dict["lifetime_revisions"] == 5
+        assert result_dict["lifetime_days"] == 14
+
+    def test_export_classifications_csv(self, evaluator, tmp_path):
+        """Test exporting classifications to CSV files."""
+        df = pd.DataFrame(
+            {
+                "rule_test1": [True, False, True, False],
+                "rule_test2": [False, True, False, True],
+                "is_deleted_next": [True, False, False, True],
+                "global_block_id": ["id1", "id2", "id3", "id4"],
+                "revision": ["r1", "r2", "r3", "r4"],
+                "function_name": ["f1", "f2", "f3", "f4"],
+                "file_path": ["p1", "p2", "p3", "p4"],
+                "lifetime_revisions": [1, 2, 3, 4],
+                "lifetime_days": [5, 6, 7, 8],
+            }
+        )
+
+        results = evaluator.evaluate(df, detailed=True)
+        output_dir = tmp_path / "classifications"
+        created_files = evaluator.export_classifications_csv(results, output_dir)
+
+        # Check that files were created
+        assert len(created_files) == 2
+        assert output_dir.exists()
+
+        # Check test1 classifications
+        test1_csv = output_dir / "test1_classifications.csv"
+        assert test1_csv.exists()
+        test1_df = pd.read_csv(test1_csv)
+        assert len(test1_df) == 4
+        assert "classification" in test1_df.columns
+        assert "global_block_id" in test1_df.columns
+
+    def test_export_classifications_csv_with_filter(self, evaluator, tmp_path):
+        """Test exporting filtered classifications to CSV."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, True, False, False],
+                "is_deleted_next": [True, False, True, False],
+                "global_block_id": ["id1", "id2", "id3", "id4"],
+                "revision": ["r1", "r2", "r3", "r4"],
+                "function_name": ["f1", "f2", "f3", "f4"],
+                "file_path": ["p1", "p2", "p3", "p4"],
+                "lifetime_revisions": [1, 2, 3, 4],
+                "lifetime_days": [5, 6, 7, 8],
+            }
+        )
+
+        results = evaluator.evaluate(df, detailed=True)
+        output_dir = tmp_path / "classifications"
+
+        # Export only FP classifications
+        created_files = evaluator.export_classifications_csv(
+            results, output_dir, classification_filter="FP"
+        )
+
+        # Check that FP file was created
+        assert len(created_files) == 1
+        fp_csv = output_dir / "test_FP.csv"
+        assert fp_csv.exists()
+        fp_df = pd.read_csv(fp_csv)
+        assert len(fp_df) == 1  # Only one FP method
+        assert fp_df.iloc[0]["classification"] == "FP"
+        assert fp_df.iloc[0]["global_block_id"] == "id2"
+
+    def test_export_classifications_csv_invalid_results(self, evaluator, tmp_path):
+        """Test error handling when exporting non-detailed results."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False],
+                "is_deleted_next": [True, False],
+            }
+        )
+
+        # Get non-detailed results
+        results = evaluator.evaluate(df, detailed=False)
+        output_dir = tmp_path / "classifications"
+
+        with pytest.raises(
+            ValueError, match="export_classifications_csv requires DetailedRuleEvaluation"
+        ):
+            evaluator.export_classifications_csv(results, output_dir)

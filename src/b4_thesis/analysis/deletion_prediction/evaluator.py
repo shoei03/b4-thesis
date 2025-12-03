@@ -1,6 +1,7 @@
 """Evaluation engine for deletion prediction rules."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
@@ -48,6 +49,103 @@ class RuleEvaluation:
         }
 
 
+@dataclass
+class MethodClassification:
+    """Classification result for a single method.
+
+    Attributes:
+        global_block_id: Unique identifier for the method
+        revision: Revision timestamp
+        function_name: Name of the method
+        file_path: Full path to the file
+        classification: Classification category (TP/FP/FN/TN)
+        predicted: Rule prediction (True = predicts deletion)
+        actual: Ground truth (True = actually deleted)
+        lifetime_revisions: Number of revisions method appeared in
+        lifetime_days: Number of days between first and last appearance
+    """
+
+    global_block_id: str
+    revision: str
+    function_name: str
+    file_path: str
+    classification: str  # "TP", "FP", "FN", "TN"
+    predicted: bool
+    actual: bool
+    lifetime_revisions: int
+    lifetime_days: int
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for CSV export.
+
+        Returns:
+            Dictionary with all classification data
+        """
+        return {
+            "global_block_id": self.global_block_id,
+            "revision": self.revision,
+            "function_name": self.function_name,
+            "file_path": self.file_path,
+            "classification": self.classification,
+            "predicted": self.predicted,
+            "actual": self.actual,
+            "lifetime_revisions": self.lifetime_revisions,
+            "lifetime_days": self.lifetime_days,
+        }
+
+
+@dataclass
+class DetailedRuleEvaluation(RuleEvaluation):
+    """Extended evaluation with per-method classification.
+
+    Attributes:
+        Inherits all attributes from RuleEvaluation
+        classifications: List of MethodClassification objects for each method
+    """
+
+    classifications: list[MethodClassification] | None = None
+
+    def get_tp_methods(self) -> list[MethodClassification]:
+        """Get methods classified as True Positives.
+
+        Returns:
+            List of MethodClassification objects with classification="TP"
+        """
+        if self.classifications is None:
+            return []
+        return [c for c in self.classifications if c.classification == "TP"]
+
+    def get_fp_methods(self) -> list[MethodClassification]:
+        """Get methods classified as False Positives.
+
+        Returns:
+            List of MethodClassification objects with classification="FP"
+        """
+        if self.classifications is None:
+            return []
+        return [c for c in self.classifications if c.classification == "FP"]
+
+    def get_fn_methods(self) -> list[MethodClassification]:
+        """Get methods classified as False Negatives.
+
+        Returns:
+            List of MethodClassification objects with classification="FN"
+        """
+        if self.classifications is None:
+            return []
+        return [c for c in self.classifications if c.classification == "FN"]
+
+    def get_tn_methods(self) -> list[MethodClassification]:
+        """Get methods classified as True Negatives.
+
+        Returns:
+            List of MethodClassification objects with classification="TN"
+        """
+        if self.classifications is None:
+            return []
+        return [c for c in self.classifications if c.classification == "TN"]
+
+
 class Evaluator:
     """Evaluate deletion prediction rules.
 
@@ -55,18 +153,22 @@ class Evaluator:
     by comparing rule predictions against ground truth labels.
     """
 
-    def evaluate(self, features_df: pd.DataFrame) -> list[RuleEvaluation]:
+    def evaluate(
+        self, features_df: pd.DataFrame, detailed: bool = False
+    ) -> list[RuleEvaluation] | list[DetailedRuleEvaluation]:
         """Evaluate all rules in the features DataFrame.
 
         Args:
             features_df: DataFrame with rule_XXX columns and is_deleted_next column
+            detailed: If True, include per-method classification details
 
         Returns:
-            List of RuleEvaluation objects, one per rule
+            List of RuleEvaluation objects (or DetailedRuleEvaluation if detailed=True)
 
         Raises:
             ValueError: If is_deleted_next column is missing
             ValueError: If no rule columns found
+            ValueError: If detailed=True but required columns are missing
         """
         # Validate ground truth column
         if "is_deleted_next" not in features_df.columns:
@@ -76,6 +178,22 @@ class Evaluator:
         rule_columns = [col for col in features_df.columns if col.startswith("rule_")]
         if not rule_columns:
             raise ValueError("No rule columns found (columns starting with 'rule_')")
+
+        # Validate columns needed for detailed mode
+        if detailed:
+            required_cols = [
+                "global_block_id",
+                "revision",
+                "function_name",
+                "file_path",
+                "lifetime_revisions",
+                "lifetime_days",
+            ]
+            missing_cols = [col for col in required_cols if col not in features_df.columns]
+            if missing_cols:
+                raise ValueError(
+                    f"Missing columns required for detailed mode: {', '.join(missing_cols)}"
+                )
 
         # Get ground truth
         ground_truth = features_df["is_deleted_next"]
@@ -97,18 +215,63 @@ class Evaluator:
                 ground_truth, predictions, labels=[False, True]
             ).ravel()
 
-            results.append(
-                RuleEvaluation(
-                    rule_name=rule_name,
-                    tp=int(tp),
-                    fp=int(fp),
-                    fn=int(fn),
-                    tn=int(tn),
-                    precision=float(precision),
-                    recall=float(recall),
-                    f1=float(f1),
+            if detailed:
+                # Create MethodClassification objects for each method
+                classifications = []
+                for idx, row in features_df.iterrows():
+                    predicted = bool(row[rule_col])
+                    actual = bool(row["is_deleted_next"])
+
+                    # Determine classification
+                    if predicted and actual:
+                        classification = "TP"
+                    elif predicted and not actual:
+                        classification = "FP"
+                    elif not predicted and actual:
+                        classification = "FN"
+                    else:
+                        classification = "TN"
+
+                    classifications.append(
+                        MethodClassification(
+                            global_block_id=str(row["global_block_id"]),
+                            revision=str(row["revision"]),
+                            function_name=str(row["function_name"]),
+                            file_path=str(row["file_path"]),
+                            classification=classification,
+                            predicted=predicted,
+                            actual=actual,
+                            lifetime_revisions=int(row["lifetime_revisions"]),
+                            lifetime_days=int(row["lifetime_days"]),
+                        )
+                    )
+
+                results.append(
+                    DetailedRuleEvaluation(
+                        rule_name=rule_name,
+                        tp=int(tp),
+                        fp=int(fp),
+                        fn=int(fn),
+                        tn=int(tn),
+                        precision=float(precision),
+                        recall=float(recall),
+                        f1=float(f1),
+                        classifications=classifications,
+                    )
                 )
-            )
+            else:
+                results.append(
+                    RuleEvaluation(
+                        rule_name=rule_name,
+                        tp=int(tp),
+                        fp=int(fp),
+                        fn=int(fn),
+                        tn=int(tn),
+                        precision=float(precision),
+                        recall=float(recall),
+                        f1=float(f1),
+                    )
+                )
 
         return results
 
@@ -133,3 +296,80 @@ class Evaluator:
             )
 
         print("\n" + "=" * 80)
+
+    def export_classifications_csv(
+        self,
+        results: list[DetailedRuleEvaluation],
+        output_dir: Path,
+        classification_filter: str | None = None,
+    ) -> list[Path]:
+        """Export classification details to CSV files.
+
+        Creates one CSV file per rule with method-level classification data.
+
+        Args:
+            results: List of DetailedRuleEvaluation objects with classifications
+            output_dir: Directory to save CSV files
+            classification_filter: Optional filter for classification type (TP/FP/FN/TN)
+
+        Returns:
+            List of Path objects for created CSV files
+
+        Raises:
+            ValueError: If results contain RuleEvaluation instead of DetailedRuleEvaluation
+            ValueError: If output_dir doesn't exist or isn't a directory
+        """
+        # Validate output directory
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True, exist_ok=True)
+        if not output_dir.is_dir():
+            raise ValueError(f"Output path is not a directory: {output_dir}")
+
+        # Validate results have classifications
+        for result in results:
+            if not isinstance(result, DetailedRuleEvaluation):
+                raise ValueError(
+                    "export_classifications_csv requires DetailedRuleEvaluation objects. "
+                    "Call evaluate() with detailed=True"
+                )
+            if result.classifications is None:
+                raise ValueError(
+                    f"Rule {result.rule_name} has no classifications. "
+                    "Call evaluate() with detailed=True"
+                )
+
+        # Validate classification filter
+        if classification_filter and classification_filter not in ["TP", "FP", "FN", "TN"]:
+            raise ValueError(
+                f"Invalid classification filter: {classification_filter}. "
+                "Must be one of: TP, FP, FN, TN"
+            )
+
+        created_files = []
+        for result in results:
+            # Get classifications (optionally filtered)
+            classifications = result.classifications
+            if classification_filter:
+                classifications = [
+                    c for c in classifications if c.classification == classification_filter
+                ]
+
+            # Skip if no classifications after filtering
+            if not classifications:
+                continue
+
+            # Convert to DataFrame
+            data = [c.to_dict() for c in classifications]
+            df = pd.DataFrame(data)
+
+            # Generate filename
+            filename_suffix = (
+                f"_{classification_filter}" if classification_filter else "_classifications"
+            )
+            output_path = output_dir / f"{result.rule_name}{filename_suffix}.csv"
+
+            # Export to CSV
+            df.to_csv(output_path, index=False)
+            created_files.append(output_path)
+
+        return created_files

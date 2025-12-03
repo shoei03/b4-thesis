@@ -159,20 +159,47 @@ def extract(
     default="table",
     help="Output format (default: table)",
 )
-def evaluate(input_csv: str, output: str, format: str):
+@click.option(
+    "--detailed",
+    is_flag=True,
+    help="Enable detailed tracking of TP/FP/FN/TN methods per rule",
+)
+@click.option(
+    "--export-dir",
+    type=click.Path(),
+    default=None,
+    help="Directory to export detailed classification CSVs (requires --detailed)",
+)
+def evaluate(input_csv: str, output: str, format: str, detailed: bool, export_dir: str | None):
     """Evaluate deletion prediction rules.
 
     This command:
     1. Reads features CSV (from extract command)
     2. Calculates Precision, Recall, F1 for each rule
     3. Outputs evaluation report
+    4. (Optional) Exports detailed classification CSVs with --detailed --export-dir
 
     Example:
         b4-thesis deletion evaluate features.csv \\
             --output report.json \\
             --format json
+
+        # With detailed tracking
+        b4-thesis deletion evaluate features.csv \\
+            --output report.json \\
+            --detailed \\
+            --export-dir ./classifications/
     """
     try:
+        # Validate flags
+        if export_dir and not detailed:
+            console.print(
+                "[yellow]Warning:[/yellow] --export-dir requires --detailed flag. "
+                "Ignoring --export-dir.",
+                highlight=False,
+            )
+            export_dir = None
+
         # Load features
         console.print(
             f"[bold blue]Loading features from {input_csv}...[/bold blue]",
@@ -193,7 +220,7 @@ def evaluate(input_csv: str, output: str, format: str):
         # Evaluate
         console.print("[bold green]Evaluating rules...[/bold green]", highlight=False)
         evaluator = Evaluator()
-        results = evaluator.evaluate(df)
+        results = evaluator.evaluate(df, detailed=detailed)
 
         # Output based on format
         output_path = Path(output)
@@ -248,6 +275,25 @@ def evaluate(input_csv: str, output: str, format: str):
                 f"\n[green]✓[/green] Evaluation saved to: {output_path}",
                 highlight=False,
             )
+
+        # Export detailed classifications if requested
+        if detailed and export_dir:
+            console.print(
+                "\n[bold blue]Exporting detailed classifications...[/bold blue]",
+                highlight=False,
+            )
+            export_path = Path(export_dir)
+            created_files = evaluator.export_classifications_csv(results, export_path)
+
+            console.print(
+                f"[green]✓[/green] Exported {len(created_files)} classification CSV files "
+                f"to: {export_path}",
+                highlight=False,
+            )
+            if created_files:
+                console.print("\n[dim]Created files:[/dim]")
+                for file_path in created_files:
+                    console.print(f"  [dim]- {file_path.name}[/dim]")
 
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}", highlight=False)
