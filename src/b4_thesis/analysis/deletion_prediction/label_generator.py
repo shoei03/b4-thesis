@@ -15,15 +15,14 @@ class LabelGenerator:
 
         For each method in the DataFrame, this function checks if the method
         is deleted in the next revision by:
-        1. Grouping methods by global_block_id
-        2. Sorting by revision within each group
-        3. Checking if state='deleted' in the next revision
+        1. Getting all revisions in sorted order
+        2. For each row, checking if the same global_block_id exists in next revision
+        3. If not exists in next revision, the method is deleted
 
         Args:
             df: DataFrame with columns:
                 - global_block_id: Unified ID tracking same method
                 - revision: Revision timestamp (YYYYMMDD_HHMMSS_<hash>)
-                - state: Method state ('survived', 'deleted', 'added')
 
         Returns:
             Boolean Series indicating whether each method is deleted
@@ -34,47 +33,43 @@ class LabelGenerator:
 
         Example:
             >>> df = pd.DataFrame({
-            ...     'global_block_id': ['id1', 'id1', 'id2', 'id2'],
-            ...     'revision': ['rev1', 'rev2', 'rev1', 'rev2'],
-            ...     'state': ['survived', 'deleted', 'survived', 'survived']
+            ...     'global_block_id': ['id1', 'id2', 'id2'],
+            ...     'revision': ['rev1', 'rev1', 'rev2']
             ... })
             >>> generator = LabelGenerator()
             >>> labels = generator.generate_labels(df)
             >>> labels.tolist()
-            [True, False, False, False]  # id1 deleted in rev2, id2 survives
+            [True, False, False]  # id1 deleted in rev2, id2 survives
         """
         # Validate required columns
-        required_columns = {"global_block_id", "revision", "state"}
+        required_columns = {"global_block_id", "revision"}
         missing_columns = required_columns - set(df.columns)
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
 
-        # Sort by global_block_id and revision, keeping track of original index
-        df_with_index = df.reset_index()
-        df_sorted = df_with_index.sort_values(["global_block_id", "revision"])
+        # Get all revisions in sorted order
+        all_revisions = sorted(df["revision"].unique())
+        revision_to_idx = {rev: idx for idx, rev in enumerate(all_revisions)}
 
-        # Generate labels for each row in sorted order
-        labels_dict = {}  # Map from original index to label
+        # Create a set of (global_block_id, revision) pairs for fast lookup
+        existing_pairs = set(zip(df["global_block_id"], df["revision"]))
 
-        for block_id, group in df_sorted.groupby("global_block_id", sort=False):
-            group_sorted = group.sort_values("revision")
-            group_list = list(group_sorted.itertuples())
+        # Generate labels for each row
+        labels = []
+        for _, row in df.iterrows():
+            block_id = row["global_block_id"]
+            current_revision = row["revision"]
 
-            for i, row in enumerate(group_list):
-                original_idx = row.index
-                if i == len(group_list) - 1:
-                    # Last revision in the group - no next revision exists
-                    labels_dict[original_idx] = False
-                else:
-                    # Check if state is 'deleted' in the next revision
-                    next_state = group_list[i + 1].state
-                    labels_dict[original_idx] = next_state == "deleted"
+            current_rev_idx = revision_to_idx[current_revision]
 
-        # Create Series with labels in original DataFrame order
-        result = pd.Series(
-            [labels_dict[i] for i in range(len(df))],
-            index=df.index,
-            name="is_deleted_next",
-        )
+            # Check if there's a next revision
+            if current_rev_idx == len(all_revisions) - 1:
+                # Last revision in dataset - cannot determine if deleted
+                labels.append(False)
+            else:
+                # Check if this block exists in next revision
+                next_revision = all_revisions[current_rev_idx + 1]
+                exists_in_next = (block_id, next_revision) in existing_pairs
+                labels.append(not exists_in_next)  # True if deleted (not exists)
 
-        return result
+        return pd.Series(labels, index=df.index, name="is_deleted_next")
