@@ -13,6 +13,7 @@ def get_all_rules() -> list[DeletionRule]:
     """
     # Import here to avoid circular imports
     from b4_thesis.analysis.deletion_prediction.rules.api_usage import (
+        UsesAssertWarnRule,
         UsesBothSelectLocRule,
         UsesLocRule,
         UsesSelectRule,
@@ -44,6 +45,7 @@ def get_all_rules() -> list[DeletionRule]:
         UsesSelectRule(),
         UsesLocRule(),
         UsesBothSelectLocRule(),
+        UsesAssertWarnRule(),
     ]
 
 
