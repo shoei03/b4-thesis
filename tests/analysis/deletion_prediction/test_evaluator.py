@@ -304,3 +304,97 @@ class TestEvaluator:
             ValueError, match="export_classifications_csv requires DetailedRuleEvaluation"
         ):
             evaluator.export_classifications_csv(results, output_dir)
+
+    def test_evaluate_combined_or_logic(self, evaluator):
+        """Test combined evaluation with OR logic."""
+        df = pd.DataFrame(
+            {
+                "rule_a": [True, False, False, False],
+                "rule_b": [False, True, False, False],
+                "is_deleted_soon": [True, True, False, False],
+            }
+        )
+
+        result = evaluator.evaluate_combined(df)
+
+        # Combined: [True, True, False, False] (OR of rule_a and rule_b)
+        # Ground truth: [True, True, False, False]
+        assert result.rule_name == "combined_all_rules"
+        assert result.tp == 2  # Both deletions caught by combined rules
+        assert result.fp == 0
+        assert result.fn == 0
+        assert result.tn == 2
+        assert result.precision == 1.0
+        assert result.recall == 1.0
+        assert result.f1 == 1.0
+
+    def test_evaluate_combined_detailed_mode(self, evaluator):
+        """Test combined evaluation with detailed mode."""
+        df = pd.DataFrame(
+            {
+                "rule_a": [True, False, False, False],
+                "rule_b": [False, True, False, False],
+                "is_deleted_soon": [True, False, True, False],
+                "global_block_id": ["id1", "id2", "id3", "id4"],
+                "revision": ["r1", "r2", "r3", "r4"],
+                "function_name": ["f1", "f2", "f3", "f4"],
+                "file_path": ["p1", "p2", "p3", "p4"],
+                "lifetime_revisions": [1, 2, 3, 4],
+                "lifetime_days": [5, 6, 7, 8],
+            }
+        )
+
+        result = evaluator.evaluate_combined(df, detailed=True)
+
+        assert isinstance(result, DetailedRuleEvaluation)
+        assert result.rule_name == "combined_all_rules"
+        # Combined predictions: [True, True, False, False]
+        # Ground truth:         [True, False, True, False]
+        assert result.tp == 1  # id1: predicted=True, actual=True
+        assert result.fp == 1  # id2: predicted=True, actual=False
+        assert result.fn == 1  # id3: predicted=False, actual=True
+        assert result.tn == 1  # id4: predicted=False, actual=False
+
+        # Check classifications
+        assert result.classifications is not None
+        assert len(result.classifications) == 4
+
+    def test_evaluate_with_include_combined(self, evaluator):
+        """Test evaluate() with include_combined=True."""
+        df = pd.DataFrame(
+            {
+                "rule_a": [True, False, False, False],
+                "rule_b": [False, True, False, False],
+                "is_deleted_soon": [True, True, False, False],
+            }
+        )
+
+        # Without combined
+        results_without = evaluator.evaluate(df, include_combined=False)
+        assert len(results_without) == 2
+        assert all(r.rule_name in ["a", "b"] for r in results_without)
+
+        # With combined
+        results_with = evaluator.evaluate(df, include_combined=True)
+        assert len(results_with) == 3
+        assert results_with[-1].rule_name == "combined_all_rules"
+        # Combined should have perfect scores in this case
+        combined = results_with[-1]
+        assert combined.tp == 2
+        assert combined.fp == 0
+        assert combined.fn == 0
+        assert combined.tn == 2
+
+    def test_evaluate_combined_missing_ground_truth(self, evaluator):
+        """Test error handling when ground truth column is missing."""
+        df = pd.DataFrame({"rule_test": [True, False, True, False]})
+
+        with pytest.raises(ValueError, match="Missing 'is_deleted_soon' column"):
+            evaluator.evaluate_combined(df)
+
+    def test_evaluate_combined_no_rules(self, evaluator):
+        """Test error handling when no rule columns exist."""
+        df = pd.DataFrame({"is_deleted_soon": [True, False, True, False]})
+
+        with pytest.raises(ValueError, match="No rule columns found"):
+            evaluator.evaluate_combined(df)

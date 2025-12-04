@@ -153,14 +153,155 @@ class Evaluator:
     by comparing rule predictions against ground truth labels.
     """
 
-    def evaluate(
+    def _evaluate_predictions(
+        self,
+        features_df: pd.DataFrame,
+        predictions: pd.Series,
+        rule_name: str,
+        detailed: bool,
+    ) -> RuleEvaluation | DetailedRuleEvaluation:
+        """Evaluate a single set of predictions against ground truth.
+
+        Args:
+            features_df: DataFrame with ground truth and metadata columns
+            predictions: Boolean Series of predictions
+            rule_name: Name for this rule/prediction set
+            detailed: If True, include per-method classification details
+
+        Returns:
+            RuleEvaluation or DetailedRuleEvaluation object
+        """
+        ground_truth = features_df["is_deleted_soon"]
+
+        # Calculate metrics
+        precision = precision_score(ground_truth, predictions, zero_division=0)
+        recall = recall_score(ground_truth, predictions, zero_division=0)
+        f1 = f1_score(ground_truth, predictions, zero_division=0)
+
+        # Calculate confusion matrix
+        # Use labels=[False, True] to ensure 2x2 matrix even if one class is missing
+        tn, fp, fn, tp = confusion_matrix(
+            ground_truth, predictions, labels=[False, True]
+        ).ravel()
+
+        if detailed:
+            # Create MethodClassification objects for each method
+            classifications = []
+            for idx, row in features_df.iterrows():
+                predicted = bool(predictions.iloc[idx] if hasattr(predictions, 'iloc') else predictions[idx])
+                actual = bool(row["is_deleted_soon"])
+
+                # Determine classification
+                if predicted and actual:
+                    classification = "TP"
+                elif predicted and not actual:
+                    classification = "FP"
+                elif not predicted and actual:
+                    classification = "FN"
+                else:
+                    classification = "TN"
+
+                classifications.append(
+                    MethodClassification(
+                        global_block_id=str(row["global_block_id"]),
+                        revision=str(row["revision"]),
+                        function_name=str(row["function_name"]),
+                        file_path=str(row["file_path"]),
+                        classification=classification,
+                        predicted=predicted,
+                        actual=actual,
+                        lifetime_revisions=int(row["lifetime_revisions"]),
+                        lifetime_days=int(row["lifetime_days"]),
+                    )
+                )
+
+            return DetailedRuleEvaluation(
+                rule_name=rule_name,
+                tp=int(tp),
+                fp=int(fp),
+                fn=int(fn),
+                tn=int(tn),
+                precision=float(precision),
+                recall=float(recall),
+                f1=float(f1),
+                classifications=classifications,
+            )
+        else:
+            return RuleEvaluation(
+                rule_name=rule_name,
+                tp=int(tp),
+                fp=int(fp),
+                fn=int(fn),
+                tn=int(tn),
+                precision=float(precision),
+                recall=float(recall),
+                f1=float(f1),
+            )
+
+    def evaluate_combined(
         self, features_df: pd.DataFrame, detailed: bool = False
+    ) -> RuleEvaluation | DetailedRuleEvaluation:
+        """Evaluate all rules combined with OR logic.
+
+        A method is predicted as deleted if ANY rule predicts deletion.
+
+        Args:
+            features_df: DataFrame with rule_XXX columns and is_deleted_soon column
+            detailed: If True, include per-method classification details
+
+        Returns:
+            RuleEvaluation (or DetailedRuleEvaluation if detailed=True)
+            with rule_name="combined_all_rules"
+
+        Raises:
+            ValueError: If is_deleted_soon column is missing
+            ValueError: If no rule columns found
+            ValueError: If detailed=True but required columns are missing
+        """
+        # Validate ground truth column
+        if "is_deleted_soon" not in features_df.columns:
+            raise ValueError("Missing 'is_deleted_soon' column in features DataFrame")
+
+        # Find all rule columns
+        rule_columns = [col for col in features_df.columns if col.startswith("rule_")]
+        if not rule_columns:
+            raise ValueError("No rule columns found (columns starting with 'rule_')")
+
+        # Validate columns needed for detailed mode
+        if detailed:
+            required_cols = [
+                "global_block_id",
+                "revision",
+                "function_name",
+                "file_path",
+                "lifetime_revisions",
+                "lifetime_days",
+            ]
+            missing_cols = [col for col in required_cols if col not in features_df.columns]
+            if missing_cols:
+                raise ValueError(
+                    f"Missing columns required for detailed mode: {', '.join(missing_cols)}"
+                )
+
+        # Combine all rules with OR logic (any rule predicts True → combined predicts True)
+        combined_predictions = features_df[rule_columns].any(axis=1)
+
+        return self._evaluate_predictions(
+            features_df, combined_predictions, "combined_all_rules", detailed
+        )
+
+    def evaluate(
+        self,
+        features_df: pd.DataFrame,
+        detailed: bool = False,
+        include_combined: bool = False,
     ) -> list[RuleEvaluation] | list[DetailedRuleEvaluation]:
         """Evaluate all rules in the features DataFrame.
 
         Args:
             features_df: DataFrame with rule_XXX columns and is_deleted_soon column
             detailed: If True, include per-method classification details
+            include_combined: If True, append combined evaluation (OR logic) to results
 
         Returns:
             List of RuleEvaluation objects (or DetailedRuleEvaluation if detailed=True)
@@ -195,83 +336,18 @@ class Evaluator:
                     f"Missing columns required for detailed mode: {', '.join(missing_cols)}"
                 )
 
-        # Get ground truth
-        ground_truth = features_df["is_deleted_soon"]
-
         # Evaluate each rule
         results = []
         for rule_col in rule_columns:
             predictions = features_df[rule_col]
             rule_name = rule_col.replace("rule_", "")
+            result = self._evaluate_predictions(features_df, predictions, rule_name, detailed)
+            results.append(result)
 
-            # Calculate metrics
-            precision = precision_score(ground_truth, predictions, zero_division=0)
-            recall = recall_score(ground_truth, predictions, zero_division=0)
-            f1 = f1_score(ground_truth, predictions, zero_division=0)
-
-            # Calculate confusion matrix
-            # Use labels=[False, True] to ensure 2x2 matrix even if one class is missing
-            tn, fp, fn, tp = confusion_matrix(
-                ground_truth, predictions, labels=[False, True]
-            ).ravel()
-
-            if detailed:
-                # Create MethodClassification objects for each method
-                classifications = []
-                for idx, row in features_df.iterrows():
-                    predicted = bool(row[rule_col])
-                    actual = bool(row["is_deleted_soon"])
-
-                    # Determine classification
-                    if predicted and actual:
-                        classification = "TP"
-                    elif predicted and not actual:
-                        classification = "FP"
-                    elif not predicted and actual:
-                        classification = "FN"
-                    else:
-                        classification = "TN"
-
-                    classifications.append(
-                        MethodClassification(
-                            global_block_id=str(row["global_block_id"]),
-                            revision=str(row["revision"]),
-                            function_name=str(row["function_name"]),
-                            file_path=str(row["file_path"]),
-                            classification=classification,
-                            predicted=predicted,
-                            actual=actual,
-                            lifetime_revisions=int(row["lifetime_revisions"]),
-                            lifetime_days=int(row["lifetime_days"]),
-                        )
-                    )
-
-                results.append(
-                    DetailedRuleEvaluation(
-                        rule_name=rule_name,
-                        tp=int(tp),
-                        fp=int(fp),
-                        fn=int(fn),
-                        tn=int(tn),
-                        precision=float(precision),
-                        recall=float(recall),
-                        f1=float(f1),
-                        classifications=classifications,
-                    )
-                )
-            else:
-                results.append(
-                    RuleEvaluation(
-                        rule_name=rule_name,
-                        tp=int(tp),
-                        fp=int(fp),
-                        fn=int(fn),
-                        tn=int(tn),
-                        precision=float(precision),
-                        recall=float(recall),
-                        f1=float(f1),
-                    )
-                )
+        # Optionally add combined evaluation
+        if include_combined:
+            combined_result = self.evaluate_combined(features_df, detailed)
+            results.append(combined_result)
 
         return results
 
