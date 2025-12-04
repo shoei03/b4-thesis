@@ -19,7 +19,7 @@ class FeatureExtractor:
     1. Reads method_lineage_labeled.csv
     2. Extracts code snippets from git repository
     3. Applies deletion prediction rules
-    4. Generates ground truth labels (is_deleted_next)
+    4. Generates ground truth labels (is_deleted_soon)
     """
 
     def __init__(
@@ -62,7 +62,7 @@ class FeatureExtractor:
             use_cache: Whether to use cache (default: True)
 
         Returns:
-            DataFrame with original columns + rule_XXX columns + is_deleted_next
+            DataFrame with original columns + rule_XXX columns + is_deleted_soon
 
         Raises:
             FileNotFoundError: If CSV file not found
@@ -217,7 +217,7 @@ class FeatureExtractor:
 
         # Generate ground truth labels
         print("Generating ground truth labels...")
-        df["is_deleted_next"] = self.label_generator.generate_labels(df)
+        df["is_deleted_soon"] = self.label_generator.generate_labels(df)
 
         # Save features to cache
         if use_cache and cache_manager:
