@@ -65,7 +65,12 @@ class FeatureExtractor:
             ValueError: If CSV missing required columns
         """
         # Normalize rule_names for consistent caching
-        rule_names_normalized = rule_names if rule_names else []
+        # If rule_names is None, get actual rule names for proper cache key generation
+        if rule_names is None:
+            all_rules = get_all_rules()
+            rule_names_normalized = [rule.rule_name for rule in all_rules]
+        else:
+            rule_names_normalized = rule_names
 
         # Try to load from features cache first (complete result)
         if use_cache and cache_manager:
