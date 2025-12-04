@@ -182,7 +182,12 @@ def extract(
     default=None,
     help="Directory to export detailed classification CSVs (requires --detailed)",
 )
-def evaluate(input_csv: str, output: str, format: str, detailed: bool, export_dir: str | None):
+@click.option(
+    "--combined",
+    is_flag=True,
+    help="Include combined evaluation of all rules (OR logic: any rule triggers = predicted deletion)",
+)
+def evaluate(input_csv: str, output: str, format: str, detailed: bool, export_dir: str | None, combined: bool):
     """Evaluate deletion prediction rules.
 
     This command:
@@ -232,7 +237,7 @@ def evaluate(input_csv: str, output: str, format: str, detailed: bool, export_di
         # Evaluate
         console.print("[bold green]Evaluating rules...[/bold green]", highlight=False)
         evaluator = Evaluator()
-        results = evaluator.evaluate(df, detailed=detailed)
+        results = evaluator.evaluate(df, detailed=detailed, include_combined=combined)
 
         # Output based on format
         output_path = Path(output)
@@ -267,16 +272,30 @@ def evaluate(input_csv: str, output: str, format: str, detailed: bool, export_di
             table.add_column("F1", justify="right", style="bold green")
 
             for r in results:
-                table.add_row(
-                    r.rule_name,
-                    str(r.tp),
-                    str(r.fp),
-                    str(r.fn),
-                    str(r.tn),
-                    f"{r.precision:.4f}",
-                    f"{r.recall:.4f}",
-                    f"{r.f1:.4f}",
-                )
+                # Add section separator before combined rule
+                if r.rule_name == "combined_all_rules":
+                    table.add_section()
+                    table.add_row(
+                        f"[bold magenta]{r.rule_name}[/bold magenta]",
+                        f"[bold magenta]{r.tp}[/bold magenta]",
+                        f"[bold magenta]{r.fp}[/bold magenta]",
+                        f"[bold magenta]{r.fn}[/bold magenta]",
+                        f"[bold magenta]{r.tn}[/bold magenta]",
+                        f"[bold magenta]{r.precision:.4f}[/bold magenta]",
+                        f"[bold magenta]{r.recall:.4f}[/bold magenta]",
+                        f"[bold magenta]{r.f1:.4f}[/bold magenta]",
+                    )
+                else:
+                    table.add_row(
+                        r.rule_name,
+                        str(r.tp),
+                        str(r.fp),
+                        str(r.fn),
+                        str(r.tn),
+                        f"{r.precision:.4f}",
+                        f"{r.recall:.4f}",
+                        f"{r.f1:.4f}",
+                    )
 
             console.print(table)
 
