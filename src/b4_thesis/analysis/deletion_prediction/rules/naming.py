@@ -64,12 +64,16 @@ class TemporaryNamingRule(DeletionRule):
             r"[_-]tmp\b",
             r"\btemp[_-]",
             r"[_-]temp\b",
-            r"\btest[_-]",
-            r"[_-]test\b",
             r"\bdebug[_-]",
             r"[_-]debug\b",
             r"\bhack\b",
             r"\bfixme\b",
+            r"\bcompat\b",
+            r"\bcompatibility\b",
+            r"\bbackward[_-]?compat(?:ibility)?\b",
+            r"\bbackward[_-]?compatible\b",
+            r"\bback_?compat\b",
+            r"\bretrocompat\b",
         ]
         self.regex = re.compile("|".join(self.patterns), re.IGNORECASE)
 
