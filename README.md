@@ -500,6 +500,7 @@ Options:
   --base-prefix TEXT                    ファイルパスから削除するベースパスプレフィックス
   --cache-dir PATH                      キャッシュディレクトリパス
   --no-cache                            キャッシュを無効化（強制再抽出）
+  --lookahead-window INTEGER            削除チェックの先読みrevision数（デフォルト: 5）
   -v, --verbose                         詳細な出力を表示
 ```
 
@@ -507,7 +508,7 @@ Options:
 1. method_lineage_labeled.csvを読み込み
 2. Gitリポジトリからコードを抽出
 3. 削除予測ルールを適用
-4. Ground truthラベル（is_deleted_next）を生成
+4. Ground truthラベル（is_deleted_soon）を生成
 5. 結果をCSVに保存
 
 **使用例**:
@@ -528,6 +529,12 @@ b4-thesis deletion extract ./output/method_lineage_labeled.csv \
     --repo ../projects/pandas \
     --output ./output/features.csv \
     --rules "short_method,empty_method,has_todo"
+
+# カスタムlookahead windowを使用（10 revision以内の削除を検出）
+b4-thesis deletion extract ./output/method_lineage_labeled.csv \
+    --repo ../projects/pandas \
+    --output ./output/features.csv \
+    --lookahead-window 10
 ```
 
 ##### deletion evaluate

@@ -1,6 +1,5 @@
 """Tests for Evaluator."""
 
-
 import pandas as pd
 import pytest
 
@@ -25,7 +24,7 @@ class TestEvaluator:
         df = pd.DataFrame(
             {
                 "rule_perfect": [True, True, False, False],
-                "is_deleted_next": [True, True, False, False],
+                "is_deleted_soon": [True, True, False, False],
             }
         )
 
@@ -47,7 +46,7 @@ class TestEvaluator:
         df = pd.DataFrame(
             {
                 "rule_always_false": [False, False, False, False],
-                "is_deleted_next": [True, True, False, False],
+                "is_deleted_soon": [True, True, False, False],
             }
         )
 
@@ -70,7 +69,7 @@ class TestEvaluator:
             {
                 "rule_good": [True, True, False, False, True],
                 "rule_bad": [False, False, True, True, False],
-                "is_deleted_next": [True, True, False, False, False],
+                "is_deleted_soon": [True, True, False, False, False],
             }
         )
 
@@ -96,12 +95,12 @@ class TestEvaluator:
         """Test error handling when ground truth column is missing."""
         df = pd.DataFrame({"rule_test": [True, False, True, False]})
 
-        with pytest.raises(ValueError, match="Missing 'is_deleted_next' column"):
+        with pytest.raises(ValueError, match="Missing 'is_deleted_soon' column"):
             evaluator.evaluate(df)
 
     def test_evaluate_no_rules(self, evaluator):
         """Test error handling when no rule columns exist."""
-        df = pd.DataFrame({"is_deleted_next": [True, False, True, False]})
+        df = pd.DataFrame({"is_deleted_soon": [True, False, True, False]})
 
         with pytest.raises(ValueError, match="No rule columns found"):
             evaluator.evaluate(df)
@@ -135,7 +134,7 @@ class TestEvaluator:
         df = pd.DataFrame(
             {
                 "rule_test": [True, True, False, False],
-                "is_deleted_next": [True, False, True, False],
+                "is_deleted_soon": [True, False, True, False],
                 "global_block_id": ["id1", "id2", "id3", "id4"],
                 "revision": [
                     "20210101_120000_abc",
@@ -190,7 +189,7 @@ class TestEvaluator:
         df = pd.DataFrame(
             {
                 "rule_test": [True, False],
-                "is_deleted_next": [True, False],
+                "is_deleted_soon": [True, False],
                 # Missing: global_block_id, revision, etc.
             }
         )
@@ -230,7 +229,7 @@ class TestEvaluator:
             {
                 "rule_test1": [True, False, True, False],
                 "rule_test2": [False, True, False, True],
-                "is_deleted_next": [True, False, False, True],
+                "is_deleted_soon": [True, False, False, True],
                 "global_block_id": ["id1", "id2", "id3", "id4"],
                 "revision": ["r1", "r2", "r3", "r4"],
                 "function_name": ["f1", "f2", "f3", "f4"],
@@ -261,7 +260,7 @@ class TestEvaluator:
         df = pd.DataFrame(
             {
                 "rule_test": [True, True, False, False],
-                "is_deleted_next": [True, False, True, False],
+                "is_deleted_soon": [True, False, True, False],
                 "global_block_id": ["id1", "id2", "id3", "id4"],
                 "revision": ["r1", "r2", "r3", "r4"],
                 "function_name": ["f1", "f2", "f3", "f4"],
@@ -293,7 +292,7 @@ class TestEvaluator:
         df = pd.DataFrame(
             {
                 "rule_test": [True, False],
-                "is_deleted_next": [True, False],
+                "is_deleted_soon": [True, False],
             }
         )
 

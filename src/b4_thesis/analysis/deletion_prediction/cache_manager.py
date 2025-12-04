@@ -64,19 +64,23 @@ class CacheManager:
         csv_hash = self._compute_csv_hash(csv_path)
         return self.cache_dir / f"snippets_{csv_hash}.parquet"
 
-    def get_features_cache_path(self, csv_path: Path, rule_names: list[str]) -> Path:
+    def get_features_cache_path(
+        self, csv_path: Path, rule_names: list[str], lookahead_window: int = 5
+    ) -> Path:
         """Get cache file path for features.
 
         Args:
             csv_path: Path to source CSV file
             rule_names: List of rule names applied
+            lookahead_window: Lookahead window for deletion prediction
 
         Returns:
             Path to features cache file (Parquet format)
         """
         csv_hash = self._compute_csv_hash(csv_path)
         rules_hash = self._compute_rules_hash(rule_names)
-        return self.cache_dir / f"features_{csv_hash}_{rules_hash}.parquet"
+        lookahead_hash = hashlib.sha256(str(lookahead_window).encode()).hexdigest()[:8]
+        return self.cache_dir / f"features_{csv_hash}_{rules_hash}_{lookahead_hash}.parquet"
 
     def load_snippets(self, csv_path: Path) -> pd.DataFrame | None:
         """Load code snippets from cache.
@@ -102,23 +106,30 @@ class CacheManager:
         cache_path = self.get_snippets_cache_path(csv_path)
         snippets_df.to_parquet(cache_path, index=False)
 
-    def load_features(self, csv_path: Path, rule_names: list[str]) -> pd.DataFrame | None:
+    def load_features(
+        self, csv_path: Path, rule_names: list[str], lookahead_window: int = 5
+    ) -> pd.DataFrame | None:
         """Load features from cache.
 
         Args:
             csv_path: Path to source CSV file
             rule_names: List of rule names applied
+            lookahead_window: Lookahead window for deletion prediction
 
         Returns:
             DataFrame with cached features, or None if cache miss
         """
-        cache_path = self.get_features_cache_path(csv_path, rule_names)
+        cache_path = self.get_features_cache_path(csv_path, rule_names, lookahead_window)
         if cache_path.exists():
             return pd.read_parquet(cache_path)
         return None
 
     def save_features(
-        self, csv_path: Path, rule_names: list[str], features_df: pd.DataFrame
+        self,
+        csv_path: Path,
+        rule_names: list[str],
+        features_df: pd.DataFrame,
+        lookahead_window: int = 5,
     ) -> None:
         """Save features to cache.
 
@@ -126,8 +137,9 @@ class CacheManager:
             csv_path: Path to source CSV file
             rule_names: List of rule names applied
             features_df: DataFrame containing features
+            lookahead_window: Lookahead window for deletion prediction
         """
-        cache_path = self.get_features_cache_path(csv_path, rule_names)
+        cache_path = self.get_features_cache_path(csv_path, rule_names, lookahead_window)
         features_df.to_parquet(cache_path, index=False)
 
     def clear_cache(self, csv_path: Path | None = None) -> int:

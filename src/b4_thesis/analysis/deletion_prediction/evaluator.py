@@ -159,20 +159,20 @@ class Evaluator:
         """Evaluate all rules in the features DataFrame.
 
         Args:
-            features_df: DataFrame with rule_XXX columns and is_deleted_next column
+            features_df: DataFrame with rule_XXX columns and is_deleted_soon column
             detailed: If True, include per-method classification details
 
         Returns:
             List of RuleEvaluation objects (or DetailedRuleEvaluation if detailed=True)
 
         Raises:
-            ValueError: If is_deleted_next column is missing
+            ValueError: If is_deleted_soon column is missing
             ValueError: If no rule columns found
             ValueError: If detailed=True but required columns are missing
         """
         # Validate ground truth column
-        if "is_deleted_next" not in features_df.columns:
-            raise ValueError("Missing 'is_deleted_next' column in features DataFrame")
+        if "is_deleted_soon" not in features_df.columns:
+            raise ValueError("Missing 'is_deleted_soon' column in features DataFrame")
 
         # Find all rule columns
         rule_columns = [col for col in features_df.columns if col.startswith("rule_")]
@@ -196,7 +196,7 @@ class Evaluator:
                 )
 
         # Get ground truth
-        ground_truth = features_df["is_deleted_next"]
+        ground_truth = features_df["is_deleted_soon"]
 
         # Evaluate each rule
         results = []
@@ -220,7 +220,7 @@ class Evaluator:
                 classifications = []
                 for idx, row in features_df.iterrows():
                     predicted = bool(row[rule_col])
-                    actual = bool(row["is_deleted_next"])
+                    actual = bool(row["is_deleted_soon"])
 
                     # Determine classification
                     if predicted and actual:

@@ -27,6 +27,7 @@ class FeatureExtractor:
         repo_path: Path,
         base_path_prefix: str = "/app/Repos/pandas/",
         github_base_url: str | None = None,
+        lookahead_window: int = 5,
     ):
         """Initialize FeatureExtractor.
 
@@ -34,13 +35,16 @@ class FeatureExtractor:
             repo_path: Path to git repository
             base_path_prefix: Prefix to remove from file paths in CSV
             github_base_url: GitHub base URL for permalink generation
+            lookahead_window: Number of future revisions to check for deletion
+                             (default: 5)
         """
         self.code_extractor = GitCodeExtractor(
             repo_path=repo_path,
             base_path_prefix=base_path_prefix,
             github_base_url=github_base_url,
         )
-        self.label_generator = LabelGenerator()
+        self.lookahead_window = lookahead_window
+        self.label_generator = LabelGenerator(lookahead_window=lookahead_window)
 
     def extract(
         self,
@@ -74,7 +78,9 @@ class FeatureExtractor:
 
         # Try to load from features cache first (complete result)
         if use_cache and cache_manager:
-            features_df = cache_manager.load_features(csv_path, rule_names_normalized)
+            features_df = cache_manager.load_features(
+                csv_path, rule_names_normalized, self.lookahead_window
+            )
             if features_df is not None:
                 print(f"✓ Loaded features from cache ({len(features_df)} methods)")
                 return features_df
@@ -215,7 +221,7 @@ class FeatureExtractor:
 
         # Save features to cache
         if use_cache and cache_manager:
-            cache_manager.save_features(csv_path, rule_names_normalized, df)
+            cache_manager.save_features(csv_path, rule_names_normalized, df, self.lookahead_window)
             print("✓ Saved features to cache")
 
         return df

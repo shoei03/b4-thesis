@@ -54,6 +54,13 @@ def deletion():
     is_flag=True,
     help="Disable caching (forces re-extraction)",
 )
+@click.option(
+    "--lookahead-window",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Number of future revisions to check for deletion",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Show verbose output")
 def extract(
     input_csv: str,
@@ -63,6 +70,7 @@ def extract(
     base_prefix: str,
     cache_dir: str | None,
     no_cache: bool,
+    lookahead_window: int,
     verbose: bool,
 ):
     """Extract deletion prediction features from method lineage CSV.
@@ -71,7 +79,7 @@ def extract(
     1. Reads method_lineage_labeled.csv
     2. Extracts code from git repository
     3. Applies deletion prediction rules
-    4. Generates ground truth labels (is_deleted_next)
+    4. Generates ground truth labels (is_deleted_soon)
     5. Saves results to CSV
 
     Example:
@@ -99,7 +107,11 @@ def extract(
 
         # Initialize extractor
         console.print("[bold blue]Initializing feature extractor...[/bold blue]", highlight=False)
-        extractor = FeatureExtractor(repo_path=Path(repo), base_path_prefix=base_prefix)
+        extractor = FeatureExtractor(
+            repo_path=Path(repo),
+            base_path_prefix=base_prefix,
+            lookahead_window=lookahead_window,
+        )
 
         # Extract features
         console.print(
@@ -123,12 +135,12 @@ def extract(
         # Display summary if verbose
         if verbose:
             rule_cols = [c for c in df.columns if c.startswith("rule_")]
-            deleted_count = df["is_deleted_next"].sum()
+            deleted_count = df["is_deleted_soon"].sum()
             deleted_pct = (deleted_count / len(df) * 100) if len(df) > 0 else 0
 
             console.print("\n[bold]Summary:[/bold]")
             console.print(f"  Total methods: {len(df):,}")
-            console.print(f"  Deleted next: {deleted_count:,} ({deleted_pct:.1f}%)")
+            console.print(f"  Deleted soon: {deleted_count:,} ({deleted_pct:.1f}%)")
             console.print(f"  Rules applied: {len(rule_cols)}")
             if rule_cols:
                 console.print("  Rule names:")
