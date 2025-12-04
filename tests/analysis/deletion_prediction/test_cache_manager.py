@@ -61,7 +61,7 @@ class TestCacheManager:
                 "state": ["survived", "survived"],
                 "code": ["def foo():\n    pass", "def bar():\n    return 1"],
                 "rule_short_method": [True, False],
-                "is_deleted_next": [False, False],
+                "is_deleted_soon": [False, False],
             }
         )
 

@@ -220,9 +220,9 @@ def evaluate(input_csv: str, output: str, format: str, detailed: bool, export_di
         df = pd.read_csv(input_csv)
 
         # Validate
-        if "is_deleted_next" not in df.columns:
+        if "is_deleted_soon" not in df.columns:
             raise ValueError(
-                "Missing 'is_deleted_next' column. Did you run 'deletion extract' first?"
+                "Missing 'is_deleted_soon' column. Did you run 'deletion extract' first?"
             )
 
         rule_cols = [c for c in df.columns if c.startswith("rule_")]
