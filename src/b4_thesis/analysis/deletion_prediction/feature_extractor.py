@@ -3,23 +3,26 @@
 from pathlib import Path
 
 import pandas as pd
-from tqdm import tqdm
 
-from b4_thesis.analysis.code_extractor import ExtractRequest, GitCodeExtractor
+from b4_thesis.analysis.code_extractor import GitCodeExtractor
 from b4_thesis.analysis.deletion_prediction.cache_manager import CacheManager
+from b4_thesis.analysis.deletion_prediction.extraction import (
+    CsvDataLoader,
+    RuleApplicator,
+    SnippetLoader,
+)
 from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
-from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet
 from b4_thesis.analysis.deletion_prediction.rules import get_all_rules, get_rules_by_name
 
 
 class FeatureExtractor:
     """Extract deletion prediction features from method lineage CSV.
 
-    This class:
-    1. Reads method_lineage_labeled.csv
-    2. Extracts code snippets from git repository
-    3. Applies deletion prediction rules
-    4. Generates ground truth labels (is_deleted_soon)
+    This class coordinates:
+    1. CSV loading and validation (CsvDataLoader)
+    2. Code snippet extraction (SnippetLoader)
+    3. Rule application (RuleApplicator)
+    4. Label generation (LabelGenerator)
     """
 
     def __init__(
@@ -38,6 +41,7 @@ class FeatureExtractor:
             lookahead_window: Number of future revisions to check for deletion
                              (default: 5)
         """
+        # Initialize existing components
         self.code_extractor = GitCodeExtractor(
             repo_path=repo_path,
             base_path_prefix=base_path_prefix,
@@ -45,6 +49,11 @@ class FeatureExtractor:
         )
         self.lookahead_window = lookahead_window
         self.label_generator = LabelGenerator(lookahead_window=lookahead_window)
+
+        # Initialize extraction components
+        self.csv_loader = CsvDataLoader()
+        self.snippet_loader = SnippetLoader(code_extractor=self.code_extractor)
+        self.rule_applicator = RuleApplicator()
 
     def extract(
         self,
@@ -85,137 +94,34 @@ class FeatureExtractor:
                 print(f"✓ Loaded features from cache ({len(features_df)} methods)")
                 return features_df
 
-        # Load CSV
-        if not csv_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {csv_path}")
+        # Step 1: Load and validate CSV
+        csv_result = self.csv_loader.load_and_validate(csv_path)
+        df = csv_result.df
 
-        df = pd.read_csv(csv_path)
-
-        # Validate required columns
-        required_columns = {
-            "global_block_id",
-            "revision",
-            "function_name",
-            "file_path",
-            "start_line",
-            "end_line",
-            "loc",
-            "state",
-        }
-        missing_columns = required_columns - set(df.columns)
-        if missing_columns:
-            raise ValueError(f"CSV missing required columns: {missing_columns}")
-
-        # Filter out deleted methods (code doesn't exist for them)
-        original_count = len(df)
-        df = df[df["state"] != "deleted"].copy()
-        deleted_count = original_count - len(df)
-
-        if deleted_count > 0:
+        if csv_result.deleted_count > 0:
             print(
-                f"Filtered out {deleted_count} deleted methods "
-                f"({original_count} -> {len(df)} methods)"
+                f"Filtered out {csv_result.deleted_count} deleted methods "
+                f"({csv_result.original_count} -> {csv_result.filtered_count} methods)"
             )
 
-        if len(df) == 0:
-            raise ValueError("No methods to process after filtering deleted methods")
+        # Step 2: Load code snippets (with caching)
+        snippet_result = self.snippet_loader.load_snippets(df, csv_path, cache_manager, use_cache)
+        df = snippet_result.df
 
-        # Get rules to apply
-        rules = get_all_rules() if rule_names is None else get_rules_by_name(rule_names)
-
-        # Try to load code snippets from cache
-        snippets_df = None
-        if use_cache and cache_manager:
-            snippets_df = cache_manager.load_snippets(csv_path)
-            if snippets_df is not None:
-                print(f"✓ Loaded code snippets from cache ({len(snippets_df)} snippets)")
-                # Merge with df to add code and github_url columns
-                df = df.merge(
-                    snippets_df,
-                    on=["global_block_id", "revision"],
-                    how="left",
-                    suffixes=("", "_cached"),
-                )
-
-        # Extract code snippets if not cached
-        if snippets_df is None:
-            # Create extraction requests
-            requests = [
-                ExtractRequest(
-                    function_name=row.function_name,
-                    file_path=row.file_path,
-                    revision=row.revision,
-                    start_line=row.start_line,
-                    end_line=row.end_line,
-                    global_block_id=row.global_block_id,
-                )
-                for row in df.itertuples()
-            ]
-
-            # Batch extract code snippets
-            print(f"Extracting {len(requests)} code snippets from repository...")
-            code_snippets_raw = self.code_extractor.batch_extract(requests)
-
-            # Create snippets DataFrame for caching
-            snippets_data = []
-            for i, snippet_raw in enumerate(code_snippets_raw):
-                row = df.iloc[i]
-                snippets_data.append(
-                    {
-                        "global_block_id": row.global_block_id,
-                        "revision": row.revision,
-                        "code": snippet_raw.code,
-                        "github_url": snippet_raw.github_url,
-                    }
-                )
-
-            snippets_df = pd.DataFrame(snippets_data)
-
-            # Save snippets to cache
+        if snippet_result.cache_hit:
+            print(f"✓ Loaded code snippets from cache ({snippet_result.snippets_count} snippets)")
+        else:
             if use_cache and cache_manager:
-                cache_manager.save_snippets(csv_path, snippets_df)
                 print("✓ Saved code snippets to cache")
 
-            # Merge with df
-            df = df.merge(
-                snippets_df, on=["global_block_id", "revision"], how="left", suffixes=("", "_new")
-            )
+        # Step 3: Get rules and apply them
+        rules = get_all_rules() if rule_names is None else get_rules_by_name(rule_names)
 
-        # Create CodeSnippet objects from df for rule application
-        code_snippets = []
-        for row in df.itertuples():
-            code_snippets.append(
-                CodeSnippet(
-                    code=row.code,
-                    function_name=row.function_name,
-                    file_path=row.file_path,
-                    start_line=row.start_line,
-                    end_line=row.end_line,
-                    revision=row.revision,
-                    loc=row.loc,
-                    global_block_id=row.global_block_id,
-                )
-            )
-
-        # Apply rules
         print(f"Applying {len(rules)} deletion prediction rules...")
-        for rule in tqdm(rules, desc="Applying rules"):
-            rule_results = []
-            for snippet in code_snippets:
-                try:
-                    result = rule.apply(snippet)
-                    rule_results.append(result)
-                except Exception as e:
-                    # If rule application fails, assume False (no deletion sign)
-                    print(
-                        f"Warning: Rule {rule.rule_name} failed on "
-                        f"{snippet.function_name} (revision {snippet.revision}): {e}"
-                    )
-                    rule_results.append(False)
+        rule_result = self.rule_applicator.apply_rules(df, rules)
+        df = rule_result.df
 
-            df[f"rule_{rule.rule_name}"] = rule_results
-
-        # Generate ground truth labels
+        # Step 4: Generate labels
         print("Generating ground truth labels...")
         df["is_deleted_soon"] = self.label_generator.generate_labels(df)
 

@@ -180,15 +180,15 @@ class Evaluator:
 
         # Calculate confusion matrix
         # Use labels=[False, True] to ensure 2x2 matrix even if one class is missing
-        tn, fp, fn, tp = confusion_matrix(
-            ground_truth, predictions, labels=[False, True]
-        ).ravel()
+        tn, fp, fn, tp = confusion_matrix(ground_truth, predictions, labels=[False, True]).ravel()
 
         if detailed:
             # Create MethodClassification objects for each method
             classifications = []
             for idx, row in features_df.iterrows():
-                predicted = bool(predictions.iloc[idx] if hasattr(predictions, 'iloc') else predictions[idx])
+                predicted = bool(
+                    predictions.iloc[idx] if hasattr(predictions, "iloc") else predictions[idx]
+                )
                 actual = bool(row["is_deleted_soon"])
 
                 # Determine classification
