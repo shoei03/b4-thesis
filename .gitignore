@@ -63,3 +63,6 @@ Thumbs.db
 
 # Project specific
 .python-version
+
+# Agent
+.serena
