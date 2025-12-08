@@ -241,22 +241,35 @@ class TestEvaluator:
 
         results = evaluator.evaluate(df, detailed=True)
         output_dir = tmp_path / "classifications"
-        created_files = evaluator.export_classifications_csv(results, output_dir)
+        created_files_dict = evaluator.export_classifications_csv(results, output_dir)
 
-        # Check that files were created
-        assert len(created_files) == 2
-        assert output_dir.exists()
+        # Check structure
+        assert len(created_files_dict) == 2  # 2 rules
+        assert "test1" in created_files_dict
+        assert "test2" in created_files_dict
 
-        # Check test1 classifications
-        test1_csv = output_dir / "test1_classifications.csv"
-        assert test1_csv.exists()
-        test1_df = pd.read_csv(test1_csv)
-        assert len(test1_df) == 4
-        assert "classification" in test1_df.columns
-        assert "global_block_id" in test1_df.columns
+        # Check each rule has all 4 classification types
+        for rule_name in ["test1", "test2"]:
+            assert set(created_files_dict[rule_name].keys()) == {"TP", "FP", "FN", "TN"}
 
-    def test_export_classifications_csv_with_filter(self, evaluator, tmp_path):
-        """Test exporting filtered classifications to CSV."""
+            # Verify folder exists
+            rule_dir = output_dir / rule_name
+            assert rule_dir.exists()
+            assert rule_dir.is_dir()
+
+            # Verify all files exist
+            for classification_type in ["TP", "FP", "FN", "TN"]:
+                csv_path = created_files_dict[rule_name][classification_type]
+                assert csv_path.exists()
+                assert csv_path == rule_dir / f"{classification_type}.csv"
+
+                # Verify CSV structure
+                df_csv = pd.read_csv(csv_path)
+                assert "classification" in df_csv.columns
+                assert "global_block_id" in df_csv.columns
+
+    def test_export_classifications_csv_structure_and_empty_files(self, evaluator, tmp_path):
+        """Test folder structure and handling of empty classification types."""
         df = pd.DataFrame(
             {
                 "rule_test": [True, True, False, False],
@@ -272,20 +285,57 @@ class TestEvaluator:
 
         results = evaluator.evaluate(df, detailed=True)
         output_dir = tmp_path / "classifications"
+        created_files_dict = evaluator.export_classifications_csv(results, output_dir)
 
-        # Export only FP classifications
-        created_files = evaluator.export_classifications_csv(
-            results, output_dir, classification_filter="FP"
-        )
+        # Verify nested dict structure
+        assert isinstance(created_files_dict, dict)
+        assert "test" in created_files_dict
+        assert isinstance(created_files_dict["test"], dict)
 
-        # Check that FP file was created
-        assert len(created_files) == 1
-        fp_csv = output_dir / "test_FP.csv"
-        assert fp_csv.exists()
-        fp_df = pd.read_csv(fp_csv)
-        assert len(fp_df) == 1  # Only one FP method
-        assert fp_df.iloc[0]["classification"] == "FP"
-        assert fp_df.iloc[0]["global_block_id"] == "id2"
+        # Verify all 4 files created
+        rule_files = created_files_dict["test"]
+        assert set(rule_files.keys()) == {"TP", "FP", "FN", "TN"}
+
+        # Check specific classifications
+        tp_csv = pd.read_csv(rule_files["TP"])
+        fp_csv = pd.read_csv(rule_files["FP"])
+        fn_csv = pd.read_csv(rule_files["FN"])
+        tn_csv = pd.read_csv(rule_files["TN"])
+
+        # TP: id1 (predicted=True, actual=True)
+        assert len(tp_csv) == 1
+        assert tp_csv.iloc[0]["global_block_id"] == "id1"
+        assert tp_csv.iloc[0]["classification"] == "TP"
+
+        # FP: id2 (predicted=True, actual=False)
+        assert len(fp_csv) == 1
+        assert fp_csv.iloc[0]["global_block_id"] == "id2"
+        assert fp_csv.iloc[0]["classification"] == "FP"
+
+        # FN: id3 (predicted=False, actual=True)
+        assert len(fn_csv) == 1
+        assert fn_csv.iloc[0]["global_block_id"] == "id3"
+        assert fn_csv.iloc[0]["classification"] == "FN"
+
+        # TN: id4 (predicted=False, actual=False)
+        assert len(tn_csv) == 1
+        assert tn_csv.iloc[0]["global_block_id"] == "id4"
+        assert tn_csv.iloc[0]["classification"] == "TN"
+
+        # Verify all CSVs have proper headers
+        expected_columns = [
+            "global_block_id",
+            "revision",
+            "function_name",
+            "file_path",
+            "classification",
+            "predicted",
+            "actual",
+            "lifetime_revisions",
+            "lifetime_days",
+        ]
+        for csv_df in [tp_csv, fp_csv, fn_csv, tn_csv]:
+            assert list(csv_df.columns) == expected_columns
 
     def test_export_classifications_csv_invalid_results(self, evaluator, tmp_path):
         """Test error handling when exporting non-detailed results."""
