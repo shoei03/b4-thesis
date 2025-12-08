@@ -6,6 +6,8 @@ from pathlib import Path
 import pandas as pd
 from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 
+from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
+
 
 @dataclass
 class RuleEvaluation:
@@ -321,19 +323,11 @@ class Evaluator:
 
         # Validate columns needed for detailed mode
         if detailed:
-            required_cols = [
-                "global_block_id",
-                "revision",
-                "function_name",
-                "file_path",
-                "lifetime_revisions",
-                "lifetime_days",
-            ]
-            missing_cols = [col for col in required_cols if col not in features_df.columns]
-            if missing_cols:
-                raise ValueError(
-                    f"Missing columns required for detailed mode: {', '.join(missing_cols)}"
-                )
+            CsvValidator.validate_required_columns(
+                features_df,
+                DeletionPredictionColumns.EVALUATION_DETAILED,
+                context="features DataFrame (detailed mode)",
+            )
 
         # Combine all rules with OR logic (any rule predicts True → combined predicts True)
         combined_predictions = features_df[rule_columns].any(axis=1)
@@ -390,21 +384,13 @@ class Evaluator:
 
         # Validate columns needed for detailed mode
         if detailed:
-            required_cols = [
-                "global_block_id",
-                "revision",
-                "function_name",
-                "file_path",
-                "lifetime_revisions",
-                "lifetime_days",
-            ]
-            missing_cols = [col for col in required_cols if col not in features_df.columns]
-            if missing_cols:
-                raise ValueError(
-                    f"Missing columns required for detailed mode: {', '.join(missing_cols)}"
-                )
+            CsvValidator.validate_required_columns(
+                features_df,
+                DeletionPredictionColumns.EVALUATION_DETAILED,
+                context="features DataFrame (detailed mode)",
+            )
 
-        # Check group_by_column has values
+        # Validate group_by_column exists
         group_values = features_df[group_by_column].dropna().unique()
         if len(group_values) == 0:
             raise ValueError(f"Group-by column '{group_by_column}' has no non-null values")

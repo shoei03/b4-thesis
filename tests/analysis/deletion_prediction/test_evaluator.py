@@ -727,5 +727,5 @@ class TestEvaluatorGrouped:
             }
         )
 
-        with pytest.raises(ValueError, match="Missing columns required for detailed mode"):
+        with pytest.raises(ValueError, match="missing required columns"):
             evaluator.evaluate_by_group(df, "group_col", detailed=True)

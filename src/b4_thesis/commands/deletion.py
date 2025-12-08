@@ -15,6 +15,7 @@ from b4_thesis.analysis.deletion_prediction.evaluator import (
     GroupedRuleEvaluation,
 )
 from b4_thesis.analysis.deletion_prediction.feature_extractor import FeatureExtractor
+from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
 
 console = Console()
 
@@ -367,10 +368,16 @@ def evaluate(
         )
         df = pd.read_csv(input_csv)
 
-        # Validate
-        if "is_deleted_soon" not in df.columns:
+        # Validate required columns
+        try:
+            CsvValidator.validate_required_columns(
+                df,
+                DeletionPredictionColumns.EVALUATION_BASIC,
+                context="features CSV",
+            )
+        except ValueError as e:
             raise ValueError(
-                "Missing 'is_deleted_soon' column. Did you run 'deletion extract' first?"
+                f"{e}. Did you run 'deletion extract' first?"
             )
 
         rule_cols = [c for c in df.columns if c.startswith("rule_")]

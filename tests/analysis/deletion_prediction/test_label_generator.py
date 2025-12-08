@@ -67,7 +67,7 @@ class TestLabelGenerator:
         # Missing revision column
         df = pd.DataFrame({"global_block_id": ["id1"]})
 
-        with pytest.raises(ValueError, match="Missing required columns"):
+        with pytest.raises(ValueError, match="missing required columns"):
             generator.generate_labels(df)
 
     def test_generate_labels_multiple_blocks(self, generator):

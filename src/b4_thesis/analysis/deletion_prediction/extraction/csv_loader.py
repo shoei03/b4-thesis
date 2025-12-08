@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from b4_thesis.analysis.deletion_prediction.extraction.result_types import CsvLoadResult
+from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
 
 
 class CsvDataLoader:
@@ -16,16 +17,7 @@ class CsvDataLoader:
     - Filtering deleted methods (code doesn't exist for them)
     """
 
-    REQUIRED_COLUMNS = {
-        "global_block_id",
-        "revision",
-        "function_name",
-        "file_path",
-        "start_line",
-        "end_line",
-        "loc",
-        "state",
-    }
+    REQUIRED_COLUMNS = DeletionPredictionColumns.BASIC
 
     def load_and_validate(self, csv_path: Path) -> CsvLoadResult:
         """Load CSV and validate required columns.
@@ -40,16 +32,13 @@ class CsvDataLoader:
             FileNotFoundError: If CSV file not found
             ValueError: If CSV missing required columns or no methods after filtering
         """
-        # Load CSV
-        if not csv_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {csv_path}")
-
-        df = pd.read_csv(csv_path)
-
-        # Validate required columns
-        missing_columns = self.REQUIRED_COLUMNS - set(df.columns)
-        if missing_columns:
-            raise ValueError(f"CSV missing required columns: {missing_columns}")
+        # Load and validate CSV using CsvValidator
+        df = CsvValidator.load_and_validate(
+            csv_path,
+            self.REQUIRED_COLUMNS,
+            allow_empty=True,  # We'll validate after filtering
+            context="method_lineage CSV",
+        )
 
         # Filter out deleted methods (code doesn't exist for them)
         original_count = len(df)

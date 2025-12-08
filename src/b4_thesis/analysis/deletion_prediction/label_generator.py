@@ -2,6 +2,8 @@
 
 import pandas as pd
 
+from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
+
 
 class LabelGenerator:
     """Generate ground truth labels for method deletion prediction.
@@ -55,10 +57,11 @@ class LabelGenerator:
             [True, False, False, False]  # id1 deleted within 2 revisions, id2 survives
         """
         # Validate required columns
-        required_columns = {"global_block_id", "revision"}
-        missing_columns = required_columns - set(df.columns)
-        if missing_columns:
-            raise ValueError(f"Missing required columns: {missing_columns}")
+        CsvValidator.validate_required_columns(
+            df,
+            DeletionPredictionColumns.LABEL_GENERATION,
+            context="label generation DataFrame",
+        )
 
         # Get all revisions in sorted order
         all_revisions = sorted(df["revision"].unique())
