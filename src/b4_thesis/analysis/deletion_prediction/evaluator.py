@@ -549,23 +549,46 @@ class Evaluator:
         self,
         results: list[DetailedRuleEvaluation],
         output_dir: Path,
-        classification_filter: str | None = None,
-    ) -> list[Path]:
-        """Export classification details to CSV files.
+    ) -> dict[str, dict[str, Path]]:
+        """Export classification details to CSV files organized by rule and type.
 
-        Creates one CSV file per rule with method-level classification data.
+        Creates a folder structure where each rule has its own directory containing
+        4 CSV files (TP.csv, FP.csv, FN.csv, TN.csv) with method-level classification data.
+
+        Output structure:
+            output_dir/
+                rule_name_1/
+                    TP.csv
+                    FP.csv
+                    FN.csv
+                    TN.csv
+                rule_name_2/
+                    TP.csv
+                    ...
 
         Args:
             results: List of DetailedRuleEvaluation objects with classifications
-            output_dir: Directory to save CSV files
-            classification_filter: Optional filter for classification type (TP/FP/FN/TN)
+            output_dir: Directory to save CSV files (will be created if doesn't exist)
 
         Returns:
-            List of Path objects for created CSV files
+            Dictionary mapping rule names to classification types to file paths:
+            {
+                "rule_name": {
+                    "TP": Path("output_dir/rule_name/TP.csv"),
+                    "FP": Path("output_dir/rule_name/FP.csv"),
+                    "FN": Path("output_dir/rule_name/FN.csv"),
+                    "TN": Path("output_dir/rule_name/TN.csv")
+                }
+            }
 
         Raises:
             ValueError: If results contain RuleEvaluation instead of DetailedRuleEvaluation
-            ValueError: If output_dir doesn't exist or isn't a directory
+            ValueError: If results have no classifications (call evaluate() with detailed=True)
+
+        Notes:
+            - All 4 classification files are created for each rule, even if empty
+            - Empty CSV files will have headers but no data rows
+            - Existing files will be overwritten
         """
         # Validate output directory
         if not output_dir.exists():
@@ -586,38 +609,53 @@ class Evaluator:
                     "Call evaluate() with detailed=True"
                 )
 
-        # Validate classification filter
-        if classification_filter and classification_filter not in ["TP", "FP", "FN", "TN"]:
-            raise ValueError(
-                f"Invalid classification filter: {classification_filter}. "
-                "Must be one of: TP, FP, FN, TN"
-            )
+        # Export classifications for each rule
+        created_files = {}
 
-        created_files = []
         for result in results:
-            # Get classifications (optionally filtered)
-            classifications = result.classifications
-            if classification_filter:
-                classifications = [
-                    c for c in classifications if c.classification == classification_filter
-                ]
+            # Create rule directory (sanitize rule name for filesystem)
+            safe_rule_name = result.rule_name.replace("/", "_").replace(" ", "_")
+            rule_dir = output_dir / safe_rule_name
+            rule_dir.mkdir(parents=True, exist_ok=True)
 
-            # Skip if no classifications after filtering
-            if not classifications:
-                continue
+            # Initialize dict for this rule
+            created_files[result.rule_name] = {}
 
-            # Convert to DataFrame
-            data = [c.to_dict() for c in classifications]
-            df = pd.DataFrame(data)
+            # Export each classification type
+            classification_methods = {
+                "TP": result.get_tp_methods,
+                "FP": result.get_fp_methods,
+                "FN": result.get_fn_methods,
+                "TN": result.get_tn_methods,
+            }
 
-            # Generate filename
-            filename_suffix = (
-                f"_{classification_filter}" if classification_filter else "_classifications"
-            )
-            output_path = output_dir / f"{result.rule_name}{filename_suffix}.csv"
+            for classification_type, getter_method in classification_methods.items():
+                # Get classifications (may be empty)
+                classifications = getter_method()
 
-            # Export to CSV
-            df.to_csv(output_path, index=False)
-            created_files.append(output_path)
+                # Convert to DataFrame (empty if no classifications)
+                if classifications:
+                    data = [c.to_dict() for c in classifications]
+                    df = pd.DataFrame(data)
+                else:
+                    # Create empty DataFrame with proper columns
+                    df = pd.DataFrame(
+                        columns=[
+                            "global_block_id",
+                            "revision",
+                            "function_name",
+                            "file_path",
+                            "classification",
+                            "predicted",
+                            "actual",
+                            "lifetime_revisions",
+                            "lifetime_days",
+                        ]
+                    )
+
+                # Export to CSV
+                output_path = rule_dir / f"{classification_type}.csv"
+                df.to_csv(output_path, index=False)
+                created_files[result.rule_name][classification_type] = output_path
 
         return created_files
