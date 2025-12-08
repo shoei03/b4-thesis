@@ -11,12 +11,14 @@ class CsvLoadResult:
 
     Attributes:
         df: Validated DataFrame with non-deleted methods
+        deleted_df: DataFrame containing only deleted methods
         original_count: Total number of methods in original CSV
         deleted_count: Number of deleted methods filtered out
         filtered_count: Number of methods remaining after filtering
     """
 
     df: pd.DataFrame
+    deleted_df: pd.DataFrame
     original_count: int
     deleted_count: int
     filtered_count: int

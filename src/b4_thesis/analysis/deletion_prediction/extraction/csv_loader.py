@@ -40,16 +40,18 @@ class CsvDataLoader:
             context="method_lineage CSV",
         )
 
-        # Filter out deleted methods (code doesn't exist for them)
+        # Separate deleted methods from non-deleted methods
         original_count = len(df)
+        deleted_df = df[df["state"] == "deleted"].copy()
         df = df[df["state"] != "deleted"].copy()
-        deleted_count = original_count - len(df)
+        deleted_count = len(deleted_df)
 
         if len(df) == 0:
             raise ValueError("No methods to process after filtering deleted methods")
 
         return CsvLoadResult(
             df=df,
+            deleted_df=deleted_df,
             original_count=original_count,
             deleted_count=deleted_count,
             filtered_count=len(df),
