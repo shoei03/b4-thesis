@@ -146,6 +146,58 @@ class DetailedRuleEvaluation(RuleEvaluation):
         return [c for c in self.classifications if c.classification == "TN"]
 
 
+@dataclass
+class GroupedRuleEvaluation:
+    """Evaluation results grouped by a categorical column.
+
+    Attributes:
+        rule_name: Name of the rule
+        group_by_column: Name of the column used for grouping
+        group_evaluations: Dict mapping group value to its evaluation
+        overall_evaluation: Combined evaluation across all groups (optional)
+    """
+
+    rule_name: str
+    group_by_column: str
+    group_evaluations: dict[str, RuleEvaluation | DetailedRuleEvaluation]
+    overall_evaluation: RuleEvaluation | DetailedRuleEvaluation | None = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary with structure:
+            {
+                "rule_name": "...",
+                "group_by_column": "...",
+                "groups": {
+                    "group_value_1": {...evaluation metrics...},
+                    "group_value_2": {...evaluation metrics...},
+                },
+                "overall": {...evaluation metrics...}  # optional
+            }
+        """
+        result = {
+            "rule_name": self.rule_name,
+            "group_by_column": self.group_by_column,
+            "groups": {
+                group_name: evaluation.to_dict()
+                for group_name, evaluation in self.group_evaluations.items()
+            },
+        }
+        if self.overall_evaluation is not None:
+            result["overall"] = self.overall_evaluation.to_dict()
+        return result
+
+    def get_group_names(self) -> list[str]:
+        """Get sorted list of group names.
+
+        Returns:
+            Sorted list of group value strings
+        """
+        return sorted(self.group_evaluations.keys())
+
+
 class Evaluator:
     """Evaluate deletion prediction rules.
 
@@ -187,7 +239,7 @@ class Evaluator:
             classifications = []
             for idx, row in features_df.iterrows():
                 predicted = bool(
-                    predictions.iloc[idx] if hasattr(predictions, "iloc") else predictions[idx]
+                    predictions.loc[idx] if hasattr(predictions, "loc") else predictions[idx]
                 )
                 actual = bool(row["is_deleted_soon"])
 
@@ -289,6 +341,140 @@ class Evaluator:
         return self._evaluate_predictions(
             features_df, combined_predictions, "combined_all_rules", detailed
         )
+
+    def evaluate_by_group(
+        self,
+        features_df: pd.DataFrame,
+        group_by_column: str,
+        detailed: bool = False,
+        include_combined: bool = False,
+        include_overall: bool = True,
+    ) -> list[GroupedRuleEvaluation]:
+        """Evaluate all rules grouped by a categorical column.
+
+        A separate evaluation is performed for each unique value in the group_by_column.
+        This allows analyzing rule performance across different data segments (e.g., rev_status).
+
+        Args:
+            features_df: DataFrame with rule_XXX columns and is_deleted_soon column
+            group_by_column: Column name to group by (e.g., 'rev_status')
+            detailed: If True, include per-method classification details
+            include_combined: If True, append combined rule (OR logic) to results
+            include_overall: If True, include overall evaluation across all groups
+
+        Returns:
+            List of GroupedRuleEvaluation objects (one per rule)
+
+        Raises:
+            ValueError: If group_by_column doesn't exist
+            ValueError: If is_deleted_soon column is missing
+            ValueError: If no rule columns found
+            ValueError: If detailed=True but required columns are missing
+            ValueError: If group_by_column has no non-null values
+        """
+        # Validate group_by_column exists
+        if group_by_column not in features_df.columns:
+            raise ValueError(
+                f"Group-by column '{group_by_column}' not found in DataFrame. "
+                f"Available columns: {', '.join(features_df.columns)}"
+            )
+
+        # Validate ground truth column
+        if "is_deleted_soon" not in features_df.columns:
+            raise ValueError("Missing 'is_deleted_soon' column in features DataFrame")
+
+        # Find all rule columns
+        rule_columns = [col for col in features_df.columns if col.startswith("rule_")]
+        if not rule_columns:
+            raise ValueError("No rule columns found (columns starting with 'rule_')")
+
+        # Validate columns needed for detailed mode
+        if detailed:
+            required_cols = [
+                "global_block_id",
+                "revision",
+                "function_name",
+                "file_path",
+                "lifetime_revisions",
+                "lifetime_days",
+            ]
+            missing_cols = [col for col in required_cols if col not in features_df.columns]
+            if missing_cols:
+                raise ValueError(
+                    f"Missing columns required for detailed mode: {', '.join(missing_cols)}"
+                )
+
+        # Check group_by_column has values
+        group_values = features_df[group_by_column].dropna().unique()
+        if len(group_values) == 0:
+            raise ValueError(f"Group-by column '{group_by_column}' has no non-null values")
+
+        # Evaluate each rule
+        results = []
+
+        for rule_col in rule_columns:
+            rule_name = rule_col.replace("rule_", "")
+            group_evaluations = {}
+
+            # Evaluate for each group
+            for group_value in sorted(group_values):
+                group_df = features_df[features_df[group_by_column] == group_value]
+
+                # Skip empty groups
+                if group_df.empty:
+                    continue
+
+                predictions = group_df[rule_col]
+                evaluation = self._evaluate_predictions(group_df, predictions, rule_name, detailed)
+                group_evaluations[str(group_value)] = evaluation
+
+            # Optionally include overall (evaluate on full dataset)
+            overall = None
+            if include_overall:
+                predictions = features_df[rule_col]
+                overall = self._evaluate_predictions(features_df, predictions, rule_name, detailed)
+
+            results.append(
+                GroupedRuleEvaluation(
+                    rule_name=rule_name,
+                    group_by_column=group_by_column,
+                    group_evaluations=group_evaluations,
+                    overall_evaluation=overall,
+                )
+            )
+
+        # Optionally add combined rule
+        if include_combined:
+            group_evaluations = {}
+            combined_predictions = features_df[rule_columns].any(axis=1)
+
+            for group_value in sorted(group_values):
+                group_df = features_df[features_df[group_by_column] == group_value]
+                if group_df.empty:
+                    continue
+
+                group_combined_pred = group_df[rule_columns].any(axis=1)
+                evaluation = self._evaluate_predictions(
+                    group_df, group_combined_pred, "combined_all_rules", detailed
+                )
+                group_evaluations[str(group_value)] = evaluation
+
+            overall = None
+            if include_overall:
+                overall = self._evaluate_predictions(
+                    features_df, combined_predictions, "combined_all_rules", detailed
+                )
+
+            results.append(
+                GroupedRuleEvaluation(
+                    rule_name="combined_all_rules",
+                    group_by_column=group_by_column,
+                    group_evaluations=group_evaluations,
+                    overall_evaluation=overall,
+                )
+            )
+
+        return results
 
     def evaluate(
         self,

@@ -105,9 +105,7 @@ class TestSnippetLoader:
         # Verify extractor was NOT called (cache hit)
         snippet_loader.code_extractor.batch_extract.assert_not_called()
 
-    def test_load_snippets_cache_miss(
-        self, snippet_loader, sample_df, mock_cache_manager, capsys
-    ):
+    def test_load_snippets_cache_miss(self, snippet_loader, sample_df, mock_cache_manager, capsys):
         """Test extracting snippets when cache misses."""
         # Setup cache to return None (cache miss)
         mock_cache_manager.load_snippets.return_value = None
@@ -148,9 +146,7 @@ class TestSnippetLoader:
         # Verify extractor was called
         snippet_loader.code_extractor.batch_extract.assert_called_once()
 
-    def test_load_snippets_use_cache_false(
-        self, snippet_loader, sample_df, mock_cache_manager
-    ):
+    def test_load_snippets_use_cache_false(self, snippet_loader, sample_df, mock_cache_manager):
         """Test extracting snippets when use_cache=False."""
         csv_path = Path("/tmp/test.csv")
         result = snippet_loader.load_snippets(

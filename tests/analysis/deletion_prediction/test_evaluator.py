@@ -398,3 +398,334 @@ class TestEvaluator:
 
         with pytest.raises(ValueError, match="No rule columns found"):
             evaluator.evaluate_combined(df)
+
+
+class TestEvaluatorGrouped:
+    """Test cases for grouped evaluation functionality."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create Evaluator instance."""
+        return Evaluator()
+
+    @pytest.fixture
+    def sample_grouped_df(self):
+        """Create sample DataFrame with rev_status groups."""
+        return pd.DataFrame(
+            {
+                "rule_test": [
+                    True,
+                    True,
+                    False,
+                    False,  # no_deleted
+                    True,
+                    False,
+                    True,
+                    False,  # partial_deleted
+                    False,
+                    False,  # all_deleted
+                ],
+                "is_deleted_soon": [
+                    True,
+                    False,
+                    True,
+                    False,  # no_deleted
+                    True,
+                    True,
+                    False,
+                    False,  # partial_deleted
+                    False,
+                    False,  # all_deleted
+                ],
+                "rev_status": [
+                    "no_deleted",
+                    "no_deleted",
+                    "no_deleted",
+                    "no_deleted",
+                    "partial_deleted",
+                    "partial_deleted",
+                    "partial_deleted",
+                    "partial_deleted",
+                    "all_deleted",
+                    "all_deleted",
+                ],
+                "global_block_id": [f"id{i}" for i in range(10)],
+                "revision": [f"r{i}" for i in range(10)],
+                "function_name": [f"func{i}" for i in range(10)],
+                "file_path": [f"file{i}.py" for i in range(10)],
+                "lifetime_revisions": [i + 1 for i in range(10)],
+                "lifetime_days": [i * 5 for i in range(10)],
+            }
+        )
+
+    def test_evaluate_by_group_basic(self, evaluator, sample_grouped_df):
+        """Test basic grouped evaluation."""
+        results = evaluator.evaluate_by_group(sample_grouped_df, "rev_status")
+
+        assert len(results) == 1
+        grouped_result = results[0]
+
+        # Check structure
+        assert grouped_result.rule_name == "test"
+        assert grouped_result.group_by_column == "rev_status"
+        assert len(grouped_result.group_evaluations) == 3
+        assert set(grouped_result.group_evaluations.keys()) == {
+            "no_deleted",
+            "partial_deleted",
+            "all_deleted",
+        }
+
+        # Check each group's evaluation
+        no_del = grouped_result.group_evaluations["no_deleted"]
+        assert no_del.tp == 1  # row 0
+        assert no_del.fp == 1  # row 1
+        assert no_del.fn == 1  # row 2
+        assert no_del.tn == 1  # row 3
+
+        partial = grouped_result.group_evaluations["partial_deleted"]
+        assert partial.tp == 1  # row 4
+        assert partial.fp == 1  # row 6
+        assert partial.fn == 1  # row 5
+        assert partial.tn == 1  # row 7
+
+        all_del = grouped_result.group_evaluations["all_deleted"]
+        assert all_del.tp == 0
+        assert all_del.fp == 0
+        assert all_del.fn == 0
+        assert all_del.tn == 2  # rows 8, 9
+
+    def test_evaluate_by_group_detailed(self, evaluator, sample_grouped_df):
+        """Test grouped evaluation with detailed mode."""
+        results = evaluator.evaluate_by_group(sample_grouped_df, "rev_status", detailed=True)
+
+        grouped_result = results[0]
+
+        # Check all evaluations are DetailedRuleEvaluation
+        for group_name, evaluation in grouped_result.group_evaluations.items():
+            assert isinstance(evaluation, DetailedRuleEvaluation)
+            assert evaluation.classifications is not None
+
+        # Check overall is also detailed
+        assert isinstance(grouped_result.overall_evaluation, DetailedRuleEvaluation)
+        assert grouped_result.overall_evaluation.classifications is not None
+
+    def test_evaluate_by_group_missing_column(self, evaluator):
+        """Test error handling when group column doesn't exist."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False],
+                "is_deleted_soon": [True, False],
+            }
+        )
+
+        with pytest.raises(ValueError, match="Group-by column 'nonexistent' not found"):
+            evaluator.evaluate_by_group(df, "nonexistent")
+
+    def test_evaluate_by_group_empty_group(self, evaluator):
+        """Test handling of empty groups after filtering."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False, True],
+                "is_deleted_soon": [True, False, True],
+                "group_col": ["A", "A", "B"],
+                "global_block_id": ["id1", "id2", "id3"],
+                "revision": ["r1", "r2", "r3"],
+                "function_name": ["f1", "f2", "f3"],
+                "file_path": ["p1", "p2", "p3"],
+                "lifetime_revisions": [1, 2, 3],
+                "lifetime_days": [5, 6, 7],
+            }
+        )
+
+        results = evaluator.evaluate_by_group(df, "group_col")
+
+        # Should only have groups A and B
+        assert len(results[0].group_evaluations) == 2
+        assert set(results[0].group_evaluations.keys()) == {"A", "B"}
+
+    def test_evaluate_by_group_with_combined(self, evaluator, sample_grouped_df):
+        """Test grouped evaluation with combined rule."""
+        results = evaluator.evaluate_by_group(
+            sample_grouped_df, "rev_status", include_combined=True
+        )
+
+        assert len(results) == 2  # test + combined_all_rules
+        assert results[0].rule_name == "test"
+        assert results[1].rule_name == "combined_all_rules"
+
+    def test_evaluate_by_group_no_overall(self, evaluator, sample_grouped_df):
+        """Test grouped evaluation without overall evaluation."""
+        results = evaluator.evaluate_by_group(
+            sample_grouped_df, "rev_status", include_overall=False
+        )
+
+        grouped_result = results[0]
+        assert grouped_result.overall_evaluation is None
+
+    def test_evaluate_by_group_with_overall(self, evaluator, sample_grouped_df):
+        """Test grouped evaluation includes overall by default."""
+        results = evaluator.evaluate_by_group(sample_grouped_df, "rev_status")
+
+        grouped_result = results[0]
+        assert grouped_result.overall_evaluation is not None
+
+        # Check overall metrics match combined evaluation
+        overall = grouped_result.overall_evaluation
+        assert overall.tp == 2  # rows 0, 4
+        assert overall.fp == 2  # rows 1, 6
+        assert overall.fn == 2  # rows 2, 5
+        assert overall.tn == 4  # rows 3, 7, 8, 9
+
+    def test_grouped_rule_evaluation_to_dict(self):
+        """Test GroupedRuleEvaluation serialization."""
+        from b4_thesis.analysis.deletion_prediction.evaluator import (
+            GroupedRuleEvaluation,
+            RuleEvaluation,
+        )
+
+        eval1 = RuleEvaluation("test", 10, 5, 3, 82, 0.6667, 0.7692, 0.7143)
+        eval2 = RuleEvaluation("test", 2, 8, 1, 120, 0.2000, 0.6667, 0.3077)
+
+        grouped = GroupedRuleEvaluation(
+            rule_name="test",
+            group_by_column="rev_status",
+            group_evaluations={"group1": eval1, "group2": eval2},
+            overall_evaluation=None,
+        )
+
+        result_dict = grouped.to_dict()
+
+        assert result_dict["rule_name"] == "test"
+        assert result_dict["group_by_column"] == "rev_status"
+        assert "groups" in result_dict
+        assert "group1" in result_dict["groups"]
+        assert "group2" in result_dict["groups"]
+        assert "overall" not in result_dict  # None should be excluded
+
+    def test_grouped_rule_evaluation_to_dict_with_overall(self):
+        """Test GroupedRuleEvaluation serialization with overall."""
+        from b4_thesis.analysis.deletion_prediction.evaluator import (
+            GroupedRuleEvaluation,
+            RuleEvaluation,
+        )
+
+        eval1 = RuleEvaluation("test", 10, 5, 3, 82, 0.6667, 0.7692, 0.7143)
+        eval_overall = RuleEvaluation("test", 12, 13, 4, 202, 0.48, 0.75, 0.585)
+
+        grouped = GroupedRuleEvaluation(
+            rule_name="test",
+            group_by_column="rev_status",
+            group_evaluations={"group1": eval1},
+            overall_evaluation=eval_overall,
+        )
+
+        result_dict = grouped.to_dict()
+
+        assert "overall" in result_dict
+        assert result_dict["overall"]["TP"] == 12
+
+    def test_evaluate_by_group_all_nan(self, evaluator):
+        """Test error handling when group column has all NaN values."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False, True],
+                "is_deleted_soon": [True, False, True],
+                "group_col": [None, None, None],
+            }
+        )
+
+        with pytest.raises(ValueError, match="has no non-null values"):
+            evaluator.evaluate_by_group(df, "group_col")
+
+    def test_evaluate_by_group_multiple_rules(self, evaluator):
+        """Test grouped evaluation with multiple rules."""
+        df = pd.DataFrame(
+            {
+                "rule_a": [True, False, True, False],
+                "rule_b": [False, True, False, True],
+                "is_deleted_soon": [True, False, True, False],
+                "group_col": ["X", "X", "Y", "Y"],
+                "global_block_id": ["id1", "id2", "id3", "id4"],
+                "revision": ["r1", "r2", "r3", "r4"],
+                "function_name": ["f1", "f2", "f3", "f4"],
+                "file_path": ["p1", "p2", "p3", "p4"],
+                "lifetime_revisions": [1, 2, 3, 4],
+                "lifetime_days": [5, 6, 7, 8],
+            }
+        )
+
+        results = evaluator.evaluate_by_group(df, "group_col")
+
+        assert len(results) == 2
+        assert results[0].rule_name == "a"
+        assert results[1].rule_name == "b"
+
+    def test_evaluate_by_group_get_group_names(self, evaluator, sample_grouped_df):
+        """Test get_group_names() method returns sorted list."""
+        results = evaluator.evaluate_by_group(sample_grouped_df, "rev_status")
+
+        grouped_result = results[0]
+        group_names = grouped_result.get_group_names()
+
+        assert group_names == ["all_deleted", "no_deleted", "partial_deleted"]
+        assert group_names == sorted(group_names)  # Verify it's sorted
+
+    def test_evaluate_by_group_numeric_groups(self, evaluator):
+        """Test grouped evaluation with numeric group column."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False, True, False],
+                "is_deleted_soon": [True, False, True, False],
+                "group_col": [1, 1, 2, 2],  # Numeric groups
+                "global_block_id": ["id1", "id2", "id3", "id4"],
+                "revision": ["r1", "r2", "r3", "r4"],
+                "function_name": ["f1", "f2", "f3", "f4"],
+                "file_path": ["p1", "p2", "p3", "p4"],
+                "lifetime_revisions": [1, 2, 3, 4],
+                "lifetime_days": [5, 6, 7, 8],
+            }
+        )
+
+        results = evaluator.evaluate_by_group(df, "group_col")
+
+        # Should convert numeric to string keys
+        grouped_result = results[0]
+        assert set(grouped_result.group_evaluations.keys()) == {"1", "2"}
+
+    def test_evaluate_by_group_missing_ground_truth(self, evaluator):
+        """Test error handling when ground truth column is missing."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False],
+                "group_col": ["A", "B"],
+            }
+        )
+
+        with pytest.raises(ValueError, match="Missing 'is_deleted_soon' column"):
+            evaluator.evaluate_by_group(df, "group_col")
+
+    def test_evaluate_by_group_no_rules(self, evaluator):
+        """Test error handling when no rule columns exist."""
+        df = pd.DataFrame(
+            {
+                "is_deleted_soon": [True, False],
+                "group_col": ["A", "B"],
+            }
+        )
+
+        with pytest.raises(ValueError, match="No rule columns found"):
+            evaluator.evaluate_by_group(df, "group_col")
+
+    def test_evaluate_by_group_detailed_missing_columns(self, evaluator):
+        """Test error handling when detailed mode is missing required columns."""
+        df = pd.DataFrame(
+            {
+                "rule_test": [True, False],
+                "is_deleted_soon": [True, False],
+                "group_col": ["A", "B"],
+                # Missing: global_block_id, revision, etc.
+            }
+        )
+
+        with pytest.raises(ValueError, match="Missing columns required for detailed mode"):
+            evaluator.evaluate_by_group(df, "group_col", detailed=True)

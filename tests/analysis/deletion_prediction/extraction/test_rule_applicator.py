@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from b4_thesis.analysis.deletion_prediction.extraction import (
-    RuleApplicator,
     RuleApplicationResult,
+    RuleApplicator,
 )
 from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet, DeletionRule
 
