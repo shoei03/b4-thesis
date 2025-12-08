@@ -145,6 +145,7 @@ class DeletionPredictionColumns:
     LABEL_GENERATION = {
         "global_block_id",
         "revision",
+        "state",
     }
 
     # Columns needed for evaluation (evaluator.py)

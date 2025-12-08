@@ -181,7 +181,7 @@ class TestDeletionPredictionColumns:
 
     def test_label_generation_columns(self):
         """Test LABEL_GENERATION column set."""
-        expected = {"global_block_id", "revision"}
+        expected = {"global_block_id", "revision", "state"}
         assert DeletionPredictionColumns.LABEL_GENERATION == expected
 
     def test_evaluation_basic_columns(self):

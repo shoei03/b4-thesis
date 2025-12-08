@@ -123,7 +123,7 @@ class FeatureExtractor:
 
         # Step 4: Generate labels
         print("Generating ground truth labels...")
-        df["is_deleted_soon"] = self.label_generator.generate_labels(df)
+        df["is_deleted_soon"] = self.label_generator.generate_labels(df, csv_result.deleted_df)
 
         # Save features to cache
         if use_cache and cache_manager:
