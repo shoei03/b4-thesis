@@ -86,6 +86,8 @@ def revisions(
     try:
         with console.status("[blue]Labeling revisions...[/blue]"):
             labeled_df = labeler.label_revisions(df)
+            # Propagate deletion status to previous revisions
+            labeled_df = labeler.propagate_deletion_status(labeled_df)
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort() from e

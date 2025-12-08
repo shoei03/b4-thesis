@@ -117,3 +117,68 @@ class RevisionLabeler:
         missing = [col for col in self.REQUIRED_COLUMNS if col not in df.columns]
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
+
+    def propagate_deletion_status(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Propagate partial_deleted and all_deleted status to previous revision.
+
+        For rows with rev_status='partial_deleted' or 'all_deleted',
+        this method finds the previous revision with the same global_block_id
+        and updates its rev_status to match.
+
+        Args:
+            df: DataFrame with rev_status and global_block_id columns.
+
+        Returns:
+            DataFrame with updated rev_status column.
+
+        Raises:
+            ValueError: If required columns are missing.
+        """
+        required_cols = ["global_block_id", "revision", "rev_status"]
+        missing = [col for col in required_cols if col not in df.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
+        # Work with a copy to avoid modifying original
+        df = df.copy()
+
+        # Get all revisions in sorted order
+        all_revisions = sorted(df["revision"].unique())
+        revision_to_idx = {rev: idx for idx, rev in enumerate(all_revisions)}
+
+        # Find rows with partial_deleted or all_deleted status
+        deletion_statuses = [
+            RevisionStatus.PARTIAL_DELETED.value,
+            RevisionStatus.ALL_DELETED.value,
+        ]
+        target_rows = df[df["rev_status"].isin(deletion_statuses)]
+
+        # Track updates to apply
+        updates = []
+
+        for _, row in target_rows.iterrows():
+            current_revision = row["revision"]
+            current_rev_idx = revision_to_idx[current_revision]
+            global_id = row["global_block_id"]
+            status = row["rev_status"]
+
+            # Skip if this is the first revision (no previous revision)
+            if current_rev_idx == 0:
+                continue
+
+            # Get previous revision
+            prev_revision = all_revisions[current_rev_idx - 1]
+
+            # Find rows with same global_block_id and previous revision
+            mask = (df["global_block_id"] == global_id) & (df["revision"] == prev_revision)
+
+            if mask.any():
+                # Record the indices and status to update
+                for idx in df[mask].index:
+                    updates.append((idx, status))
+
+        # Apply all updates
+        for idx, status in updates:
+            df.at[idx, "rev_status"] = status
+
+        return df
