@@ -510,17 +510,22 @@ def evaluate(
                     highlight=False,
                 )
                 export_path = Path(export_dir)
-                created_files = evaluator.export_classifications_csv(results, export_path)
+                created_files_dict = evaluator.export_classifications_csv(results, export_path)
+
+                # Count total files created
+                total_files = sum(len(files) for files in created_files_dict.values())
 
                 console.print(
-                    f"[green]✓[/green] Exported {len(created_files)} classification CSV files "
+                    f"[green]✓[/green] Exported {total_files} classification CSV files "
                     f"to: {export_path}",
                     highlight=False,
                 )
-                if created_files:
+                if created_files_dict:
                     console.print("\n[dim]Created files:[/dim]")
-                    for file_path in created_files:
-                        console.print(f"  [dim]- {file_path.name}[/dim]")
+                    for rule_name in sorted(created_files_dict.keys()):
+                        console.print(f"  [dim]{rule_name}/[/dim]")
+                        for classification_type in ["TP", "FP", "FN", "TN"]:
+                            console.print(f"    [dim]- {classification_type}.csv[/dim]")
 
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}", highlight=False)
