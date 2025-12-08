@@ -1,7 +1,9 @@
 """Deletion prediction commands."""
 
+import functools
 import json
 from pathlib import Path
+from typing import Callable
 
 import click
 import pandas as pd
@@ -18,6 +20,45 @@ from b4_thesis.analysis.deletion_prediction.feature_extractor import FeatureExtr
 from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
 
 console = Console()
+
+
+# ============================================================================
+# Common Utilities
+# ============================================================================
+
+def handle_command_errors(func: Callable) -> Callable:
+    """Decorator to handle common command errors with consistent messaging."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except FileNotFoundError as e:
+            console.print(f"[red]Error:[/red] {e}", highlight=False)
+            raise click.Abort()
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}", highlight=False)
+            raise click.Abort()
+        except Exception as e:
+            console.print(f"[red]Unexpected error:[/red] {e}", highlight=False)
+            raise click.Abort()
+    return wrapper
+
+
+def print_success(message: str, output_path: Path) -> None:
+    """Print success message with output path."""
+    console.print(f"[green]✓[/green] {message}: {output_path}", highlight=False)
+
+
+def print_warning(message: str) -> None:
+    """Print warning message."""
+    console.print(f"[yellow]Warning:[/yellow] {message}", highlight=False)
+
+
+def prepare_output_path(output: str) -> Path:
+    """Prepare output path by creating parent directories."""
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 @click.group()
@@ -67,6 +108,7 @@ def deletion():
     help="Number of future revisions to check for deletion",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Show verbose output")
+@handle_command_errors
 def extract(
     input_csv: str,
     repo: str,
@@ -92,78 +134,66 @@ def extract(
             --repo /path/to/repo \\
             --output features.csv
     """
-    try:
-        # Parse rules
-        rule_names = rules.split(",") if rules else None
-        if rule_names:
-            rule_names = [r.strip() for r in rule_names]
+    # Parse rules
+    rule_names = rules.split(",") if rules else None
+    if rule_names:
+        rule_names = [r.strip() for r in rule_names]
 
-        # Setup cache manager
-        cache_manager = None
-        if not no_cache:
-            if cache_dir:
-                cache_path = Path(cache_dir)
-            else:
-                cache_path = Path.home() / ".cache" / "b4-thesis" / "deletion-prediction"
+    # Setup cache manager
+    cache_manager = None
+    if not no_cache:
+        if cache_dir:
+            cache_path = Path(cache_dir)
+        else:
+            cache_path = Path.home() / ".cache" / "b4-thesis" / "deletion-prediction"
 
-            cache_manager = CacheManager(cache_path)
-            if verbose:
-                console.print(f"[dim]Cache directory: {cache_path}[/dim]")
-
-        # Initialize extractor
-        console.print("[bold blue]Initializing feature extractor...[/bold blue]", highlight=False)
-        extractor = FeatureExtractor(
-            repo_path=Path(repo),
-            base_path_prefix=base_prefix,
-            lookahead_window=lookahead_window,
-        )
-
-        # Extract features
-        console.print(
-            f"[bold green]Extracting features from {input_csv}...[/bold green]",
-            highlight=False,
-        )
-        df = extractor.extract(
-            Path(input_csv),
-            rule_names=rule_names,
-            cache_manager=cache_manager,
-            use_cache=not no_cache,
-        )
-
-        # Save results
-        output_path = Path(output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(output_path, index=False)
-
-        console.print(f"[green]✓[/green] Features saved to: {output_path}", highlight=False)
-
-        # Display summary if verbose
+        cache_manager = CacheManager(cache_path)
         if verbose:
-            rule_cols = [c for c in df.columns if c.startswith("rule_")]
-            deleted_count = df["is_deleted_soon"].sum()
-            deleted_pct = (deleted_count / len(df) * 100) if len(df) > 0 else 0
+            console.print(f"[dim]Cache directory: {cache_path}[/dim]")
 
-            console.print("\n[bold]Summary:[/bold]")
-            console.print(f"  Total methods: {len(df):,}")
-            console.print(f"  Deleted soon: {deleted_count:,} ({deleted_pct:.1f}%)")
-            console.print(f"  Rules applied: {len(rule_cols)}")
-            if rule_cols:
-                console.print("  Rule names:")
-                for col in rule_cols:
-                    rule_name = col.replace("rule_", "")
-                    positive_count = df[col].sum()
-                    positive_pct = (positive_count / len(df) * 100) if len(df) > 0 else 0
-                    console.print(f"    - {rule_name}: {positive_count:,} ({positive_pct:.1f}%)")
+    # Initialize extractor
+    console.print("[bold blue]Initializing feature extractor...[/bold blue]", highlight=False)
+    extractor = FeatureExtractor(
+        repo_path=Path(repo),
+        base_path_prefix=base_prefix,
+        lookahead_window=lookahead_window,
+    )
 
-    except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}", highlight=False)
-        raise click.Abort()
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}", highlight=False)
-        raise click.Abort()
-    except Exception as e:
-        console.print(f"[red]Unexpected error:[/red] {e}", highlight=False)
-        raise click.Abort()
+    # Extract features
+    console.print(
+        f"[bold green]Extracting features from {input_csv}...[/bold green]",
+        highlight=False,
+    )
+    df = extractor.extract(
+        Path(input_csv),
+        rule_names=rule_names,
+        cache_manager=cache_manager,
+        use_cache=not no_cache,
+    )
+
+    # Save results
+    output_path = prepare_output_path(output)
+    df.to_csv(output_path, index=False)
+
+    print_success("Features saved to", output_path)
+
+    # Display summary if verbose
+    if verbose:
+        rule_cols = [c for c in df.columns if c.startswith("rule_")]
+        deleted_count = df["is_deleted_soon"].sum()
+        deleted_pct = (deleted_count / len(df) * 100) if len(df) > 0 else 0
+
+        console.print("\n[bold]Summary:[/bold]")
+        console.print(f"  Total methods: {len(df):,}")
+        console.print(f"  Deleted soon: {deleted_count:,} ({deleted_pct:.1f}%)")
+        console.print(f"  Rules applied: {len(rule_cols)}")
+        if rule_cols:
+            console.print("  Rule names:")
+            for col in rule_cols:
+                rule_name = col.replace("rule_", "")
+                positive_count = df[col].sum()
+                positive_pct = (positive_count / len(df) * 100) if len(df) > 0 else 0
+                console.print(f"    - {rule_name}: {positive_count:,} ({positive_pct:.1f}%)")
 
 
 def _create_composite_group_column(
@@ -274,21 +304,22 @@ def _create_composite_group_column(
 @click.option(
     "--group-by",
     type=str,
-    default=None,
-    help="Column name to group evaluation by (e.g., 'rev_status')",
+    default="rev_status",
+    help="Column name to group evaluation by (default: 'rev_status')",
 )
 @click.option(
     "--no-overall",
     is_flag=True,
-    help="Exclude overall evaluation when using --group-by (only show per-group results)",
+    help="Exclude overall evaluation (only show per-group results)",
 )
 @click.option(
     "--split-partial-by",
     type=str,
     default=None,
     help="Column to subdivide 'partial_deleted' group by (e.g., 'state'). "
-    "Requires --group-by to be set to 'rev_status'.",
+    "Only works when --group-by is 'rev_status'.",
 )
+@handle_command_errors
 def evaluate(
     input_csv: str,
     output: str,
@@ -305,8 +336,8 @@ def evaluate(
     This command:
     1. Reads features CSV (from extract command)
     2. Calculates Precision, Recall, F1 for each rule
-    3. Outputs evaluation report
-    4. (Optional) Groups evaluation by categorical column with --group-by
+    3. Groups evaluation by categorical column (default: rev_status)
+    4. Outputs evaluation report
     5. (Optional) Exports detailed classification CSVs with --detailed --export-dir
 
     Example:
@@ -320,222 +351,91 @@ def evaluate(
             --detailed \\
             --export-dir ./classifications/
 
-        # Grouped evaluation by rev_status
+        # Split partial_deleted group by state
         b4-thesis deletion evaluate features.csv \\
             --output grouped_report.json \\
             --format json \\
-            --group-by rev_status
+            --split-partial-by state
     """
+    # Validate flags
+    if export_dir and not detailed:
+        print_warning("--export-dir requires --detailed flag. Ignoring --export-dir.")
+        export_dir = None
+
+    if split_partial_by and group_by != "rev_status":
+        print_warning(
+            "--split-partial-by currently only supports --group-by rev_status. "
+            "Ignoring --split-partial-by."
+        )
+        split_partial_by = None
+
+    # Load features
+    console.print(
+        f"[bold blue]Loading features from {input_csv}...[/bold blue]",
+        highlight=False,
+    )
+    df = pd.read_csv(input_csv)
+
+    # Validate required columns
     try:
-        # Validate flags
-        if export_dir and not detailed:
-            console.print(
-                "[yellow]Warning:[/yellow] --export-dir requires --detailed flag. "
-                "Ignoring --export-dir.",
-                highlight=False,
-            )
-            export_dir = None
+        CsvValidator.validate_required_columns(
+            df,
+            DeletionPredictionColumns.EVALUATION_BASIC,
+            context="features CSV",
+        )
+    except ValueError as e:
+        raise ValueError(
+            f"{e}. Did you run 'deletion extract' first?"
+        )
 
-        if no_overall and not group_by:
-            console.print(
-                "[yellow]Warning:[/yellow] --no-overall only affects --group-by mode. "
-                "Ignoring --no-overall.",
-                highlight=False,
-            )
-            no_overall = False
+    rule_cols = [c for c in df.columns if c.startswith("rule_")]
+    if not rule_cols:
+        raise ValueError("No rule columns found. Did you run 'deletion extract' first?")
 
-        # Validate split_partial_by flag
-        if split_partial_by and not group_by:
-            console.print(
-                "[yellow]Warning:[/yellow] --split-partial-by requires --group-by. "
-                "Ignoring --split-partial-by.",
-                highlight=False,
-            )
-            split_partial_by = None
+    # Create composite column if splitting partial_deleted
+    evaluator = Evaluator()
 
-        if split_partial_by and group_by != "rev_status":
-            console.print(
-                "[yellow]Warning:[/yellow] --split-partial-by currently only supports "
-                "--group-by rev_status. Ignoring --split-partial-by.",
-                highlight=False,
-            )
-            split_partial_by = None
-
-        # Load features
+    if split_partial_by:
         console.print(
-            f"[bold blue]Loading features from {input_csv}...[/bold blue]",
+            f"[bold blue]Creating composite groups: "
+            f"subdividing 'partial_deleted' by '{split_partial_by}'...[/bold blue]",
             highlight=False,
         )
-        df = pd.read_csv(input_csv)
+        df, actual_group_column = _create_composite_group_column(
+            df,
+            group_by=group_by,
+            split_partial_by=split_partial_by,
+        )
+    else:
+        actual_group_column = group_by
 
-        # Validate required columns
-        try:
-            CsvValidator.validate_required_columns(
-                df,
-                DeletionPredictionColumns.EVALUATION_BASIC,
-                context="features CSV",
-            )
-        except ValueError as e:
-            raise ValueError(
-                f"{e}. Did you run 'deletion extract' first?"
-            )
+    # Validate group column exists
+    console.print(
+        f"[bold green]Evaluating rules grouped by '{actual_group_column}'...[/bold green]",
+        highlight=False,
+    )
 
-        rule_cols = [c for c in df.columns if c.startswith("rule_")]
-        if not rule_cols:
-            raise ValueError("No rule columns found. Did you run 'deletion extract' first?")
+    if actual_group_column not in df.columns:
+        raise ValueError(
+            f"Group-by column '{actual_group_column}' not found. "
+            f"Available columns: {', '.join(df.columns)}"
+        )
 
-        # Evaluate (branching logic for grouped vs standard)
-        evaluator = Evaluator()
+    # Execute grouped evaluation
+    grouped_results = evaluator.evaluate_by_group(
+        df,
+        group_by_column=actual_group_column,
+        detailed=detailed,
+        include_combined=combined,
+        include_overall=not no_overall,
+    )
 
-        if group_by:
-            # Create composite column if splitting partial_deleted
-            if split_partial_by:
-                console.print(
-                    f"[bold blue]Creating composite groups: "
-                    f"subdividing 'partial_deleted' by '{split_partial_by}'...[/bold blue]",
-                    highlight=False,
-                )
-                df, actual_group_column = _create_composite_group_column(
-                    df,
-                    group_by=group_by,
-                    split_partial_by=split_partial_by,
-                )
-            else:
-                actual_group_column = group_by
+    # Output grouped results
+    _output_grouped_results(grouped_results, output, format, console)
 
-            # Grouped evaluation path
-            console.print(
-                f"[bold green]Evaluating rules grouped by '{actual_group_column}'...[/bold green]",
-                highlight=False,
-            )
-
-            # Validate group column exists (check actual_group_column, not group_by)
-            if actual_group_column not in df.columns:
-                raise ValueError(
-                    f"Group-by column '{actual_group_column}' not found. "
-                    f"Available columns: {', '.join(df.columns)}"
-                )
-
-            grouped_results = evaluator.evaluate_by_group(
-                df,
-                group_by_column=actual_group_column,
-                detailed=detailed,
-                include_combined=combined,
-                include_overall=not no_overall,
-            )
-
-            # Output grouped results
-            _output_grouped_results(grouped_results, output, format, console)
-
-            # Export detailed classifications if requested
-            if detailed and export_dir:
-                _export_grouped_classifications(grouped_results, export_dir, console)
-        else:
-            # Standard evaluation path (existing code)
-            console.print("[bold green]Evaluating rules...[/bold green]", highlight=False)
-            results = evaluator.evaluate(df, detailed=detailed, include_combined=combined)
-
-            # Output based on format
-            output_path = Path(output)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if format == "json":
-                with open(output_path, "w") as f:
-                    json.dump([r.to_dict() for r in results], f, indent=2)
-                console.print(
-                    f"[green]✓[/green] Evaluation saved to: {output_path}",
-                    highlight=False,
-                )
-
-            elif format == "csv":
-                results_df = pd.DataFrame([r.to_dict() for r in results])
-                results_df.to_csv(output_path, index=False)
-                console.print(
-                    f"[green]✓[/green] Evaluation saved to: {output_path}",
-                    highlight=False,
-                )
-
-            elif format == "table":
-                # Display rich table
-                table = Table(title="Deletion Prediction Rule Evaluation")
-                table.add_column("Rule", style="cyan", no_wrap=True)
-                table.add_column("TP", justify="right")
-                table.add_column("FP", justify="right")
-                table.add_column("FN", justify="right")
-                table.add_column("TN", justify="right")
-                table.add_column("Precision", justify="right")
-                table.add_column("Recall", justify="right")
-                table.add_column("F1", justify="right", style="bold green")
-
-                for r in results:
-                    # Add section separator before combined rule
-                    if r.rule_name == "combined_all_rules":
-                        table.add_section()
-                        table.add_row(
-                            f"[bold magenta]{r.rule_name}[/bold magenta]",
-                            f"[bold magenta]{r.tp}[/bold magenta]",
-                            f"[bold magenta]{r.fp}[/bold magenta]",
-                            f"[bold magenta]{r.fn}[/bold magenta]",
-                            f"[bold magenta]{r.tn}[/bold magenta]",
-                            f"[bold magenta]{r.precision:.4f}[/bold magenta]",
-                            f"[bold magenta]{r.recall:.4f}[/bold magenta]",
-                            f"[bold magenta]{r.f1:.4f}[/bold magenta]",
-                        )
-                    else:
-                        table.add_row(
-                            r.rule_name,
-                            str(r.tp),
-                            str(r.fp),
-                            str(r.fn),
-                            str(r.tn),
-                            f"{r.precision:.4f}",
-                            f"{r.recall:.4f}",
-                            f"{r.f1:.4f}",
-                        )
-
-                console.print(table)
-
-                # Also save to JSON
-                with open(output_path, "w") as f:
-                    json.dump([r.to_dict() for r in results], f, indent=2)
-                console.print(
-                    f"\n[green]✓[/green] Evaluation saved to: {output_path}",
-                    highlight=False,
-                )
-
-            # Export detailed classifications if requested
-            if detailed and export_dir:
-                console.print(
-                    "\n[bold blue]Exporting detailed classifications...[/bold blue]",
-                    highlight=False,
-                )
-                export_path = Path(export_dir)
-                created_files_dict = evaluator.export_classifications_csv(results, export_path)
-
-                # Count total files created
-                total_files = sum(len(files) for files in created_files_dict.values())
-
-                console.print(
-                    f"[green]✓[/green] Exported {total_files} classification CSV files "
-                    f"to: {export_path}",
-                    highlight=False,
-                )
-                if created_files_dict:
-                    console.print("\n[dim]Created files:[/dim]")
-                    for rule_name in sorted(created_files_dict.keys()):
-                        console.print(f"  [dim]{rule_name}/[/dim]")
-                        for classification_type in ["TP", "FP", "FN", "TN"]:
-                            console.print(f"    [dim]- {classification_type}.csv[/dim]")
-
-    except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}", highlight=False)
-        raise click.Abort()
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}", highlight=False)
-        raise click.Abort()
-    except Exception as e:
-        console.print(f"[red]Unexpected error:[/red] {e}", highlight=False)
-        raise click.Abort()
+    # Export detailed classifications if requested
+    if detailed and export_dir:
+        _export_grouped_classifications(grouped_results, export_dir, console)
 
 
 def _output_grouped_results(
@@ -545,8 +445,7 @@ def _output_grouped_results(
     console: Console,
 ) -> None:
     """Dispatch grouped results to appropriate output formatter."""
-    output_path = Path(output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path = prepare_output_path(output)
 
     if format == "json":
         _output_grouped_results_json(grouped_results, output_path, console)
@@ -564,10 +463,7 @@ def _output_grouped_results_json(
     """Output grouped results in JSON format."""
     with open(output_path, "w") as f:
         json.dump([gr.to_dict() for gr in grouped_results], f, indent=2)
-    console.print(
-        f"[green]✓[/green] Grouped evaluation saved to: {output_path}",
-        highlight=False,
-    )
+    print_success("Grouped evaluation saved to", output_path)
 
 
 def _output_grouped_results_csv(
@@ -613,10 +509,7 @@ def _output_grouped_results_csv(
     df = df[col_order]
 
     df.to_csv(output_path, index=False)
-    console.print(
-        f"[green]✓[/green] Grouped evaluation saved to: {output_path}",
-        highlight=False,
-    )
+    print_success("Grouped evaluation saved to", output_path)
 
 
 def _output_grouped_results_table(
@@ -677,10 +570,8 @@ def _output_grouped_results_table(
     # Also save to JSON for persistence
     with open(output_path, "w") as f:
         json.dump([gr.to_dict() for gr in grouped_results], f, indent=2)
-    console.print(
-        f"\n[green]✓[/green] Grouped evaluation saved to: {output_path}",
-        highlight=False,
-    )
+    console.print()
+    print_success("Grouped evaluation saved to", output_path)
 
 
 def _export_grouped_classifications(
@@ -741,11 +632,13 @@ def _export_grouped_classifications(
                 df.to_csv(file_path, index=False)
                 created_files.append(file_path)
 
+    total_files = len(created_files)
     console.print(
-        f"[green]✓[/green] Exported {len(created_files)} classification CSV files "
-        f"to: {export_path}",
+        f"[green]✓[/green] Exported {total_files} classification CSV file{'s' if total_files != 1 else ''}",
         highlight=False,
     )
+    console.print(f"    to: {export_path}", highlight=False)
+
     if created_files:
         console.print("\n[dim]Created files:[/dim]")
         for file_path in sorted(created_files):
