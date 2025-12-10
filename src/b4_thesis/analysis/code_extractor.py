@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
 
 @dataclass
@@ -218,7 +218,7 @@ class GitCodeExtractor:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         console = Console()
-        
+
         # Create indexed requests to preserve order
         indexed_requests = list(enumerate(requests))
 
@@ -234,11 +234,12 @@ class GitCodeExtractor:
             console=console,
         ) as progress:
             task = progress.add_task("Extracting code snippets", total=len(requests))
-            
+
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 future_to_idx = {
-                    executor.submit(self._extract_snippet, req): idx for idx, req in indexed_requests
+                    executor.submit(self._extract_snippet, req): idx
+                    for idx, req in indexed_requests
                 }
 
                 # Process completed tasks with progress bar
@@ -260,7 +261,9 @@ class GitCodeExtractor:
 
         # Report failures
         if failed_count > 0:
-            console.print(f"[yellow]Warning: {failed_count}/{len(requests)} extraction requests failed[/yellow]")
+            console.print(
+                f"[yellow]Warning: {failed_count}/{len(requests)} extraction requests failed[/yellow]"
+            )
 
         # Restore original order and filter out None
         results.sort(key=lambda x: x[0])

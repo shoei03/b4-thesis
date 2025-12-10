@@ -10,13 +10,13 @@ import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
-from b4_thesis.analysis.deletion_prediction.cache_manager import CacheManager
+from b4_thesis.analysis.code_extractor import GitCodeExtractor
 from b4_thesis.analysis.deletion_prediction.evaluator import (
-    DetailedRuleEvaluation,
     Evaluator,
     GroupedRuleEvaluation,
 )
-from b4_thesis.analysis.deletion_prediction.feature_extractor import FeatureExtractor
+from b4_thesis.analysis.deletion_prediction.extraction.snippet_loader import SnippetLoader
+from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
 from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
 
 console = Console()
@@ -26,8 +26,10 @@ console = Console()
 # Common Utilities
 # ============================================================================
 
+
 def handle_command_errors(func: Callable) -> Callable:
     """Decorator to handle common command errors with consistent messaging."""
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -41,6 +43,7 @@ def handle_command_errors(func: Callable) -> Callable:
         except Exception as e:
             console.print(f"[red]Unexpected error:[/red] {e}", highlight=False)
             raise click.Abort()
+
     return wrapper
 
 
@@ -68,15 +71,26 @@ def deletion():
 
 
 @deletion.command()
-@click.argument("input_csv", type=click.Path(exists=True))
+@click.argument(
+    "input_csv",
+    type=click.Path(path_type=Path, exists=True, file_okay=True, dir_okay=False),
+    default="./output/method_lineage_labeled.csv",
+)
 @click.option(
     "--repo",
     "-r",
-    type=click.Path(exists=True),
-    required=True,
+    type=click.Path(path_type=Path, exists=True),
+    default="../projects/pandas",
     help="Path to git repository",
 )
-@click.option("--output", "-o", type=click.Path(), required=True, help="Output CSV file path")
+@click.option(
+    "--output",
+    "-o",
+    default="./output/method_lineage/snippets.csv",
+    type=click.Path(path_type=Path, file_okay=True, dir_okay=False),
+    required=True,
+    help="Output CSV file path",
+)
 @click.option(
     "--rules",
     type=str,
@@ -89,16 +103,53 @@ def deletion():
     default="/app/Repos/pandas/",
     help="Base path prefix to remove from file paths",
 )
-@click.option(
-    "--cache-dir",
-    type=click.Path(),
-    default=None,
-    help="Cache directory path (default: ~/.cache/b4-thesis/deletion-prediction)",
+@click.option("--verbose", "-v", is_flag=True, help="Show verbose output")
+@handle_command_errors
+def extract(
+    input_csv: Path,
+    repo: Path,
+    output: Path,
+    base_prefix: str,
+):
+    """Extract deletion prediction features from method lineage CSV.
+
+    This command:
+    1. Reads method_lineage_labeled.csv
+    2. Extracts code from git repository
+    3. Saves results to CSV
+
+    """
+    # load csv
+    method_lineage_df = pd.read_csv(input_csv)
+
+    # divide into deleted and non-deleted
+    non_deleted_df = method_lineage_df[method_lineage_df["state"] != "deleted"].copy()
+    # extract snippets for non-deleted
+    snippet_loader = SnippetLoader(
+        code_extractor=GitCodeExtractor(
+            repo_path=repo,
+            base_path_prefix=base_prefix,
+            github_base_url=None,
+        )
+    )
+    snippet_df = snippet_loader.load_snippets(non_deleted_df)
+
+    # save snippets to csv
+    snippet_df.to_csv(output, index=False)
+
+
+@deletion.command()
+@click.argument(
+    "input_csv",
+    type=click.Path(path_type=Path, exists=True, file_okay=True, dir_okay=False),
+    default="./output/method_lineage_labeled.csv",
 )
 @click.option(
-    "--no-cache",
-    is_flag=True,
-    help="Disable caching (forces re-extraction)",
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path, file_okay=True, dir_okay=False),
+    default="./output/method_lineage/ground_truth.csv",
+    help="Output CSV file path (default: method_lineage/ground_truth.csv in input CSV directory)",
 )
 @click.option(
     "--lookahead-window",
@@ -107,172 +158,31 @@ def deletion():
     show_default=True,
     help="Number of future revisions to check for deletion",
 )
-@click.option("--verbose", "-v", is_flag=True, help="Show verbose output")
-@handle_command_errors
-def extract(
-    input_csv: str,
-    repo: str,
-    output: str,
-    rules: str | None,
-    base_prefix: str,
-    cache_dir: str | None,
-    no_cache: bool,
-    lookahead_window: int,
-    verbose: bool,
-):
-    """Extract deletion prediction features from method lineage CSV.
+def generate(input_csv: Path, output: Path, lookahead_window: int):
+    """Generate ground truth labels for deletion prediction.
 
-    This command:
-    1. Reads method_lineage_labeled.csv
-    2. Extracts code from git repository
-    3. Applies deletion prediction rules
-    4. Generates ground truth labels (is_deleted_soon)
-    5. Saves results to CSV
+    This command reads a CSV with method lineage and code snippets,
+    then generates the 'is_deleted_soon' labels based on future revisions.
 
     Example:
-        b4-thesis deletion extract method_lineage_labeled.csv \\
-            --repo /path/to/repo \\
-            --output features.csv
+        b4-thesis deletion generate ./output/method_lineage.csv
     """
-    # Parse rules
-    rule_names = rules.split(",") if rules else None
-    if rule_names:
-        rule_names = [r.strip() for r in rule_names]
+    # Load CSV
+    method_lineage_df = pd.read_csv(input_csv)
 
-    # Setup cache manager
-    cache_manager = None
-    if not no_cache:
-        if cache_dir:
-            cache_path = Path(cache_dir)
-        else:
-            cache_path = Path.home() / ".cache" / "b4-thesis" / "deletion-prediction"
+    # Initialize feature extractor (dummy repo path since we only need labeling)
+    label_generator = LabelGenerator(lookahead_window=lookahead_window)
 
-        cache_manager = CacheManager(cache_path)
-        if verbose:
-            console.print(f"[dim]Cache directory: {cache_path}[/dim]")
+    # Generate labels
+    labeled_df = label_generator.generate_labels(method_lineage_df)
 
-    # Initialize extractor
-    console.print("[bold blue]Initializing feature extractor...[/bold blue]", highlight=False)
-    extractor = FeatureExtractor(
-        repo_path=Path(repo),
-        base_path_prefix=base_prefix,
-        lookahead_window=lookahead_window,
-    )
+    # extract only necessary columns
+    ground_truth_df = labeled_df[
+        ["global_block_id", "revision", "state_with_clone", "is_deleted_soon"]
+    ]
 
-    # Extract features
-    console.print(
-        f"[bold green]Extracting features from {input_csv}...[/bold green]",
-        highlight=False,
-    )
-    df = extractor.extract(
-        Path(input_csv),
-        rule_names=rule_names,
-        cache_manager=cache_manager,
-        use_cache=not no_cache,
-    )
-
-    # Save results
-    output_path = prepare_output_path(output)
-    df.to_csv(output_path, index=False)
-
-    print_success("Features saved to", output_path)
-
-    # Display summary if verbose
-    if verbose:
-        rule_cols = [c for c in df.columns if c.startswith("rule_")]
-        deleted_count = df["is_deleted_soon"].sum()
-        deleted_pct = (deleted_count / len(df) * 100) if len(df) > 0 else 0
-
-        console.print("\n[bold]Summary:[/bold]")
-        console.print(f"  Total methods: {len(df):,}")
-        console.print(f"  Deleted soon: {deleted_count:,} ({deleted_pct:.1f}%)")
-        console.print(f"  Rules applied: {len(rule_cols)}")
-        if rule_cols:
-            console.print("  Rule names:")
-            for col in rule_cols:
-                rule_name = col.replace("rule_", "")
-                positive_count = df[col].sum()
-                positive_pct = (positive_count / len(df) * 100) if len(df) > 0 else 0
-                console.print(f"    - {rule_name}: {positive_count:,} ({positive_pct:.1f}%)")
-
-
-def _create_composite_group_column(
-    df: pd.DataFrame,
-    group_by: str,
-    split_partial_by: str,
-    split_value: str = "partial_deleted",
-) -> tuple[pd.DataFrame, str]:
-    """Create a composite grouping column by subdividing a specific group value.
-
-    Args:
-        df: Features DataFrame
-        group_by: Primary grouping column (e.g., 'rev_status')
-        split_partial_by: Column to use for subdividing (e.g., 'state')
-        split_value: Which group value to subdivide (default: 'partial_deleted')
-
-    Returns:
-        Tuple of (modified DataFrame with new column, new column name)
-
-    Logic:
-        For each row:
-        - If df[group_by] != split_value: composite = df[group_by]
-        - If df[group_by] == split_value:
-          - If df[split_partial_by] == 'deleted': composite = f"{split_value}_deleted"
-          - If df[split_partial_by] in ['survived', 'added']: composite = f"{split_value}_survived"
-          - Otherwise (NaN or unexpected): composite = f"{split_value}_other"
-
-    Example:
-        Input: group_by='rev_status', split_partial_by='state'
-        - rev_status='no_deleted' → composite_group='no_deleted'
-        - rev_status='all_deleted' → composite_group='all_deleted'
-        - rev_status='partial_deleted', state='deleted'
-          → composite_group='partial_deleted_deleted'
-        - rev_status='partial_deleted', state='survived'
-          → composite_group='partial_deleted_survived'
-        - rev_status='partial_deleted', state='added'
-          → composite_group='partial_deleted_survived' (same as survived!)
-        - rev_status='partial_deleted', state=NaN
-          → composite_group='partial_deleted_other'
-    """
-    # Validate columns exist
-    if group_by not in df.columns:
-        raise ValueError(
-            f"Group-by column '{group_by}' not found in DataFrame. "
-            f"Available columns: {', '.join(df.columns)}"
-        )
-    if split_partial_by not in df.columns:
-        raise ValueError(
-            f"Split column '{split_partial_by}' not found in DataFrame. "
-            f"Available columns: {', '.join(df.columns)}"
-        )
-
-    # Create composite column
-    composite_col_name = f"_composite_{group_by}_{split_partial_by}"
-    df = df.copy()
-
-    def create_composite_value(row):
-        """Create composite group value for a single row."""
-        if row[group_by] != split_value:
-            # Not the target group value, use as-is
-            return row[group_by]
-
-        # Target group value - subdivide by split column
-        split_col_value = row[split_partial_by]
-
-        # Handle deleted state
-        if split_col_value == "deleted":
-            return f"{split_value}_deleted"
-
-        # Handle survived and added states (both are non-deleted)
-        if split_col_value in ["survived", "added"]:
-            return f"{split_value}_survived"
-
-        # Handle NaN or unexpected values
-        return f"{split_value}_other"
-
-    df[composite_col_name] = df.apply(create_composite_value, axis=1)
-
-    return df, composite_col_name
+    # Save labeled DataFrame
+    ground_truth_df.to_csv(output, index=False)
 
 
 @deletion.command()
@@ -384,9 +294,7 @@ def evaluate(
             context="features CSV",
         )
     except ValueError as e:
-        raise ValueError(
-            f"{e}. Did you run 'deletion extract' first?"
-        )
+        raise ValueError(f"{e}. Did you run 'deletion extract' first?")
 
     rule_cols = [c for c in df.columns if c.startswith("rule_")]
     if not rule_cols:
@@ -435,7 +343,36 @@ def evaluate(
 
     # Export detailed classifications if requested
     if detailed and export_dir:
-        _export_grouped_classifications(grouped_results, export_dir, console)
+        console.print(
+            "\n[bold blue]Exporting detailed classifications...[/bold blue]",
+            highlight=False,
+        )
+        export_path = Path(export_dir)
+        created_files_dict = evaluator.export_grouped_classifications_csv(
+            grouped_results, export_path
+        )
+
+        # Count total files created
+        total_files = sum(
+            len(classification_files)
+            for group_files in created_files_dict.values()
+            for classification_files in group_files.values()
+        )
+
+        console.print(
+            f"[green]✓[/green] Exported {total_files} classification CSV file{'s' if total_files != 1 else ''}",
+            highlight=False,
+        )
+        console.print(f"    to: {export_path}", highlight=False)
+
+        # Display created structure
+        console.print("\n[dim]Created structure:[/dim]")
+        for rule_name in sorted(created_files_dict.keys()):
+            console.print(f"  [dim]{rule_name}/[/dim]")
+            for group_name in sorted(created_files_dict[rule_name].keys()):
+                console.print(f"    [dim]{group_name}/[/dim]")
+                for classification_type in ["TP", "FP", "FN", "TN"]:
+                    console.print(f"      [dim]- {classification_type}.csv[/dim]")
 
 
 def _output_grouped_results(
@@ -572,74 +509,3 @@ def _output_grouped_results_table(
         json.dump([gr.to_dict() for gr in grouped_results], f, indent=2)
     console.print()
     print_success("Grouped evaluation saved to", output_path)
-
-
-def _export_grouped_classifications(
-    grouped_results: list[GroupedRuleEvaluation],
-    export_dir: str,
-    console: Console,
-) -> None:
-    """Export detailed classifications for grouped evaluation.
-
-    Creates one CSV per (rule, group) combination.
-
-    Example files:
-        short_lifetime_all_deleted_classifications.csv
-        short_lifetime_no_deleted_classifications.csv
-        short_lifetime_partial_deleted_classifications.csv
-        short_lifetime_OVERALL_classifications.csv
-    """
-    console.print(
-        "\n[bold blue]Exporting detailed classifications...[/bold blue]",
-        highlight=False,
-    )
-
-    export_path = Path(export_dir)
-    export_path.mkdir(parents=True, exist_ok=True)
-
-    created_files = []
-
-    for grouped_result in grouped_results:
-        rule_name = grouped_result.rule_name
-
-        # Export each group's classifications
-        for group_name, evaluation in grouped_result.group_evaluations.items():
-            if not isinstance(evaluation, DetailedRuleEvaluation):
-                continue
-            if evaluation.classifications is None:
-                continue
-
-            # Generate filename
-            safe_group_name = group_name.replace("/", "_").replace(" ", "_")
-            filename = f"{rule_name}_{safe_group_name}_classifications.csv"
-            file_path = export_path / filename
-
-            # Export to CSV
-            data = [c.to_dict() for c in evaluation.classifications]
-            df = pd.DataFrame(data)
-            df.to_csv(file_path, index=False)
-            created_files.append(file_path)
-
-        # Export overall if present
-        if grouped_result.overall_evaluation:
-            overall = grouped_result.overall_evaluation
-            if isinstance(overall, DetailedRuleEvaluation) and overall.classifications:
-                filename = f"{rule_name}_OVERALL_classifications.csv"
-                file_path = export_path / filename
-
-                data = [c.to_dict() for c in overall.classifications]
-                df = pd.DataFrame(data)
-                df.to_csv(file_path, index=False)
-                created_files.append(file_path)
-
-    total_files = len(created_files)
-    console.print(
-        f"[green]✓[/green] Exported {total_files} classification CSV file{'s' if total_files != 1 else ''}",
-        highlight=False,
-    )
-    console.print(f"    to: {export_path}", highlight=False)
-
-    if created_files:
-        console.print("\n[dim]Created files:[/dim]")
-        for file_path in sorted(created_files):
-            console.print(f"  [dim]- {file_path.name}[/dim]")

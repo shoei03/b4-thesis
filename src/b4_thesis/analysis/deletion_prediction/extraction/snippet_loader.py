@@ -64,5 +64,4 @@ class SnippetLoader:
             columns=["global_block_id", "revision", "code"],
         )
 
-
         return snippets_df
