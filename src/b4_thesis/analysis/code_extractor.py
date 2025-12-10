@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
-from tqdm import tqdm
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 
 @dataclass
@@ -216,6 +217,8 @@ class GitCodeExtractor:
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        console = Console()
+        
         # Create indexed requests to preserve order
         indexed_requests = list(enumerate(requests))
 
@@ -223,14 +226,22 @@ class GitCodeExtractor:
         results: list[tuple[int, CodeSnippet | None]] = []
         failed_count = 0
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks
-            future_to_idx = {
-                executor.submit(self._extract_snippet, req): idx for idx, req in indexed_requests
-            }
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Extracting code snippets", total=len(requests))
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_idx = {
+                    executor.submit(self._extract_snippet, req): idx for idx, req in indexed_requests
+                }
 
-            # Process completed tasks with progress bar
-            with tqdm(total=len(requests), desc="Extracting code snippets") as pbar:
+                # Process completed tasks with progress bar
                 for future in as_completed(future_to_idx):
                     idx = future_to_idx[future]
                     try:
@@ -240,16 +251,16 @@ class GitCodeExtractor:
                         # Log error but continue processing
                         failed_count += 1
                         request = requests[idx]
-                        tqdm.write(
-                            f"Warning: Failed to extract {request.function_name} "
-                            f"({request.revision}:{request.file_path}): {e}"
+                        console.print(
+                            f"[yellow]Warning: Failed to extract {request.function_name} "
+                            f"({request.revision}:{request.file_path}): {e}[/yellow]"
                         )
                         results.append((idx, None))
-                    pbar.update(1)
+                    progress.update(task, advance=1)
 
         # Report failures
         if failed_count > 0:
-            print(f"Warning: {failed_count}/{len(requests)} extraction requests failed")
+            console.print(f"[yellow]Warning: {failed_count}/{len(requests)} extraction requests failed[/yellow]")
 
         # Restore original order and filter out None
         results.sort(key=lambda x: x[0])
