@@ -262,7 +262,8 @@ class GitCodeExtractor:
         # Report failures
         if failed_count > 0:
             console.print(
-                f"[yellow]Warning: {failed_count}/{len(requests)} extraction requests failed[/yellow]"
+                f"[yellow]Warning: {failed_count}/{len(requests)} "
+                "extraction requests failed[/yellow]"
             )
 
         # Restore original order and filter out None
