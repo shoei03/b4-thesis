@@ -15,8 +15,10 @@ from b4_thesis.analysis.deletion_prediction.evaluator import (
     Evaluator,
     GroupedRuleEvaluation,
 )
+from b4_thesis.analysis.deletion_prediction.extraction.rule_applicator import RuleApplicator
 from b4_thesis.analysis.deletion_prediction.extraction.snippet_loader import SnippetLoader
 from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
+from b4_thesis.analysis.deletion_prediction.rules import get_rules
 from b4_thesis.analysis.validation import CsvValidator, DeletionPredictionColumns
 
 console = Console()
@@ -183,6 +185,87 @@ def generate(input_csv: Path, output: Path, lookahead_window: int):
 
     # Save labeled DataFrame
     ground_truth_df.to_csv(output, index=False)
+
+
+@deletion.command()
+@click.option(
+    "--input-snippets",
+    type=click.Path(path_type=Path, exists=True, file_okay=True, dir_okay=False),
+    default="./output/method_lineage/snippets.csv",
+)
+@click.option(
+    "--input-metadata",
+    type=click.Path(path_type=Path, exists=True, file_okay=True, dir_okay=False),
+    default="./output/method_lineage_labeled.csv",
+    help="CSV with method metadata (function_name, file_path, loc, etc.)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path, file_okay=True, dir_okay=False),
+    default="./output/method_lineage/with_rules.csv",
+    help="Output file path",
+)
+@click.option(
+    "--rules",
+    type=str,
+    default=None,
+    help="Comma-separated rule names to apply (default: all rules)",
+)
+def rule(input_snippets: Path, input_metadata: Path, output: Path, rules: str | None):
+    """Apply deletion prediction rules and output results.
+
+    This command reads a CSV with method lineage and code snippets,
+    applies deletion prediction rules, and outputs a CSV with rule results.
+
+    Example:
+        b4-thesis deletion rule ./output/method_lineage/snippets.csv \\
+            --output ./output/method_lineage/with_rules.csv \\
+            --rules short_method,has_todo
+    """
+    # Load CSV
+    snippets_df = pd.read_csv(input_snippets)
+    metadata_df = pd.read_csv(
+        input_metadata,
+        usecols=[
+            "global_block_id",
+            "revision",
+            "function_name",
+            "file_path",
+            "start_line",
+            "end_line",
+            "loc",
+        ],
+    )
+
+    # Merge snippets with metadata (inner join to ensure both exist)
+    merged_df = snippets_df.merge(
+        metadata_df,
+        on=["global_block_id", "revision"],
+        how="inner",
+    )
+
+    rule_applicator = RuleApplicator()
+
+    # Apply rules
+    rule_result = rule_applicator.apply_rules(merged_df, get_rules(rules))
+
+    # drop unnecessary columns
+    rule_result.df = rule_result.df.drop(
+        columns=["function_name", "file_path", "start_line", "end_line", "loc", "code"]
+    )
+
+    # sort
+    rule_result.df = rule_result.df.sort_values(by=["global_block_id", "revision"]).reset_index(
+        drop=True
+    )
+
+    # Save results
+    rule_result.df.to_csv(output, index=False)
+
+    print_success(
+        f"Applied {rule_result.rules_applied} rules ({rule_result.errors_count} errors) to", output
+    )
 
 
 @deletion.command()

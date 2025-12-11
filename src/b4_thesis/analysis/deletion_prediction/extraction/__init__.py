@@ -1,6 +1,5 @@
 """Feature extraction components for deletion prediction."""
 
-from b4_thesis.analysis.deletion_prediction.extraction.csv_loader import CsvDataLoader
 from b4_thesis.analysis.deletion_prediction.extraction.result_types import (
     CsvLoadResult,
     RuleApplicationResult,
