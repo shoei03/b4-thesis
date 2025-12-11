@@ -94,18 +94,11 @@ def deletion():
     help="Output CSV file path",
 )
 @click.option(
-    "--rules",
-    type=str,
-    default=None,
-    help="Comma-separated rule names (default: all rules)",
-)
-@click.option(
     "--base-prefix",
     type=str,
     default="/app/Repos/pandas/",
     help="Base path prefix to remove from file paths",
 )
-@click.option("--verbose", "-v", is_flag=True, help="Show verbose output")
 @handle_command_errors
 def extract(
     input_csv: Path,
