@@ -39,7 +39,7 @@ def extract():
     help="Base path prefix to remove from file paths",
 )
 @handle_command_errors
-def snippets(
+def extract_snippets(
     input_csv: Path,
     repo: Path,
     output: Path,
