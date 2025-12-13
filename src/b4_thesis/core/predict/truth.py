@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
+from b4_thesis.core.predict.predict_truth.label_generator import LabelGenerator
 
 
 def truth(input: Path, output: Path, lookahead_window: int):
