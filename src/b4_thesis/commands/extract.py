@@ -2,7 +2,7 @@ from pathlib import Path
 
 import click
 
-from b4_thesis.core.snippets import extract_snippets
+from b4_thesis.core.extract.snippets import extract_snippets
 from b4_thesis.error.cmd import handle_command_errors
 
 
