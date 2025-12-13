@@ -52,4 +52,4 @@ def extract_snippets(
         }
     )
 
-    snippets_df.to_csv(output, index=False)
+    snippets_df.to_csv(output, index=False, columns=["global_block_id", "revision", "code"])
