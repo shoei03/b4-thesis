@@ -57,6 +57,7 @@ def deletion():
     show_default=True,
     help="Number of future revisions to check for deletion",
 )
+@handle_command_errors
 def generate(input: Path, output: Path, lookahead_window: int):
     """Generate ground truth labels for deletion prediction.
 
@@ -112,6 +113,7 @@ def generate(input: Path, output: Path, lookahead_window: int):
     default=None,
     help="Comma-separated rule names to apply (default: all rules)",
 )
+@handle_command_errors
 def rule(input_snippets: Path, input_metadata: Path, output: Path, rules: str | None):
     """Apply deletion prediction rules and output results.
 
