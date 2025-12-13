@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from b4_thesis.cli import main
-from b4_thesis.commands.deletion import _create_composite_group_column
+from b4_thesis.commands.predict import _create_composite_group_column
 
 
 class TestCreateCompositeGroupColumn:
