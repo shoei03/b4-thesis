@@ -30,3 +30,4 @@ def truth(input: Path, output: Path, lookahead_window: int):
             "is_deleted_soon",
         ],
     )
+    print(f"Generated truth labels saved to {output}")

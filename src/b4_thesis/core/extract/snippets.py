@@ -53,3 +53,5 @@ def snippets(
     )
 
     snippets_df.to_csv(output, index=False, columns=["global_block_id", "revision", "code"])
+    
+    print(f"Extracted code snippets saved to {output}")
