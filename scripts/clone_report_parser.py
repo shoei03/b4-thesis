@@ -1,8 +1,8 @@
 """Parse clone group reports to extract method data for deletion pattern analysis."""
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Optional
 
 

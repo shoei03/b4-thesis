@@ -1,8 +1,8 @@
 """Analyze deletion patterns from clone reports using structured approach."""
 
-import json
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
+import json
 from pathlib import Path
 
 from clone_report_parser import CloneReportParser, MethodData

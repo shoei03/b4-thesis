@@ -1,8 +1,8 @@
 """LLM-based feature extraction for method deletion prediction."""
 
+from dataclasses import asdict, dataclass
 import json
 import os
-from dataclasses import asdict, dataclass
 from typing import Any
 
 import anthropic

@@ -1,8 +1,8 @@
 """Deep contextual analysis of deleted vs survived methods."""
 
-import json
 from collections import defaultdict
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
 
