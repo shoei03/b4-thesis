@@ -7,6 +7,7 @@ from b4_thesis.commands import (
     analyze,
     convert,
     deletion,
+    extract,
     label,
     report,
     stats,
@@ -32,6 +33,7 @@ def main(ctx):
 main.add_command(analyze.analyze)
 main.add_command(convert.convert)
 main.add_command(deletion.deletion)
+main.add_command(extract.extract)
 main.add_command(label.label)
 main.add_command(report.report)
 main.add_command(stats.stats)
