@@ -8,7 +8,7 @@ from rich.console import Console
 
 from b4_thesis.analysis.deletion_prediction.extraction.rule_applicator import RuleApplicator
 from b4_thesis.analysis.deletion_prediction.rules import get_rules
-from b4_thesis.core.deletion.truth import deletion_truth
+from b4_thesis.core.predict.truth import make_truth
 from b4_thesis.error.cmd import handle_command_errors
 
 console = Console()
@@ -25,12 +25,12 @@ def print_warning(message: str) -> None:
 
 
 @click.group()
-def deletion():
+def predict():
     """Detect deletion signs and evaluate prediction rules."""
     pass
 
 
-@deletion.command()
+@predict.command()
 @click.option(
     "--input",
     type=click.Path(path_type=Path, exists=True, file_okay=True, dir_okay=False),
@@ -51,15 +51,15 @@ def deletion():
     help="Number of future revisions to check for deletion",
 )
 @handle_command_errors
-def truth(input: Path, output: Path, lookahead_window: int):
-    deletion_truth(
+def make_truth(input: Path, output: Path, lookahead_window: int):
+    make_truth(
         input=input,
         output=output,
         lookahead_window=lookahead_window,
     )
 
 
-@deletion.command()
+@predict.command()
 @click.option(
     "--input-snippets",
     type=click.Path(path_type=Path, exists=True, file_okay=True, dir_okay=False),
@@ -126,7 +126,7 @@ def rule(input_snippets: Path, input_metadata: Path, output: Path, rules: str | 
     )
 
 
-@deletion.command()
+@predict.command()
 @click.argument("input_csv", type=click.Path(exists=True))
 @click.option("--output", "-o", type=click.Path(), required=True, help="Output file path")
 @click.option(

@@ -5,7 +5,7 @@ import pandas as pd
 from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
 
 
-def deletion_truth(input: Path, output: Path, lookahead_window: int):
+def make_truth(input: Path, output: Path, lookahead_window: int):
     method_lineage_df = pd.read_csv(
         input,
         usecols=[
