@@ -51,9 +51,9 @@ def predict():
     help="Number of future revisions to check for deletion",
 )
 @handle_command_errors
-def make_truth(input_file: Path, output: Path, lookahead_window: int):
+def make_truth(input: Path, output: Path, lookahead_window: int):
     truth(
-        input=input_file,
+        input=input,
         output=output,
         lookahead_window=lookahead_window,
     )
