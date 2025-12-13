@@ -359,7 +359,7 @@ Types:
 # 1. Start new feature development
 # 2. Implementation
 # 3. Lint & format
-uv run ruff check --fix src/ && uv run ruff format src/
+uv run ruff check --fix src/ && uv run ruff format src/ && uv run ruff check --select I --fix
 
 # 4. Run tests
 uv run pytest tests/
