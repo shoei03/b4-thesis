@@ -8,7 +8,7 @@ from rich.console import Console
 
 from b4_thesis.analysis.deletion_prediction.extraction.rule_applicator import RuleApplicator
 from b4_thesis.analysis.deletion_prediction.rules import get_rules
-from b4_thesis.core.predict.truth import make_truth
+from b4_thesis.core.predict.truth import truth
 from b4_thesis.error.cmd import handle_command_errors
 
 console = Console()
@@ -51,9 +51,9 @@ def predict():
     help="Number of future revisions to check for deletion",
 )
 @handle_command_errors
-def make_truth(input: Path, output: Path, lookahead_window: int):
-    make_truth(
-        input=input,
+def make_truth(input_file: Path, output: Path, lookahead_window: int):
+    truth(
+        input=input_file,
         output=output,
         lookahead_window=lookahead_window,
     )

@@ -5,7 +5,7 @@ import pandas as pd
 from b4_thesis.analysis.code_extractor import ExtractRequest, GitCodeExtractor
 
 
-def extract_snippets(
+def snippets(
     input_csv: Path,
     repo: Path,
     output: Path,

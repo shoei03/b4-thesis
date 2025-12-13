@@ -2,7 +2,7 @@ from pathlib import Path
 
 import click
 
-from b4_thesis.core.extract.snippets import extract_snippets
+from b4_thesis.core.extract.snippets import snippets
 from b4_thesis.error.cmd import handle_command_errors
 
 
@@ -45,7 +45,7 @@ def extract_snippets(
     output: Path,
     base_prefix: str,
 ):
-    extract_snippets(
+    snippets(
         input_csv=input_csv,
         repo=repo,
         output=output,
