@@ -6,11 +6,9 @@ from b4_thesis.analysis.deletion_prediction.extraction.result_types import (
     SnippetLoadResult,
 )
 from b4_thesis.analysis.deletion_prediction.extraction.rule_applicator import RuleApplicator
-from b4_thesis.analysis.deletion_prediction.extraction.snippet_loader import SnippetLoader
 
 __all__ = [
     "CsvDataLoader",
-    "SnippetLoader",
     "RuleApplicator",
     "CsvLoadResult",
     "SnippetLoadResult",
