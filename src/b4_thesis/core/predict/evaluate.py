@@ -28,13 +28,19 @@ def evaluate(
         merged_df[rule_columns].any(axis=1), "class_*_deleted", "class_*_survived"
     )
 
-    # Evaluate prediction accuracy
-    merged_df["is_correct"] = (
-        (merged_df["predict_class"] == "class_*_deleted")
-        & merged_df["is_deleted_soon"].str.contains("deleted")
-    ) | (
-        (merged_df["predict_class"] == "class_*_survived")
-        & merged_df["is_deleted_soon"].str.contains("survived")
+    # Create classification label for confusion matrix (TP/TN/FP/FN)
+    is_predicted_deleted = merged_df["predict_class"] == "class_*_deleted"
+    is_actually_deleted = merged_df["is_deleted_soon"].str.contains("deleted")
+
+    merged_df["prediction_result"] = np.select(
+        [
+            is_predicted_deleted & is_actually_deleted,  # True Positive
+            ~is_predicted_deleted & ~is_actually_deleted,  # True Negative
+            is_predicted_deleted & ~is_actually_deleted,  # False Positive
+            ~is_predicted_deleted & is_actually_deleted,  # False Negative
+        ],
+        ["TP", "TN", "FP", "FN"],
+        default="unknown",
     )
 
     merged_df.to_csv(
@@ -45,7 +51,7 @@ def evaluate(
             "revision",
             "predict_class",
             "is_deleted_soon",
-            "is_correct",
+            "prediction_result",
         ],
     )
     print(f"Evaluation results saved to {output}")
