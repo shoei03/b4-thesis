@@ -7,8 +7,8 @@ import pandas as pd
 from rich.console import Console
 
 from b4_thesis.analysis.deletion_prediction.extraction.rule_applicator import RuleApplicator
-from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
 from b4_thesis.analysis.deletion_prediction.rules import get_rules
+from b4_thesis.core.deletion.truth import deletion_truth
 from b4_thesis.error.cmd import handle_command_errors
 
 console = Console()
@@ -22,13 +22,6 @@ def print_success(message: str, output_path: Path) -> None:
 def print_warning(message: str) -> None:
     """Print warning message."""
     console.print(f"[yellow]Warning:[/yellow] {message}", highlight=False)
-
-
-def prepare_output_path(output: str) -> Path:
-    """Prepare output path by creating parent directories."""
-    path = Path(output)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 @click.group()
@@ -58,34 +51,12 @@ def deletion():
     help="Number of future revisions to check for deletion",
 )
 @handle_command_errors
-def generate(input: Path, output: Path, lookahead_window: int):
-    """Generate ground truth labels for deletion prediction.
-
-    This command reads a CSV with method lineage and code snippets,
-    then generates the 'is_deleted_soon' labels based on future revisions.
-
-    Example:
-        b4-thesis deletion generate ./output/method_lineage.csv
-    """
-    # Load CSV
-    method_lineage_df = pd.read_csv(input)
-
-    # Initialize feature extractor (dummy repo path since we only need labeling)
-    label_generator = LabelGenerator(lookahead_window=lookahead_window)
-
-    # Generate labels
-    labeled_df = label_generator.generate_labels(method_lineage_df)
-
-    # extract only necessary columns
-    ground_truth_df = labeled_df[
-        ["global_block_id", "revision", "state_with_clone", "is_deleted_soon"]
-    ]
-
-    # Prepare output path (create parent directories if needed)
-    output_path = prepare_output_path(output)
-
-    # Save labeled DataFrame
-    ground_truth_df.to_csv(output_path, index=False)
+def truth(input: Path, output: Path, lookahead_window: int):
+    deletion_truth(
+        input=input,
+        output=output,
+        lookahead_window=lookahead_window,
+    )
 
 
 @deletion.command()
