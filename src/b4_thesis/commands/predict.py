@@ -6,8 +6,7 @@ import click
 import pandas as pd
 from rich.console import Console
 
-from b4_thesis.analysis.deletion_prediction.extraction.rule_applicator import RuleApplicator
-from b4_thesis.analysis.deletion_prediction.rules import get_rules
+from b4_thesis.core.predict.rule import rule
 from b4_thesis.core.predict.truth import truth
 from b4_thesis.error.cmd import handle_command_errors
 
@@ -85,44 +84,12 @@ def make_truth(input: Path, output: Path, lookahead_window: int):
     help="Comma-separated rule names to apply (default: all rules)",
 )
 @handle_command_errors
-def rule(input_snippets: Path, input_metadata: Path, output: Path, rules: str | None):
-    """Apply deletion prediction rules and output results.
-
-    This command reads a CSV with method lineage and code snippets,
-    applies deletion prediction rules, and outputs a CSV with rule results.
-
-    """
-    # Load CSV
-    snippets_df = pd.read_csv(input_snippets)
-    metadata_df = pd.read_csv(input_metadata)
-
-    # Merge snippets with metadata (inner join to ensure both exist)
-    merged_df = snippets_df.merge(
-        metadata_df,
-        on=["global_block_id", "revision"],
-        how="inner",
-    )
-
-    rule_applicator = RuleApplicator()
-
-    # Apply rules
-    rule_result = rule_applicator.apply_rules(merged_df, get_rules(rules))
-
-    # drop unnecessary columns
-    rule_result.df = rule_result.df.drop(
-        columns=["function_name", "file_path", "start_line", "end_line", "loc", "code"]
-    )
-
-    # sort
-    rule_result.df = rule_result.df.sort_values(by=["global_block_id", "revision"]).reset_index(
-        drop=True
-    )
-
-    # Save results
-    rule_result.df.to_csv(output, index=False)
-
-    print_success(
-        f"Applied {rule_result.rules_applied} rules ({rule_result.errors_count} errors) to", output
+def apply_rule(input_snippets: Path, input_metadata: Path, output: Path, rules: str | None):
+    rule(
+        input_snippets=input_snippets,
+        input_metadata=input_metadata,
+        output=output,
+        rules=rules,
     )
 
 

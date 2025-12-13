@@ -1,28 +1,14 @@
 """Rule applicator for deletion prediction feature extraction."""
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from b4_thesis.analysis.deletion_prediction.extraction.result_types import (
-    RuleApplicationResult,
-)
 from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet, DeletionRule
 
 
 class RuleApplicator:
-    """Apply deletion prediction rules to code snippets.
-
-    This component handles:
-    - Creating CodeSnippet objects from DataFrame
-    - Applying rules with error handling
-    - Adding rule columns to DataFrame
-    """
-
-    def apply_rules(
-        self,
-        df: pd.DataFrame,
-        rules: list[DeletionRule],
-    ) -> RuleApplicationResult:
+    def apply_rules(self, df: pd.DataFrame, rules: list[DeletionRule]) -> pd.DataFrame:
         """Apply rules to methods in DataFrame.
 
         Args:
@@ -30,52 +16,42 @@ class RuleApplicator:
             rules: List of DeletionRule instances to apply
 
         Returns:
-            RuleApplicationResult with DataFrame containing rule_* columns
+            DataFrame with rule_* columns added
         """
-        # Create CodeSnippet objects from DataFrame
-        code_snippets = [self._create_code_snippet(row) for row in df.itertuples()]
+        snippets = self._create_snippets(df)
 
-        # Apply rules
-        errors_count = 0
         for rule in tqdm(rules, desc="Applying rules"):
-            rule_results = []
-            for snippet in code_snippets:
-                try:
-                    result = rule.apply(snippet)
-                    rule_results.append(result)
-                except Exception as e:
-                    # If rule application fails, assume False (no deletion sign)
-                    print(
-                        f"Warning: Rule {rule.rule_name} failed on "
-                        f"{snippet.function_name} (revision {snippet.revision}): {e}"
-                    )
-                    rule_results.append(False)
-                    errors_count += 1
+            df[f"rule_{rule.rule_name}"] = self._apply_rule(rule, snippets)
 
-            df[f"rule_{rule.rule_name}"] = rule_results
+        return df
 
-        return RuleApplicationResult(
-            df=df,
-            rules_applied=len(rules),
-            errors_count=errors_count,
-        )
+    def _apply_rule(self, rule: DeletionRule, snippets: list[CodeSnippet]) -> np.ndarray:
+        """Apply a single rule to all snippets."""
+        results = np.empty(len(snippets), dtype=bool)
 
-    def _create_code_snippet(self, row) -> CodeSnippet:
-        """Create CodeSnippet from DataFrame row.
+        for i, snippet in enumerate(snippets):
+            try:
+                results[i] = rule.apply(snippet)
+            except Exception as e:
+                print(f"Warning: Rule {rule.rule_name} failed on {snippet.function_name}: {e}")
+                results[i] = False
 
-        Args:
-            row: DataFrame row (itertuples result)
+        return results
 
-        Returns:
-            CodeSnippet instance
-        """
-        return CodeSnippet(
-            code=row.code,
-            function_name=row.function_name,
-            file_path=row.file_path,
-            start_line=row.start_line,
-            end_line=row.end_line,
-            revision=row.revision,
-            loc=row.loc,
-            global_block_id=row.global_block_id,
-        )
+    def _create_snippets(self, df: pd.DataFrame) -> list[CodeSnippet]:
+        """Create CodeSnippet objects from DataFrame."""
+        cols = {col: df[col].values for col in df.columns}
+
+        return [
+            CodeSnippet(
+                code=cols["code"][i],
+                function_name=cols["function_name"][i],
+                file_path=cols["file_path"][i],
+                start_line=cols["start_line"][i],
+                end_line=cols["end_line"][i],
+                revision=cols["revision"][i],
+                loc=cols["loc"][i],
+                global_block_id=cols["global_block_id"][i],
+            )
+            for i in range(len(df))
+        ]
