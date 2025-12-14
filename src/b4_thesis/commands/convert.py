@@ -39,7 +39,7 @@ def methods(input_file: Path, output: Path) -> None:
     # Convert to lineage format
     converter = LineageConverter()
     lineage_df = converter.convert(df)
-    
+
     # Save output
     output.parent.mkdir(parents=True, exist_ok=True)
     lineage_df.to_csv(output, index=False)

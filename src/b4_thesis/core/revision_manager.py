@@ -11,7 +11,6 @@ from pathlib import Path
 import pandas as pd
 
 
-
 @dataclass
 class RevisionInfo:
     """Information about a single revision.
