@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet, DeletionRule
+from b4_thesis.rules.base import CodeSnippet, DeletionRule
 
 
 class RuleApplicator:

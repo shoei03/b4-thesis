@@ -1,6 +1,6 @@
 """Rule registry for managing deletion prediction rules."""
 
-from b4_thesis.analysis.deletion_prediction.rule_base import DeletionRule
+from b4_thesis.rules.base import DeletionRule
 
 
 class RuleRegistry:
@@ -12,22 +12,22 @@ class RuleRegistry:
     def _load_rules(cls) -> list[DeletionRule]:
         """Lazy load all rule instances."""
         if cls._rules is None:
-            from b4_thesis.analysis.deletion_prediction.rules.api_usage import (
+            from b4_thesis.rules.deletion_prediction.api_usage import (
                 UsesAssertWarnRule,
                 UsesBothSelectLocRule,
                 UsesLocRule,
                 UsesSelectRule,
             )
-            from b4_thesis.analysis.deletion_prediction.rules.code_quality import (
+            from b4_thesis.rules.deletion_prediction.code_quality import (
                 EmptyMethodRule,
                 ShortMethodRule,
                 SingleReturnRule,
             )
-            from b4_thesis.analysis.deletion_prediction.rules.comment import (
+            from b4_thesis.rules.deletion_prediction.comment import (
                 DeprecatedAnnotationRule,
                 TodoCommentRule,
             )
-            from b4_thesis.analysis.deletion_prediction.rules.naming import (
+            from b4_thesis.rules.deletion_prediction.naming import (
                 DeprecatedNamingRule,
                 PrivateUnusedRule,
                 TemporaryNamingRule,

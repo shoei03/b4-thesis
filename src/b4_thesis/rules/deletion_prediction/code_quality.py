@@ -1,6 +1,6 @@
 """Code quality-based deletion prediction rules."""
 
-from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet, DeletionRule
+from b4_thesis.rules.base import CodeSnippet, DeletionRule
 
 
 class ShortMethodRule(DeletionRule):
