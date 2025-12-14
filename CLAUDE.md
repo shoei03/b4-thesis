@@ -22,8 +22,6 @@ b4-thesis/
 │   │   ├── config.py       # Pydantic-based config management
 │   │   └── revision_manager.py  # Revision data management with validation
 │   └── analysis/           # Analysis modules (Phase 1-6 ✓)
-│       ├── validation/          # Data validation (Phase 6)
-│       │   └── data_validator.py  # CSV data validation
 │       ├── tracking/            # Method tracking modules (Phase 6 refactored)
 │       │   ├── group_helper.py        # Group-related helper functions
 │       │   ├── lifetime_tracker.py    # Lifetime tracking logic
