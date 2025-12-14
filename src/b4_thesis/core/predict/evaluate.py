@@ -18,6 +18,7 @@ def evaluate(
         how="inner",
     )
 
+    # 削除されていなくとも，最終日までに削除されるか不明なものは除外される
     merged_df = merged_df[merged_df["is_deleted_soon"] != "unknown"]
 
     # Extract all rule_* columns
