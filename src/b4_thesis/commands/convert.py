@@ -31,27 +31,19 @@ def convert():
     help="Output file path",
 )
 def methods(input_file: Path, output: Path) -> None:
-    """
-    Convert method tracking data to lineage format.
-
-    This command unifies method identifiers across revisions by assigning
-    a global_block_id to each method lineage. Methods that match across
-    revisions will share the same global_block_id.
-
-    Examples:
-        b4-thesis convert methods ./output/method_tracking.csv -o result.csv
-    """
     console.print(f"[blue]Reading:[/blue] {input_file}")
     df = pd.read_csv(input_file)
+    # TODO: 本来はこの行は不要だが、変換処理の確認のため一時的に出力
     console.print(f"[dim]Input rows:[/dim] {df.shape[0]:,}")
 
     # Convert to lineage format
-    converter = LineageConverter(df)
-    lineage_df = converter.convert()
+    converter = LineageConverter()
+    lineage_df = converter.convert(df)
     
     # Save output
     output.parent.mkdir(parents=True, exist_ok=True)
     lineage_df.to_csv(output, index=False)
 
     console.print(f"[green]✓ Saved:[/green] {output}")
+    # TODO: 本来はこの行は不要だが、変換処理の確認のため一時的に出力
     console.print(f"[dim]Output rows:[/dim] {lineage_df.shape[0]:,}")
