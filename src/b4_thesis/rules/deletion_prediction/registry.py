@@ -1,52 +1,41 @@
 """Rule registry for managing deletion prediction rules."""
 
 from b4_thesis.rules.base import DeletionRule
+from b4_thesis.rules.deletion_prediction.rule_factory import RuleFactory
 
 
 class RuleRegistry:
     """Central registry for all deletion prediction rules."""
 
     _rules: list[DeletionRule] | None = None
+    _factory: RuleFactory | None = None
+
+    @classmethod
+    def _get_factory(cls) -> RuleFactory:
+        """Get or create RuleFactory instance.
+
+        Returns:
+            RuleFactory instance
+        """
+        if cls._factory is None:
+            cls._factory = RuleFactory()
+        return cls._factory
 
     @classmethod
     def _load_rules(cls) -> list[DeletionRule]:
-        """Lazy load all rule instances."""
-        if cls._rules is None:
-            from b4_thesis.rules.deletion_prediction.api_usage import (
-                UsesAssertWarnRule,
-                UsesBothSelectLocRule,
-                UsesLocRule,
-                UsesSelectRule,
-            )
-            from b4_thesis.rules.deletion_prediction.code_quality import (
-                EmptyMethodRule,
-                ShortMethodRule,
-                SingleReturnRule,
-            )
-            from b4_thesis.rules.deletion_prediction.comment import (
-                DeprecatedAnnotationRule,
-                TodoCommentRule,
-            )
-            from b4_thesis.rules.deletion_prediction.naming import (
-                DeprecatedNamingRule,
-                PrivateUnusedRule,
-                TemporaryNamingRule,
-            )
+        """Lazy load all rule instances from YAML configuration.
 
-            cls._rules = [
-                ShortMethodRule(),
-                EmptyMethodRule(),
-                SingleReturnRule(),
-                TodoCommentRule(),
-                DeprecatedAnnotationRule(),
-                DeprecatedNamingRule(),
-                TemporaryNamingRule(),
-                PrivateUnusedRule(),
-                UsesSelectRule(),
-                UsesLocRule(),
-                UsesBothSelectLocRule(),
-                UsesAssertWarnRule(),
-            ]
+        Returns:
+            List of rule instances
+
+        Raises:
+            FileNotFoundError: If rules.yaml not found
+            yaml.YAMLError: If YAML syntax is invalid
+            ValueError: If rule configuration is invalid
+        """
+        if cls._rules is None:
+            factory = cls._get_factory()
+            cls._rules = factory.load_rules()
         return cls._rules
 
     @classmethod

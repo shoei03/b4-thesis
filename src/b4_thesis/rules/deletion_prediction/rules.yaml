@@ -1,0 +1,153 @@
+# Deletion Prediction Rules Configuration
+# Defines all rules for detecting methods that might be candidates for deletion
+
+rules:
+  # ========================================
+  # REGEX-BASED RULES (code pattern matching)
+  # ========================================
+
+  - name: has_todo
+    type: regex
+    description: "Method contains TODO, FIXME, HACK, or XXX comments"
+    enabled: true
+    patterns:
+      - "#.*\\bTODO\\b"
+      - "#.*\\bFIXME\\b"
+      - "#.*\\bHACK\\b"
+      - "#.*\\bXXX\\b"
+    flags:
+      - IGNORECASE
+
+  - name: has_deprecated
+    type: regex
+    description: "Method has @deprecated decorator or deprecation warning"
+    enabled: true
+    patterns:
+      - "@deprecated"
+      - "@deprecate"
+      - "warnings\\.warn.*[Dd]eprecat"
+      - "DeprecationWarning"
+      - "FutureWarning"
+      - "# *deprecated"
+      - "# *DEPRECATED"
+    flags: []
+
+  - name: uses_select
+    type: regex
+    description: "Method uses pandas .select() API"
+    enabled: true
+    patterns:
+      - "\\.select\\s*\\("
+    flags: []
+
+  - name: uses_loc
+    type: regex
+    description: "Method uses pandas .loc[] indexer"
+    enabled: true
+    patterns:
+      - "\\.loc\\s*\\["
+    flags: []
+
+  - name: uses_assert_warn
+    type: regex
+    description: "Method uses assert and warning-related APIs"
+    enabled: true
+    patterns:
+      - "[\\w\\.]*assert_.*warn[\\w]*\\s*\\("
+    flags: []
+
+  # ========================================
+  # REGEX-BASED RULES (function name pattern matching)
+  # ========================================
+
+  - name: deprecated_naming
+    type: regex_function_name
+    description: "Method name contains 'deprecated', 'old', 'legacy', or 'obsolete'"
+    enabled: true
+    patterns:
+      - "\\bdeprecated\\b"
+      - "\\bold[_-]"
+      - "[_-]old\\b"
+      - "\\blegacy\\b"
+      - "\\bobsolete\\b"
+    flags:
+      - IGNORECASE
+
+  - name: temporary_naming
+    type: regex_function_name
+    description: "Method name contains 'tmp', 'temp', 'test', 'debug', or 'hack'"
+    enabled: true
+    patterns:
+      - "\\btmp[_-]"
+      - "[_-]tmp\\b"
+      - "\\btemp[_-]"
+      - "[_-]temp\\b"
+      - "\\bdebug[_-]"
+      - "[_-]debug\\b"
+      - "\\bhack\\b"
+      - "\\bfixme\\b"
+      - "\\bcompat\\b"
+      - "\\bcompatibility\\b"
+      - "\\bbackward[_-]?compat(?:ibility)?\\b"
+      - "\\bbackward[_-]?compatible\\b"
+      - "\\bback_?compat\\b"
+      - "\\bretrocompat\\b"
+    flags:
+      - IGNORECASE
+
+  # ========================================
+  # THRESHOLD-BASED RULES
+  # ========================================
+
+  - name: short_method
+    type: threshold
+    description: "Method has 3 or fewer effective lines of code"
+    enabled: true
+    threshold: 3
+
+  # ========================================
+  # TRIVIAL STATEMENTS RULES
+  # ========================================
+
+  - name: empty_method
+    type: trivial_statements
+    description: "Method body is empty or contains only pass/... statements"
+    enabled: true
+    trivial_statements:
+      - "pass"
+      - "..."
+      - "return"
+      - "return None"
+
+  # ========================================
+  # COMPOSITE RULES (multiple patterns combined)
+  # ========================================
+
+  - name: uses_both_select_loc
+    type: composite
+    description: "Method uses .select(), .loc[], and assert_*warn* APIs together"
+    enabled: true
+    operator: AND
+    sub_patterns:
+      - pattern: "\\.select\\s*\\("
+        flags: []
+      - pattern: "\\.loc\\s*\\["
+        flags: []
+      - pattern: "[\\w\\.]*assert_.*warn[\\w]*\\s*\\("
+        flags: []
+
+  # ========================================
+  # CUSTOM RULES (require Python implementation)
+  # ========================================
+
+  - name: single_return
+    type: custom
+    description: "Method contains only a single return statement"
+    enabled: true
+    class: "b4_thesis.rules.deletion_prediction.code_quality.SingleReturnRule"
+
+  - name: private_unused
+    type: custom
+    description: "Method is private (starts with underscore)"
+    enabled: true
+    class: "b4_thesis.rules.deletion_prediction.naming.PrivateUnusedRule"
