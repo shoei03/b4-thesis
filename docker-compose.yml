@@ -12,5 +12,7 @@ services:
       # Host paths for Docker-in-Docker volume mounts
       - HOST_PROJECTS_PATH=/Users/shoei-y/research/projects
       - HOST_OUTPUT_PATH=/Users/shoei-y/research/b4-thesis/output
+      # Docker API version compatibility
+      - DOCKER_API_VERSION=1.43
     stdin_open: true
     tty: true
