@@ -15,6 +15,31 @@ from rich.progress import (
 )
 
 
+def ensure_repository(repo_path: Path, console: Console) -> None:
+    """Ensure pandas repository exists and is properly cloned.
+
+    Args:
+        repo_path: Path to the repository
+        console: Rich console for output
+    """
+    if not (repo_path / ".git").exists():
+        console.print("[yellow]Pandas repository not found. Setting up...[/yellow]")
+
+        setup_script = Path(__file__).parent / "setup_repository.sh"
+        if not setup_script.exists():
+            console.print(f"[red]Setup script not found at {setup_script}[/red]")
+            exit(1)
+
+        result = subprocess.run(["bash", str(setup_script)])
+        if result.returncode != 0:
+            console.print("[red]Failed to set up repository[/red]")
+            exit(1)
+
+        console.print("[green]Repository set up successfully[/green]")
+    else:
+        console.print("[dim]Repository found[/dim]")
+
+
 def _generate_tag_pairs(tags: list) -> list[tuple[str, str, str, str]]:
     """Generate consecutive tag pairs with commit information.
 
@@ -104,10 +129,15 @@ host_output_dir = (
     Path(os.getenv("HOST_OUTPUT_PATH", str(base_dir / "output"))) / "refactoring_miner"
 )
 
+console = Console()
+
 print(f"Repository path (container): {repo_path}")
 print(f"Repository path (host): {host_repo_path}")
 print(f"Output directory (container): {output_dir}")
 print(f"Output directory (host): {host_output_dir}")
+
+# リポジトリが存在することを確認（必要であればクローン）
+ensure_repository(repo_path, console)
 
 # リポジトリからタグを取得
 repo = Repo(repo_path)
@@ -115,7 +145,6 @@ tags = [t for t in repo.tags if re.match(r"^v\d+\.\d+\.0$", t.name)]
 tags.sort(key=lambda t: [int(x) for x in t.name[1:].split(".")])
 
 # エッジケース処理
-console = Console()
 
 if len(tags) < 2:
     console.print("[yellow]At least 2 tags required[/yellow]")
