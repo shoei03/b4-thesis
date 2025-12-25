@@ -60,6 +60,7 @@ def _process_tag_pair(
     cmd = [
         "docker",
         "run",
+        "--rm",
         "-v",
         f"{host_repo_path}:/repo",
         "-v",
@@ -78,12 +79,12 @@ def _process_tag_pair(
         if result.returncode == 0:
             return (prev_name, next_name, True, None)
         else:
-            return (
-                prev_name,
-                next_name,
-                False,
-                f"Docker returned code {result.returncode}",
-            )
+            error_msg = f"Docker returned code {result.returncode}"
+            if result.stderr:
+                error_msg += f"\nStderr: {result.stderr.strip()}"
+            if result.stdout:
+                error_msg += f"\nStdout: {result.stdout.strip()}"
+            return (prev_name, next_name, False, error_msg)
     except subprocess.TimeoutExpired:
         return (prev_name, next_name, False, "Timeout (1 hour)")
     except Exception as e:
@@ -125,6 +126,22 @@ tag_pairs = _generate_tag_pairs(tags)
 if not tag_pairs:
     console.print("[yellow]No tag pairs to process[/yellow]")
     exit(0)
+
+# Docker可用性チェック
+console.print("[dim]Checking Docker availability...[/dim]")
+try:
+    docker_version = subprocess.run(
+        ["docker", "version", "--format", "{{.Server.Version}}"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if docker_version.returncode == 0:
+        console.print(f"[dim]Docker version: {docker_version.stdout.strip()}[/dim]")
+    else:
+        console.print("[yellow]Warning: Docker may not be available[/yellow]")
+except Exception as e:
+    console.print(f"[yellow]Warning: Could not check Docker: {e}[/yellow]")
 
 # 並列処理でRefactoringMinerを実行
 max_workers = 3
