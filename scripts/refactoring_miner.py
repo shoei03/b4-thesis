@@ -5,8 +5,8 @@ import subprocess
 from git import Repo
 
 # パス設定
-repo_path = Path(__file__).parent.parent / "projects" / "pandas"
-output_dir = Path(__file__).parent.parent / "output" / "refactoring_miner"
+repo_path = Path(__file__).parents[2] / "projects" / "pandas"
+output_dir = Path(__file__).parents[1] / "output" / "refactoring_miner"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # リポジトリからタグを取得
