@@ -91,15 +91,17 @@ def _process_tag_pair(
 
 
 # パス設定
-# コンテナ内のパス（Gitリポジトリの操作やファイル存在チェックに使用）
-repo_path = Path(__file__).parent.parent / "projects" / "pandas"
-output_dir = Path(__file__).parent.parent / "output" / "refactoring_miner"
+base_dir = Path(__file__).parent.parent
+repo_path = base_dir / "projects" / "pandas"
+output_dir = base_dir / "output" / "refactoring_miner"
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# ホスト側のパス（Docker-in-Docker用のボリュームマウントに使用）
-# 環境変数が設定されていない場合はコンテナ内のパスをそのまま使用（ローカル実行時）
-host_repo_path = Path(os.getenv("HOST_PROJECTS_PATH", str(repo_path.parent))) / "pandas"
-host_output_dir = Path(os.getenv("HOST_OUTPUT_PATH", str(output_dir.parent))) / "refactoring_miner"
+# ホスト側パス（Docker-in-Docker用のボリュームマウントに使用）
+# デフォルトは親ディレクトリのprojects/outputを使用（ローカル実行想定）
+host_repo_path = Path(os.getenv("HOST_PROJECTS_PATH", str(base_dir.parent / "projects"))) / "pandas"
+host_output_dir = (
+    Path(os.getenv("HOST_OUTPUT_PATH", str(base_dir / "output"))) / "refactoring_miner"
+)
 
 print(f"Repository path (container): {repo_path}")
 print(f"Repository path (host): {host_repo_path}")
