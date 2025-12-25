@@ -22,6 +22,7 @@ dependencies = [
     "pyarrow>=22.0.0",
     "anthropic>=0.75.0",
     "pyyaml>=6.0.3",
+    "gitpython>=3.1.45",
 ]
 
 [dependency-groups]
