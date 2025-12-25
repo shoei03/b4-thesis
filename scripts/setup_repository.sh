@@ -12,6 +12,8 @@ if [ -d "$REPO_PATH/.git" ]; then
 else
     echo "Cloning pandas repository (this may take a while)..."
     mkdir -p /app/projects
-    git clone --progress "$REPO_URL" "$REPO_PATH"
+    git clone --progress --no-single-branch "$REPO_URL" "$REPO_PATH"
+    cd "$REPO_PATH"
+    git fetch --tags
     echo "Repository cloned successfully"
 fi
