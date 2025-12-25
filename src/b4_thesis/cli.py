@@ -9,6 +9,7 @@ from b4_thesis.commands import (
     extract,
     label,
     predict,
+    refactoring,
     report,
     stats,
     track,
@@ -35,6 +36,7 @@ main.add_command(convert.convert)
 main.add_command(predict.predict)
 main.add_command(extract.extract)
 main.add_command(label.label)
+main.add_command(refactoring.refactoring)
 main.add_command(report.report)
 main.add_command(stats.stats)
 main.add_command(track.track)
