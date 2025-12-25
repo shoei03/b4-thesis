@@ -12,8 +12,10 @@ if [ -d "$REPO_PATH/.git" ]; then
 else
     echo "Cloning pandas repository (this may take a while)..."
     mkdir -p /app/projects
-    git clone --progress --no-single-branch "$REPO_URL" "$REPO_PATH"
+    # Use mirror clone to get complete repository including all refs
+    git clone --mirror "$REPO_URL" "$REPO_PATH/.git"
     cd "$REPO_PATH"
-    git fetch --tags
+    git config --bool core.bare false
+    git reset --hard HEAD
     echo "Repository cloned successfully"
 fi
