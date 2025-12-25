@@ -34,27 +34,36 @@ def _process_tag_pair(
     pair: tuple[str, str, str, str],
     repo_path: Path,
     output_dir: Path,
+    host_repo_path: Path,
+    host_output_dir: Path,
 ) -> tuple[str, str, bool, str | None]:
     """Process a single tag pair with RefactoringMiner.
 
     Args:
         pair: Tuple of (prev_hexsha, next_hexsha, prev_name, next_name)
-        repo_path: Path to repository
-        output_dir: Directory for output JSON files
+        repo_path: Path to repository (container path)
+        output_dir: Directory for output JSON files (container path)
+        host_repo_path: Path to repository (host path for Docker volume mount)
+        host_output_dir: Directory for output JSON files (host path for Docker volume mount)
 
     Returns:
         Tuple of (prev_name, next_name, success, error_message)
     """
     prev_hexsha, next_hexsha, prev_name, next_name = pair
     output_file = f"pandas_{prev_name}_to_{next_name}.json"
+    output_path = output_dir / output_file
+
+    # Skip if output file already exists
+    if output_path.exists():
+        return (prev_name, next_name, True, "skipped (already exists)")
 
     cmd = [
         "docker",
         "run",
         "-v",
-        f"{repo_path}:/repo",
+        f"{host_repo_path}:/repo",
         "-v",
-        f"{output_dir}:/output",
+        f"{host_output_dir}:/output",
         "tsantalis/refactoringminer",
         "-bc",
         "/repo",
@@ -82,9 +91,20 @@ def _process_tag_pair(
 
 
 # パス設定
+# コンテナ内のパス（Gitリポジトリの操作やファイル存在チェックに使用）
 repo_path = Path(__file__).parent.parent / "projects" / "pandas"
 output_dir = Path(__file__).parent.parent / "output" / "refactoring_miner"
 output_dir.mkdir(parents=True, exist_ok=True)
+
+# ホスト側のパス（Docker-in-Docker用のボリュームマウントに使用）
+# 環境変数が設定されていない場合はコンテナ内のパスをそのまま使用（ローカル実行時）
+host_repo_path = Path(os.getenv("HOST_PROJECTS_PATH", str(repo_path.parent))) / "pandas"
+host_output_dir = Path(os.getenv("HOST_OUTPUT_PATH", str(output_dir.parent))) / "refactoring_miner"
+
+print(f"Repository path (container): {repo_path}")
+print(f"Repository path (host): {host_repo_path}")
+print(f"Output directory (container): {output_dir}")
+print(f"Output directory (host): {host_output_dir}")
 
 # リポジトリからタグを取得
 repo = Repo(repo_path)
@@ -105,9 +125,10 @@ if not tag_pairs:
     exit(0)
 
 # 並列処理でRefactoringMinerを実行
-max_workers = os.cpu_count()
+max_workers = 3
 failed_analyses = []
 successful_count = 0
+skipped_count = 0
 
 with Progress(
     SpinnerColumn(),
@@ -124,7 +145,9 @@ with Progress(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # 全てのタスクを投入
         future_to_pair = {
-            executor.submit(_process_tag_pair, pair, repo_path, output_dir): pair
+            executor.submit(
+                _process_tag_pair, pair, repo_path, output_dir, host_repo_path, host_output_dir
+            ): pair
             for pair in tag_pairs
         }
 
@@ -135,7 +158,10 @@ with Progress(
                 prev_name, next_name, success, error = future.result()
 
                 if success:
-                    successful_count += 1
+                    if error and "skipped" in error:
+                        skipped_count += 1
+                    else:
+                        successful_count += 1
                 else:
                     failed_analyses.append((prev_name, next_name, error))
                     console.print(
@@ -150,7 +176,10 @@ with Progress(
             progress.update(task, advance=1)
 
 # サマリー表示
-console.print(f"\n[bold]Complete:[/bold] {successful_count}/{len(tag_pairs)} succeeded")
+console.print(
+    f"\n[bold]Complete:[/bold] {successful_count}/{len(tag_pairs)} succeeded, "
+    f"{skipped_count} skipped"
+)
 
 if failed_analyses:
     console.print("[yellow]Failed analyses:[/yellow]")
