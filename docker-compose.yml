@@ -1,0 +1,15 @@
+services:
+  analysis:
+    build: .
+    volumes:
+      - ./..:/workspace
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
+      # Host paths for Docker-in-Docker volume mounts
+      - HOST_PROJECTS_PATH=${PWD}/../projects
+      - HOST_OUTPUT_PATH=${PWD}/output
+    stdin_open: true
+    tty: true
