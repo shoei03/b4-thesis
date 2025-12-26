@@ -15,7 +15,6 @@ from b4_thesis.analysis.tracking import (
     calculate_avg_similarity_to_group,
     find_group_for_block,
 )
-from b4_thesis.analysis.validation import DataValidator
 from b4_thesis.core.revision_manager import RevisionManager
 
 
@@ -91,7 +90,6 @@ class MethodTracker:
         )
         self.group_detector = GroupDetector(similarity_threshold=similarity_threshold)
         self.state_classifier = StateClassifier()
-        self.data_validator = DataValidator()
         self.pair_processor = RevisionPairProcessor(
             revision_manager=self.revision_manager,
             method_matcher=self.method_matcher,
@@ -208,44 +206,8 @@ class MethodTracker:
 
         # Convert to DataFrame
         df = pd.DataFrame([asdict(r) for r in all_results])
-
-        # Ensure correct data types
-        if len(df) > 0:
-            df["start_line"] = df["start_line"].astype(int)
-            df["end_line"] = df["end_line"].astype(int)
-            df["loc"] = df["loc"].astype(int)
-            df["clone_count"] = df["clone_count"].astype(int)
-            df["clone_group_size"] = df["clone_group_size"].astype(int)
-            df["lifetime_revisions"] = df["lifetime_revisions"].astype(int)
-            df["lifetime_days"] = df["lifetime_days"].astype(int)
-
-            # Sort by revision, file_path, state, state_detail
-            df = df.sort_values(
-                ["revision", "clone_group_id", "state", "state_detail", "file_path"]
-            )
-
-            # Validate method tracking data quality
-            df = self.data_validator.validate_method_tracking(df, source="method_tracking.csv")
-
+        df = df.sort_values(["revision", "clone_group_id", "state", "state_detail", "file_path"])
         # Store results for lineage format conversion
         self._results_df = df
 
         return df
-
-    def to_tracking_format(self) -> pd.DataFrame:
-        """
-        Return method tracking results in the original format.
-
-        Returns method_tracking.csv format with block_id and matched_block_id columns.
-        Must be called after track().
-
-        Returns:
-            DataFrame with 17 columns including block_id and matched_block_id
-
-        Raises:
-            RuntimeError: If called before track()
-        """
-        if self._results_df is None:
-            raise RuntimeError("Must call track() before to_tracking_format()")
-
-        return self._results_df.copy()
