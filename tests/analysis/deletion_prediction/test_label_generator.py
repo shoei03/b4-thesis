@@ -1,9 +1,9 @@
 """Tests for LabelGenerator."""
 
-import pandas as pd
 import pytest
 
 from b4_thesis.analysis.deletion_prediction.label_generator import LabelGenerator
+import pandas as pd
 
 
 class TestLabelGenerator:
@@ -51,9 +51,7 @@ class TestLabelGenerator:
             }
         )
         # No deleted records
-        deleted_df = pd.DataFrame(
-            {"global_block_id": [], "revision": [], "state": []}
-        )
+        deleted_df = pd.DataFrame({"global_block_id": [], "revision": [], "state": []})
 
         labels = generator.generate_labels(df, deleted_df)
 
@@ -87,9 +85,7 @@ class TestLabelGenerator:
         """Test error handling for missing required columns."""
         # Missing revision and state columns
         df = pd.DataFrame({"global_block_id": ["id1"]})
-        deleted_df = pd.DataFrame(
-            {"global_block_id": [], "revision": [], "state": []}
-        )
+        deleted_df = pd.DataFrame({"global_block_id": [], "revision": [], "state": []})
 
         with pytest.raises(ValueError, match="missing required columns"):
             generator.generate_labels(df, deleted_df)
@@ -252,9 +248,7 @@ class TestLabelGeneratorWithLookahead:
             }
         )
         # No deletions
-        deleted_df = pd.DataFrame(
-            {"global_block_id": [], "revision": [], "state": []}
-        )
+        deleted_df = pd.DataFrame({"global_block_id": [], "revision": [], "state": []})
 
         generator = LabelGenerator(lookahead_window=5)
         labels = generator.generate_labels(df, deleted_df)
@@ -310,9 +304,7 @@ class TestLabelGeneratorWithLookahead:
                 "state": ["added", "added"],
             }
         )
-        deleted_df = pd.DataFrame(
-            {"global_block_id": [], "revision": [], "state": []}
-        )
+        deleted_df = pd.DataFrame({"global_block_id": [], "revision": [], "state": []})
 
         generator = LabelGenerator(lookahead_window=5)
         labels = generator.generate_labels(df, deleted_df)

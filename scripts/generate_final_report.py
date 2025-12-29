@@ -455,7 +455,7 @@ The identified patterns provide a foundation for building **predictive models** 
     report += "|--------------|---------|----------|-------|----------------|\n"
     for stat in pattern_stats:
         pattern = stat["pattern"].replace("_", " ").title()
-        report += f"| {pattern} | {stat['deleted']} | {stat['survived']} | {stat['total']} | {stat['deletion_ratio']*100:.1f}% |\n"
+        report += f"| {pattern} | {stat['deleted']} | {stat['survived']} | {stat['total']} | {stat['deletion_ratio'] * 100:.1f}% |\n"
 
     report += """
 

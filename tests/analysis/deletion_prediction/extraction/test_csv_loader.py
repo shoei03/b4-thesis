@@ -1,10 +1,9 @@
 """Tests for CsvDataLoader."""
 
-
-import pandas as pd
 import pytest
 
 from b4_thesis.analysis.deletion_prediction.extraction import CsvDataLoader, CsvLoadResult
+import pandas as pd
 
 
 class TestCsvDataLoader:

@@ -56,10 +56,7 @@ def analyze_code_sample(sample: dict) -> dict:
         features["detected_patterns"].append("delegation")
 
     # Pattern 3: Conversion/casting functions
-    if any(
-        keyword in code.lower()
-        for keyword in ["convert", "cast", "to_", "as_", "from_"]
-    ):
+    if any(keyword in code.lower() for keyword in ["convert", "cast", "to_", "as_", "from_"]):
         if sample["loc"] <= 15:
             features["detected_patterns"].append("conversion_utility")
 
@@ -68,10 +65,7 @@ def analyze_code_sample(sample: dict) -> dict:
         features["detected_patterns"].append("validation")
 
     # Pattern 5: Deprecated or transitional code
-    if any(
-        marker in code.lower()
-        for marker in ["deprecated", "todo", "fixme", "xxx", "hack"]
-    ):
+    if any(marker in code.lower() for marker in ["deprecated", "todo", "fixme", "xxx", "hack"]):
         features["detected_patterns"].append("deprecated_or_todo")
 
     # Pattern 6: One-liner or very small functions
@@ -81,10 +75,7 @@ def analyze_code_sample(sample: dict) -> dict:
     # Pattern 7: Functions with complex logic
     if any(keyword in code for keyword in ["for ", "while ", "if "]):
         control_flow_count = (
-            code.count("for ")
-            + code.count("while ")
-            + code.count("if ")
-            + code.count("elif ")
+            code.count("for ") + code.count("while ") + code.count("if ") + code.count("elif ")
         )
         if control_flow_count >= 3:
             features["detected_patterns"].append("complex_control_flow")
@@ -196,7 +187,7 @@ The following patterns were identified through contextual code analysis. Pattern
 
     for stat in pattern_stats:
         pattern = stat["pattern"].replace("_", " ").title()
-        report += f"| {pattern} | {stat['deleted']} | {stat['survived']} | {stat['total']} | {stat['deletion_ratio']*100:.1f}% | {'**High risk**' if stat['deletion_ratio'] > 0.6 else '**Moderate**' if stat['deletion_ratio'] > 0.4 else 'Low'} |\n"
+        report += f"| {pattern} | {stat['deleted']} | {stat['survived']} | {stat['total']} | {stat['deletion_ratio'] * 100:.1f}% | {'**High risk**' if stat['deletion_ratio'] > 0.6 else '**Moderate**' if stat['deletion_ratio'] > 0.4 else 'Low'} |\n"
 
     report += "\n## Detailed Pattern Descriptions\n\n"
 
@@ -227,7 +218,7 @@ The following patterns were identified through contextual code analysis. Pattern
         report += f"**Statistics**:\n"
         report += f"- Deleted: {stat['deleted']}\n"
         report += f"- Survived: {stat['survived']}\n"
-        report += f"- Deletion Ratio: {stat['deletion_ratio']*100:.1f}%\n\n"
+        report += f"- Deletion Ratio: {stat['deletion_ratio'] * 100:.1f}%\n\n"
         report += f"**Examples**:\n"
         for example in stat["examples"][:3]:
             report += f"- {example}\n"
@@ -238,14 +229,14 @@ The following patterns were identified through contextual code analysis. Pattern
     report += f"\n## High-Risk Patterns (Deletion Ratio > 50%)\n\n"
     report += f"The following {len(high_risk)} patterns show strong correlation with deletion:\n\n"
     for stat in high_risk:
-        report += f"- **{stat['pattern'].replace('_', ' ').title()}**: {stat['deletion_ratio']*100:.1f}% deletion rate\n"
+        report += f"- **{stat['pattern'].replace('_', ' ').title()}**: {stat['deletion_ratio'] * 100:.1f}% deletion rate\n"
 
     # Protective patterns
     protective = [p for p in pattern_stats if p["deletion_ratio"] < 0.3]
     report += f"\n## Protective Patterns (Deletion Ratio < 30%)\n\n"
     report += f"The following {len(protective)} patterns correlate with method survival:\n\n"
     for stat in protective:
-        report += f"- **{stat['pattern'].replace('_', ' ').title()}**: {stat['deletion_ratio']*100:.1f}% deletion rate (protective)\n"
+        report += f"- **{stat['pattern'].replace('_', ' ').title()}**: {stat['deletion_ratio'] * 100:.1f}% deletion rate (protective)\n"
 
     # Save detailed analysis
     detailed_output = Path("output/contextual_features_analysis.json")

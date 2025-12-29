@@ -55,9 +55,7 @@ class DeletionPatternAnalyzer:
         survived_locs = [m.loc for m in self.survived if m.loc > 0]
 
         stats["deleted_avg_loc"] = sum(deleted_locs) / len(deleted_locs) if deleted_locs else 0
-        stats["survived_avg_loc"] = (
-            sum(survived_locs) / len(survived_locs) if survived_locs else 0
-        )
+        stats["survived_avg_loc"] = sum(survived_locs) / len(survived_locs) if survived_locs else 0
 
         # Match type distribution
         stats["deleted_by_match_type"] = Counter(m.match_type for m in self.deleted)
@@ -128,9 +126,7 @@ class DeletionPatternAnalyzer:
 
         for method_type, methods in [("deleted", self.deleted), ("survived", self.survived)]:
             # Analyze available code
-            methods_with_code = [
-                m for m in methods if (m.previous_code or m.current_code)
-            ]
+            methods_with_code = [m for m in methods if (m.previous_code or m.current_code)]
 
             if not methods_with_code:
                 continue
@@ -174,7 +170,9 @@ class DeletionPatternAnalyzer:
 
         return characteristics
 
-    def generate_preliminary_report(self, output_file: str = "output/deletion_analysis_preliminary.md") -> None:
+    def generate_preliminary_report(
+        self, output_file: str = "output/deletion_analysis_preliminary.md"
+    ) -> None:
         """Generate preliminary analysis report."""
         stats = self.compute_basic_statistics()
         characteristics = self.analyze_code_characteristics()
@@ -187,18 +185,18 @@ This report provides a preliminary analysis of method deletion patterns from {le
 
 ## Summary Statistics
 
-- **Total Methods**: {stats['total_methods']}
-- **Deleted Methods**: {stats['deleted_count']} ({stats['deletion_rate']*100:.1f}%)
-- **Survived Methods**: {stats['survived_count']} ({(1-stats['deletion_rate'])*100:.1f}%)
+- **Total Methods**: {stats["total_methods"]}
+- **Deleted Methods**: {stats["deleted_count"]} ({stats["deletion_rate"] * 100:.1f}%)
+- **Survived Methods**: {stats["survived_count"]} ({(1 - stats["deletion_rate"]) * 100:.1f}%)
 
 ## Code Size Comparison
 
 | Metric | Deleted | Survived | Difference |
 |--------|---------|----------|------------|
-| Average LOC | {stats['deleted_avg_loc']:.1f} | {stats['survived_avg_loc']:.1f} | {stats['survived_avg_loc'] - stats['deleted_avg_loc']:+.1f} |
-| Avg Clone Group Size | {stats['deleted_avg_group_size']:.1f} | {stats['survived_avg_group_size']:.1f} | {stats['survived_avg_group_size'] - stats['deleted_avg_group_size']:+.1f} |
+| Average LOC | {stats["deleted_avg_loc"]:.1f} | {stats["survived_avg_loc"]:.1f} | {stats["survived_avg_loc"] - stats["deleted_avg_loc"]:+.1f} |
+| Avg Clone Group Size | {stats["deleted_avg_group_size"]:.1f} | {stats["survived_avg_group_size"]:.1f} | {stats["survived_avg_group_size"] - stats["deleted_avg_group_size"]:+.1f} |
 
-**Key Finding**: {"Deleted methods are smaller on average" if stats['deleted_avg_loc'] < stats['survived_avg_loc'] else "Deleted methods are larger on average"}
+**Key Finding**: {"Deleted methods are smaller on average" if stats["deleted_avg_loc"] < stats["survived_avg_loc"] else "Deleted methods are larger on average"}
 
 ## Match Type Distribution
 
@@ -207,14 +205,14 @@ This report provides a preliminary analysis of method deletion patterns from {le
 | Match Type | Count | Percentage |
 |------------|-------|------------|
 """
-        for match_type, count in stats['deleted_by_match_type'].most_common():
-            pct = count / stats['deleted_count'] * 100
+        for match_type, count in stats["deleted_by_match_type"].most_common():
+            pct = count / stats["deleted_count"] * 100
             report += f"| `{match_type}` | {count} | {pct:.1f}% |\n"
 
         report += "\n### Survived Methods\n\n| Match Type | Count | Percentage |\n|------------|-------|------------|\n"
 
-        for match_type, count in stats['survived_by_match_type'].most_common():
-            pct = count / stats['survived_count'] * 100
+        for match_type, count in stats["survived_by_match_type"].most_common():
+            pct = count / stats["survived_count"] * 100
             report += f"| `{match_type}` | {count} | {pct:.1f}% |\n"
 
         report += f"""
@@ -226,24 +224,24 @@ This report provides a preliminary analysis of method deletion patterns from {le
         if "deleted" in characteristics:
             d_char = characteristics["deleted"]
             report += f"""
-- Methods with code available: {d_char['total_with_code']}
-- Has docstring: {d_char['has_docstring_pct']:.1f}%
-- Has try-except: {d_char['has_try_except_pct']:.1f}%
-- Has TODO/FIXME: {d_char['has_todo_fixme_pct']:.1f}%
-- Is private (starts with `_`): {d_char['is_private_pct']:.1f}%
-- Is property: {d_char['is_property_pct']:.1f}%
+- Methods with code available: {d_char["total_with_code"]}
+- Has docstring: {d_char["has_docstring_pct"]:.1f}%
+- Has try-except: {d_char["has_try_except_pct"]:.1f}%
+- Has TODO/FIXME: {d_char["has_todo_fixme_pct"]:.1f}%
+- Is private (starts with `_`): {d_char["is_private_pct"]:.1f}%
+- Is property: {d_char["is_property_pct"]:.1f}%
 """
 
         report += "\n### Survived Methods\n"
         if "survived" in characteristics:
             s_char = characteristics["survived"]
             report += f"""
-- Methods with code available: {s_char['total_with_code']}
-- Has docstring: {s_char['has_docstring_pct']:.1f}%
-- Has try-except: {s_char['has_try_except_pct']:.1f}%
-- Has TODO/FIXME: {s_char['has_todo_fixme_pct']:.1f}%
-- Is private (starts with `_`): {s_char['is_private_pct']:.1f}%
-- Is property: {s_char['is_property_pct']:.1f}%
+- Methods with code available: {s_char["total_with_code"]}
+- Has docstring: {s_char["has_docstring_pct"]:.1f}%
+- Has try-except: {s_char["has_try_except_pct"]:.1f}%
+- Has TODO/FIXME: {s_char["has_todo_fixme_pct"]:.1f}%
+- Is private (starts with `_`): {s_char["is_private_pct"]:.1f}%
+- Is property: {s_char["is_property_pct"]:.1f}%
 """
 
         report += """

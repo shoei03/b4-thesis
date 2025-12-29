@@ -5,7 +5,7 @@ import click
 from rich.console import Console
 
 from b4_thesis.analysis.clone_group_tracker import CloneGroupTracker
-from b4_thesis.analysis.method_tracker import MethodTracker
+from b4_thesis.core.track.method import MethodTracker
 
 console = Console()
 
@@ -159,164 +159,166 @@ def track():
 
 
 @track.command()
-@optimization_options
+# @optimization_options
+# @click.option(
+#     "--max-workers",
+#     type=click.IntRange(1),
+#     help="Maximum number of worker processes (default: number of CPU cores)",
+# )
+# @click.option(
+#     "--parallel",
+#     "-p",
+#     is_flag=True,
+#     help="Enable parallel processing for similarity calculation",
+# )
+# @click.option(
+#     "--similarity",
+#     type=click.IntRange(0, 100),
+#     default=70,
+#     help="Similarity threshold for method matching (0-100, default: 70)",
+# )
 @click.option(
-    "--max-workers",
-    type=click.IntRange(1),
-    help="Maximum number of worker processes (default: number of CPU cores)",
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    help="Input directory containing revision subdirectories",
 )
 @click.option(
-    "--parallel",
-    "-p",
-    is_flag=True,
-    help="Enable parallel processing for similarity calculation",
+    "--output",
+    "-o",
+    type=click.Path(file_okay=False, dir_okay=True),
+    required=True,
+    help="Output directory for CSV files",
 )
-@click.option(
-    "--similarity",
-    type=click.IntRange(0, 100),
-    default=70,
-    help="Similarity threshold for method matching (0-100, default: 70)",
-)
-@common_tracking_options
 def methods(
     input: str,
     output: str,
-    start_date: datetime | None,
-    end_date: datetime | None,
-    similarity: int,
-    verbose: bool,
-    parallel: bool,
-    max_workers: int | None,
-    use_lsh: bool,
-    lsh_threshold: float,
-    lsh_num_perm: int,
-    top_k: int,
-    use_optimized_similarity: bool,
-    progressive_thresholds: str | None,
-    optimize: bool,
 ) -> None:
     """Track method evolution across revisions."""
-    # Apply optimization defaults
-    use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
-        optimize, use_lsh, use_optimized_similarity, progressive_thresholds
-    )
+    method_tracker = MethodTracker()
+    method_tracker.track(Path(input))
+    # # Apply optimization defaults
+    # use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
+    #     optimize, use_lsh, use_optimized_similarity, progressive_thresholds
+    # )
 
-    # Parse progressive thresholds
-    try:
-        parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+    # # Parse progressive thresholds
+    # try:
+    #     parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
+    # except ValueError as e:
+    #     console.print(f"[red]Error:[/red] {e}")
+    #     raise click.Abort()
 
-    try:
-        # Initialize tracker
-        tracker = MethodTracker(
-            input,
-            similarity_threshold=similarity,
-            use_lsh=use_lsh,
-            lsh_threshold=lsh_threshold,
-            lsh_num_perm=lsh_num_perm,
-            top_k=top_k,
-            use_optimized_similarity=use_optimized_similarity,
-            progressive_thresholds=parsed_progressive_thresholds,
-        )
+    # try:
+    #     # Initialize tracker
+    #     tracker = MethodTracker(
+    #         input,
+    #         similarity_threshold=similarity,
+    #         use_lsh=use_lsh,
+    #         lsh_threshold=lsh_threshold,
+    #         lsh_num_perm=lsh_num_perm,
+    #         top_k=top_k,
+    #         use_optimized_similarity=use_optimized_similarity,
+    #         progressive_thresholds=parsed_progressive_thresholds,
+    #     )
 
-        # Track methods
-        with console.status("Tracking methods..."):
-            df = tracker.track(
-                start_date=start_date,
-                end_date=end_date,
-                parallel=parallel,
-                max_workers=max_workers,
-            )
+    #     # Track methods
+    #     with console.status("Tracking methods..."):
+    #         df = tracker.track(
+    #             start_date=start_date,
+    #             end_date=end_date,
+    #             parallel=parallel,
+    #             max_workers=max_workers,
+    #         )
 
-        output_file = Path(output) / "method_tracking.csv"
-        df.to_csv(output_file, index=False)
+    #     output_file = Path(output) / "method_tracking.csv"
+    #     df.to_csv(output_file, index=False)
 
-        console.print("[green]✓[/green] Method tracking complete!")
-        console.print(f"[green]Results saved to:[/green] {output_file} row:{df.shape[0]}")
+    #     console.print("[green]✓[/green] Method tracking complete!")
+    #     console.print(f"[green]Results saved to:[/green] {output_file} row:{df.shape[0]}")
 
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        if verbose:
-            console.print_exception()
-        raise click.Abort()
+    # except Exception as e:
+    #     console.print(f"[red]Error:[/red] {e}")
+    #     if verbose:
+    #         console.print_exception()
+    #     raise click.Abort()
 
 
-@track.command()
-@optimization_options
-@click.option(
-    "--overlap",
-    type=click.FloatRange(0.0, 1.0),
-    default=0.5,
-    help="Overlap threshold for group matching (0.0-1.0, default: 0.5)",
-)
-@click.option(
-    "--similarity",
-    type=click.IntRange(0, 100),
-    default=70,
-    help="Similarity threshold for group detection (0-100, default: 70)",
-)
-@common_tracking_options
-def groups(
-    input: str,
-    output: str,
-    start_date: datetime | None,
-    end_date: datetime | None,
-    similarity: int,
-    overlap: float,
-    verbose: bool,
-    use_lsh: bool,
-    lsh_threshold: float,
-    lsh_num_perm: int,
-    top_k: int,
-    use_optimized_similarity: bool,
-    progressive_thresholds: str | None,
-    optimize: bool,
-) -> None:
-    """Track clone group evolution across revisions."""
-    # Apply optimization defaults
-    use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
-        optimize, use_lsh, use_optimized_similarity, progressive_thresholds
-    )
+# @track.command()
+# @optimization_options
+# @click.option(
+#     "--overlap",
+#     type=click.FloatRange(0.0, 1.0),
+#     default=0.5,
+#     help="Overlap threshold for group matching (0.0-1.0, default: 0.5)",
+# )
+# @click.option(
+#     "--similarity",
+#     type=click.IntRange(0, 100),
+#     default=70,
+#     help="Similarity threshold for group detection (0-100, default: 70)",
+# )
+# @common_tracking_options
+# def groups(
+#     input: str,
+#     output: str,
+#     start_date: datetime | None,
+#     end_date: datetime | None,
+#     similarity: int,
+#     overlap: float,
+#     verbose: bool,
+#     use_lsh: bool,
+#     lsh_threshold: float,
+#     lsh_num_perm: int,
+#     top_k: int,
+#     use_optimized_similarity: bool,
+#     progressive_thresholds: str | None,
+#     optimize: bool,
+# ) -> None:
+#     """Track clone group evolution across revisions."""
+#     # Apply optimization defaults
+#     use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
+#         optimize, use_lsh, use_optimized_similarity, progressive_thresholds
+#     )
 
-    # Parse progressive thresholds
-    try:
-        parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+#     # Parse progressive thresholds
+#     try:
+#         parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
+#     except ValueError as e:
+#         console.print(f"[red]Error:[/red] {e}")
+#         raise click.Abort()
 
-    try:
-        # Initialize tracker
-        tracker = CloneGroupTracker(
-            input,
-            similarity_threshold=similarity,
-            overlap_threshold=overlap,
-            use_lsh=use_lsh,
-            lsh_threshold=lsh_threshold,
-            lsh_num_perm=lsh_num_perm,
-            top_k=top_k,
-            use_optimized_similarity=use_optimized_similarity,
-            progressive_thresholds=parsed_progressive_thresholds,
-        )
+#     try:
+#         # Initialize tracker
+#         tracker = CloneGroupTracker(
+#             input,
+#             similarity_threshold=similarity,
+#             overlap_threshold=overlap,
+#             use_lsh=use_lsh,
+#             lsh_threshold=lsh_threshold,
+#             lsh_num_perm=lsh_num_perm,
+#             top_k=top_k,
+#             use_optimized_similarity=use_optimized_similarity,
+#             progressive_thresholds=parsed_progressive_thresholds,
+#         )
 
-        # Track groups
-        with console.status("Tracking clone groups..."):
-            group_df, membership_df = tracker.track(start_date=start_date, end_date=end_date)
+#         # Track groups
+#         with console.status("Tracking clone groups..."):
+#             group_df, membership_df = tracker.track(start_date=start_date, end_date=end_date)
 
-        group_file = output / "group_tracking.csv"
-        membership_file = output / "group_membership.csv"
-        group_df.to_csv(group_file, index=False)
-        membership_df.to_csv(membership_file, index=False)
+#         group_file = output / "group_tracking.csv"
+#         membership_file = output / "group_membership.csv"
+#         group_df.to_csv(group_file, index=False)
+#         membership_df.to_csv(membership_file, index=False)
 
-        console.print("[green]✓[/green] Group tracking complete!")
-        console.print("[green]Results saved to:[/green]")
-        console.print(f"  - {group_file}")
-        console.print(f"  - {membership_file}")
+#         console.print("[green]✓[/green] Group tracking complete!")
+#         console.print("[green]Results saved to:[/green]")
+#         console.print(f"  - {group_file}")
+#         console.print(f"  - {membership_file}")
 
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        if verbose:
-            console.print_exception()
-        raise click.Abort()
+#     except Exception as e:
+#         console.print(f"[red]Error:[/red] {e}")
+#         if verbose:
+#             console.print_exception()
+#         raise click.Abort()

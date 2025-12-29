@@ -1,9 +1,9 @@
 from pathlib import Path
-import pandas as pd
 
-from b4_thesis.utils.revision_manager import RevisionManager
-from b4_thesis.core.track.validate import validate_code_block
 from b4_thesis.core.track.similarity import NILCloneDetector
+from b4_thesis.core.track.validate import validate_code_block
+from b4_thesis.utils.revision_manager import RevisionManager
+import pandas as pd
 
 
 class MethodTracker:

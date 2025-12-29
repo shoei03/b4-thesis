@@ -1,6 +1,7 @@
 import bisect
 from collections import defaultdict
 
+
 class NILCloneDetector:
     """
     NIL: Large-Scale Detection of Large-Variance Clones

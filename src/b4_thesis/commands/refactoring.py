@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import click
-import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
@@ -12,6 +11,7 @@ from b4_thesis.analysis.refactoring_analyzer import (
     analyze_directory,
     analyze_single_file,
 )
+import pandas as pd
 
 console = Console()
 

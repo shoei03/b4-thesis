@@ -1,9 +1,8 @@
 from pathlib import Path
 
-import pandas as pd
-
 from b4_thesis.rules.applicator import RuleApplicator
 from b4_thesis.rules.deletion_prediction.registry import get_rules
+import pandas as pd
 
 
 def rule(input_snippets: Path, input_metadata: Path, output: Path, rules: str | None):
