@@ -98,12 +98,16 @@ class CrossRevisionMatcher:
                         "prev_function_name": source_block["function_name"],
                         "prev_return_type": source_block["return_type"],
                         "prev_parameters": source_block["parameters"],
+                        "prev_start_line": source_block["start_line"],
+                        "prev_end_line": source_block["end_line"],
                         "curr_revision": target_blocks[match["target_idx"]]["revision"],
                         "curr_block_id": target_blocks[match["target_idx"]]["block_id"],
                         "curr_file_path": target_blocks[match["target_idx"]]["file_path"],
                         "curr_function_name": target_blocks[match["target_idx"]]["function_name"],
                         "curr_return_type": target_blocks[match["target_idx"]]["return_type"],
                         "curr_parameters": target_blocks[match["target_idx"]]["parameters"],
+                        "curr_start_line": target_blocks[match["target_idx"]]["start_line"],
+                        "curr_end_line": target_blocks[match["target_idx"]]["end_line"],
                     }
                 )
 
