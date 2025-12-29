@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from b4_thesis.core.track.similarity import NILCloneDetector
+from b4_thesis.core.track.cross_revision_matcher import CrossRevisionMatcher
 from b4_thesis.core.track.validate import validate_code_block
 from b4_thesis.utils.revision_manager import RevisionManager
 import pandas as pd
@@ -9,17 +9,36 @@ import pandas as pd
 class MethodTracker:
     def __init__(self) -> None:
         self.revision_manager = RevisionManager()
-        self.clone_detector = NILCloneDetector()
 
     def _parse_token_sequence(self, token_sequences: pd.Series) -> pd.Series:
         """token_sequenceをパースしてリストに変換（インプレース）"""
         return token_sequences.str[1:-1].str.split(";").apply(lambda x: [int(i) for i in x])
 
-    def _calc_similarity_placeholder(self, seq1: list[int], seq2: list[int]) -> float:
-        """類似度計算の仮実装"""
-        return self.clone_detector._compute_lcs_length_hunt_szymanski(seq1, seq2)
+    def track(
+        self,
+        data_dir: Path,
+        similarity_threshold: float = 0.7,
+        n_gram_size: int = 5,
+        filter_threshold: float = 0.1,
+    ) -> pd.DataFrame:
+        """Track methods across revisions.
 
-    def track(self, data_dir: Path, similarity_threshold: float = 70.0) -> pd.DataFrame:
+        Args:
+            data_dir: Directory containing revision subdirectories
+            similarity_threshold: LCS similarity threshold (0.0-1.0, default: 0.7)
+            n_gram_size: Size of N-grams for indexing (default: 5)
+            filter_threshold: N-gram overlap threshold for filtration (0.0-1.0, default: 0.1)
+
+        Returns:
+            DataFrame with method tracking results
+        """
+        # Initialize matcher with user-specified parameters
+        cross_revision_matcher = CrossRevisionMatcher(
+            n_gram_size=n_gram_size,
+            filter_threshold=filter_threshold,
+            verify_threshold=similarity_threshold,
+        )
+
         revisions = self.revision_manager.get_revisions(data_dir)
 
         # 全結果を保存するリスト
@@ -52,54 +71,27 @@ class MethodTracker:
             prev_code_blocks["revision"] = prev_revision.timestamp
             curr_code_blocks["revision"] = curr_revision.timestamp
 
-            # クロス結合で全ペアを生成
-            prev_code_blocks["_merge_key"] = 1
-            curr_code_blocks["_merge_key"] = 1
-
-            pairs = prev_code_blocks.merge(
-                curr_code_blocks, on="_merge_key", suffixes=("_prev", "_curr")
-            )
-
-            # 不要な列を削除
-            pairs = pairs.drop("_merge_key", axis=1)
+            # Convert DataFrames to list of dicts for NIL-based matching
+            source_blocks = prev_code_blocks.to_dict("records")
+            target_blocks = curr_code_blocks.to_dict("records")
 
             print(
                 f"Revision {prev_revision.timestamp} -> {curr_revision.timestamp}: "
-                f"{len(pairs)} pairs to compare"
+                f"{len(source_blocks)}×{len(target_blocks)} blocks to match"
             )
 
-            # 類似度を計算
-            similarities: list[float] = []
-            for _, row in pairs.iterrows():
-                similarity: float = self._calc_similarity_placeholder(
-                    row["token_sequence_prev"], row["token_sequence_curr"]
-                )
-                similarities.append(similarity)
+            # Use NIL-based cross-revision matching
+            match_results = cross_revision_matcher.match_revisions(source_blocks, target_blocks)
 
-            pairs["similarity"] = similarities
+            # Convert match results to DataFrame
+            if match_results:
+                matches = pd.DataFrame(match_results)
+            else:
+                matches = pd.DataFrame()
 
-            # 閾値でフィルタリング
-            matches: pd.DataFrame = pairs[pairs["similarity"] >= similarity_threshold].copy()
-
-            print(f"  {len(matches)} matches found (similarity >= {similarity_threshold})")
-
-            # 結果を整形
+            # Append matches to results
             if len(matches) > 0:
-                result: pd.DataFrame = pd.DataFrame(
-                    {
-                        "prev_revision": matches["revision_prev"],
-                        "curr_revision": matches["revision_curr"],
-                        "prev_file_path": matches["file_path_prev"],
-                        "prev_function_name": matches["function_name_prev"],
-                        "prev_block_id": matches["block_id_prev"],
-                        "curr_file_path": matches["file_path_curr"],
-                        "curr_function_name": matches["function_name_curr"],
-                        "curr_block_id": matches["block_id_curr"],
-                        "similarity": matches["similarity"],
-                    }
-                )
-
-                all_matches.append(result)
+                all_matches.append(matches)
 
             # 次のイテレーションの準備
             prev_revision = curr_revision

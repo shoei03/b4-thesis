@@ -42,7 +42,7 @@ def validate_code_block(code_block: pd.DataFrame) -> None:
         duplicates = code_block[code_block["block_id"].duplicated()]
         if not duplicates.empty:
             dup_ids = duplicates["block_id"].tolist()
-            errors.append(f"block_idに重複が{len(dup_ids)}件あります: {dup_ids[:5]}...")
+            errors.append(f"block_idに重複が{len(dup_ids)}件あります")
 
     # 必須カラムの欠損値チェック
     non_nullable_columns = ["block_id", "file_path", "start_line", "end_line", "function_name"]

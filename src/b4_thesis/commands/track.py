@@ -1,10 +1,8 @@
-from datetime import datetime
 from pathlib import Path
 
 import click
 from rich.console import Console
 
-from b4_thesis.analysis.clone_group_tracker import CloneGroupTracker
 from b4_thesis.core.track.method import MethodTracker
 
 console = Console()
@@ -159,24 +157,24 @@ def track():
 
 
 @track.command()
-# @optimization_options
-# @click.option(
-#     "--max-workers",
-#     type=click.IntRange(1),
-#     help="Maximum number of worker processes (default: number of CPU cores)",
-# )
-# @click.option(
-#     "--parallel",
-#     "-p",
-#     is_flag=True,
-#     help="Enable parallel processing for similarity calculation",
-# )
-# @click.option(
-#     "--similarity",
-#     type=click.IntRange(0, 100),
-#     default=70,
-#     help="Similarity threshold for method matching (0-100, default: 70)",
-# )
+@click.option(
+    "--similarity",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.7,
+    help="LCS similarity threshold for method matching (0.0-1.0, default: 0.7)",
+)
+@click.option(
+    "--n-gram-size",
+    type=click.IntRange(1),
+    default=5,
+    help="Size of N-grams for indexing (default: 5)",
+)
+@click.option(
+    "--filter-threshold",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.1,
+    help="N-gram overlap threshold for filtration (0.0-1.0, default: 0.1)",
+)
 @click.option(
     "--input",
     "-i",
@@ -191,13 +189,40 @@ def track():
     required=True,
     help="Output directory for CSV files",
 )
+@click.option(
+    "--output-file",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="method_tracking_multi.csv",
+    help="Output CSV file name (default: method_tracking_multi.csv)",
+)
 def methods(
     input: str,
     output: str,
+    output_file: str,
+    similarity: float,
+    n_gram_size: int,
+    filter_threshold: float,
 ) -> None:
     """Track method evolution across revisions."""
-    method_tracker = MethodTracker()
-    method_tracker.track(Path(input))
+    try:
+        method_tracker = MethodTracker()
+        result = method_tracker.track(
+            Path(input),
+            similarity_threshold=similarity,
+            n_gram_size=n_gram_size,
+            filter_threshold=filter_threshold,
+        )
+
+        output_path = Path(output)
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_file_path = output_path / output_file
+        result.to_csv(output_file_path, index=False)
+
+        console.print(f"[green]Results saved to:[/green] {output_file_path} rows:{len(result)}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise click.Abort()
     # # Apply optimization defaults
     # use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
     #     optimize, use_lsh, use_optimized_similarity, progressive_thresholds
