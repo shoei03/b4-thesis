@@ -212,6 +212,16 @@ def methods(
             n_gram_size=n_gram_size,
             filter_threshold=filter_threshold,
         )
+        result.sort_values(
+            by=[
+                "prev_revision",
+                "prev_block_id",
+                "prev_file_path",
+                "prev_start_line",
+                "prev_end_line",
+                "prev_function_name",
+            ]
+        )
 
         output_path = Path(output)
         output_path.mkdir(parents=True, exist_ok=True)
