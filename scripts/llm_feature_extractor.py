@@ -3,7 +3,6 @@
 from dataclasses import asdict, dataclass
 import json
 import os
-from typing import Any
 
 import anthropic
 

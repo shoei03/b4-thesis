@@ -498,10 +498,10 @@ def main():
     output_path = generate_final_report()
 
     print(f"\n✓ Final report generated: {output_path}")
-    print(f"\n📊 Report Statistics:")
+    print("\n📊 Report Statistics:")
     print(f"   - Total words: ~{len(output_path.read_text().split()):,}")
-    print(f"   - Sections: Executive Summary, Methodology, Feature Taxonomy,")
-    print(f"              Pattern Analysis, Recommendations, Conclusions")
+    print("   - Sections: Executive Summary, Methodology, Feature Taxonomy,")
+    print("              Pattern Analysis, Recommendations, Conclusions")
 
     print("\n" + "=" * 70)
     print("Analysis Complete!")

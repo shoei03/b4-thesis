@@ -215,25 +215,25 @@ The following patterns were identified through contextual code analysis. Pattern
         pattern = stat["pattern"]
         report += f"### {pattern.replace('_', ' ').title()}\n\n"
         report += f"**Description**: {pattern_descriptions.get(pattern, 'Pattern detected through code analysis.')}\n\n"
-        report += f"**Statistics**:\n"
+        report += "**Statistics**:\n"
         report += f"- Deleted: {stat['deleted']}\n"
         report += f"- Survived: {stat['survived']}\n"
         report += f"- Deletion Ratio: {stat['deletion_ratio'] * 100:.1f}%\n\n"
-        report += f"**Examples**:\n"
+        report += "**Examples**:\n"
         for example in stat["examples"][:3]:
             report += f"- {example}\n"
         report += "\n"
 
     # High-risk patterns
     high_risk = [p for p in pattern_stats if p["deletion_ratio"] > 0.5]
-    report += f"\n## High-Risk Patterns (Deletion Ratio > 50%)\n\n"
+    report += "\n## High-Risk Patterns (Deletion Ratio > 50%)\n\n"
     report += f"The following {len(high_risk)} patterns show strong correlation with deletion:\n\n"
     for stat in high_risk:
         report += f"- **{stat['pattern'].replace('_', ' ').title()}**: {stat['deletion_ratio'] * 100:.1f}% deletion rate\n"
 
     # Protective patterns
     protective = [p for p in pattern_stats if p["deletion_ratio"] < 0.3]
-    report += f"\n## Protective Patterns (Deletion Ratio < 30%)\n\n"
+    report += "\n## Protective Patterns (Deletion Ratio < 30%)\n\n"
     report += f"The following {len(protective)} patterns correlate with method survival:\n\n"
     for stat in protective:
         report += f"- **{stat['pattern'].replace('_', ' ').title()}**: {stat['deletion_ratio'] * 100:.1f}% deletion rate (protective)\n"
@@ -256,7 +256,7 @@ The following patterns were identified through contextual code analysis. Pattern
     print(f"✓ Identified {len(pattern_stats)} patterns")
     print(f"✓ High-risk patterns: {len(high_risk)}")
     print(f"✓ Protective patterns: {len(protective)}")
-    print(f"\nReports generated:")
+    print("\nReports generated:")
     print(f"  - {report_path}")
     print(f"  - {detailed_output}")
 

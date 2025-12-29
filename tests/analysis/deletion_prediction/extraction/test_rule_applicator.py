@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
 from b4_thesis.analysis.deletion_prediction.extraction import (
@@ -10,6 +9,7 @@ from b4_thesis.analysis.deletion_prediction.extraction import (
     RuleApplicator,
 )
 from b4_thesis.analysis.deletion_prediction.rule_base import CodeSnippet, DeletionRule
+import pandas as pd
 
 
 class TestRuleApplicator:

@@ -1,6 +1,5 @@
 """Tests for Evaluator."""
 
-import pandas as pd
 import pytest
 
 from b4_thesis.analysis.deletion_prediction.evaluator import (
@@ -9,6 +8,7 @@ from b4_thesis.analysis.deletion_prediction.evaluator import (
     MethodClassification,
     RuleEvaluation,
 )
+import pandas as pd
 
 
 class TestEvaluator:

@@ -1,11 +1,11 @@
 """Tests for deletion command."""
 
 from click.testing import CliRunner
-import pandas as pd
 import pytest
 
 from b4_thesis.cli import main
 from b4_thesis.commands.predict import _create_composite_group_column
+import pandas as pd
 
 
 class TestCreateCompositeGroupColumn:

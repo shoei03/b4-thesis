@@ -1,7 +1,7 @@
 """Analyze deletion patterns from clone reports using structured approach."""
 
-from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
+from collections import Counter
+from dataclasses import dataclass
 import json
 from pathlib import Path
 
@@ -215,7 +215,7 @@ This report provides a preliminary analysis of method deletion patterns from {le
             pct = count / stats["survived_count"] * 100
             report += f"| `{match_type}` | {count} | {pct:.1f}% |\n"
 
-        report += f"""
+        report += """
 
 ## Code Characteristics
 

@@ -221,7 +221,7 @@ def main():
             print(f"File: {method.file_path}")
             print(f"Clone Group: {method.clone_group_id}")
             print(f"Match Type: {method.match_type}")
-            print(f"Previous Code (first 200 chars):")
+            print("Previous Code (first 200 chars):")
             print(method.previous_code[:200])
             break
 

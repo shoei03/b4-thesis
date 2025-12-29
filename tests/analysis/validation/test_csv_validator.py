@@ -1,14 +1,13 @@
 """Tests for CsvValidator."""
 
-from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from b4_thesis.analysis.validation.csv_validator import (
     CsvValidator,
     DeletionPredictionColumns,
 )
+import pandas as pd
 
 
 class TestCsvValidator:

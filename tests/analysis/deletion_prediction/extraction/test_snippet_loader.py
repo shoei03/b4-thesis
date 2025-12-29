@@ -3,12 +3,12 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
 from b4_thesis.analysis.code_extractor import CodeSnippet, GitCodeExtractor
 from b4_thesis.analysis.deletion_prediction.cache_manager import CacheManager
 from b4_thesis.analysis.deletion_prediction.extraction import SnippetLoader, SnippetLoadResult
+import pandas as pd
 
 
 class TestSnippetLoader:
