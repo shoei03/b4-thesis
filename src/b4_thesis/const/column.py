@@ -1,0 +1,43 @@
+from enum import Enum
+
+
+class ColumnNames(Enum):
+    REVISION_ID = "revision_id"
+    FILE_PATH = "file_path"
+    START_LINE = "start_line"
+    END_LINE = "end_line"
+    CODE = "code"
+    METHOD_NAME = "method_name"
+    RETURN_TYPE = "return_type"
+    PARAMETERS = "parameters"
+    TOKEN_HASH = "token_hash"
+    TOKEN_SEQUENCE = "token_sequence"
+    
+    PREV_REVISION_ID = "prev_revision_id"
+    PREV_FILE_PATH = "prev_file_path"
+    PREV_START_LINE = "prev_start_line"
+    PREV_END_LINE = "prev_end_line"
+    PREV_CODE = "prev_code"
+    PREV_METHOD_NAME = "prev_method_name"
+    PREV_RETURN_TYPE = "prev_return_type"
+    PREV_PARAMETERS = "prev_parameters"
+    PREV_TOKEN_HASH = "prev_token_hash"
+    PREV_TOKEN_SEQUENCE = "prev_token_sequence"
+    
+    CURR_REVISION_ID = "curr_revision_id"
+    CURR_FILE_PATH = "curr_file_path"
+    CURR_START_LINE = "curr_start_line"
+    CURR_END_LINE = "curr_end_line"
+    CURR_CODE = "curr_code"
+    CURR_METHOD_NAME = "curr_method_name"
+    CURR_RETURN_TYPE = "curr_return_type"
+    CURR_PARAMETERS = "curr_parameters"
+    CURR_TOKEN_HASH = "curr_token_hash"
+    CURR_TOKEN_SEQUENCE = "curr_token_sequence"
+    
+    SIMILARITY = "similarity"
+    
+    TOKEN_HASH_1 = "token_hash_1"
+    TOKEN_HASH_2 = "token_hash_2"
+    NGRAM_OVERLAP = "ngram_overlap"
+    VERIFY_SIMILARITY = "verify_similarity"
