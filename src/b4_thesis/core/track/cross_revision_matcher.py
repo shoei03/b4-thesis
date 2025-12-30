@@ -43,20 +43,32 @@ class CrossRevisionMatcher:
         self,
         source_blocks: list[dict],
         target_blocks: list[dict],
-    ) -> dict:
-        """Match blocks and track deletions/additions."""
+    ) -> list[dict]:
+        """Match blocks and track deletions/additions.
+
+        Returns:
+            Single list of all blocks with boolean flags (is_matched, is_deleted, is_added)
+        """
 
         # 空チェック
         if not source_blocks and not target_blocks:
-            return {"matches": [], "deleted": [], "added": []}
+            return []
 
         if not source_blocks:
-            added = [self._format_block(target_block=block) for block in target_blocks]
-            return {"matches": [], "deleted": [], "added": added}
+            return [
+                self._format_block(
+                    target_block=block, is_matched=False, is_deleted=False, is_added=True
+                )
+                for block in target_blocks
+            ]
 
         if not target_blocks:
-            deleted = [self._format_block(source_block=block) for block in source_blocks]
-            return {"matches": [], "deleted": deleted, "added": []}
+            return [
+                self._format_block(
+                    source_block=block, is_matched=False, is_deleted=True, is_added=False
+                )
+                for block in source_blocks
+            ]
 
         # Phase 1: Build inverted index
         print(f"Building N-gram index for {len(target_blocks)} target blocks...")
@@ -95,30 +107,54 @@ class CrossRevisionMatcher:
                     matched_target_indices.add(target_idx)
                     match_pairs.append((source_idx, target_idx, match["similarity"]))
 
-        # 最後にまとめてフォーマット
-        matches = [
-            self._format_block(source_blocks[src_idx], target_blocks[tgt_idx], similarity)
-            for src_idx, tgt_idx, similarity in match_pairs
-        ]
+        # Build unified result list
+        all_results = []
 
-        deleted_blocks = [
-            self._format_block(source_block=source_blocks[i])
-            for i in range(len(source_blocks))
-            if i not in matched_source_indices
-        ]
+        # 1. Add matched pairs
+        for src_idx, tgt_idx, similarity in match_pairs:
+            all_results.append(
+                self._format_block(
+                    source_block=source_blocks[src_idx],
+                    target_block=target_blocks[tgt_idx],
+                    similarity=similarity,
+                    is_matched=True,
+                    is_deleted=False,
+                    is_added=False,
+                )
+            )
 
-        added_blocks = [
-            self._format_block(target_block=target_blocks[i])
-            for i in range(len(target_blocks))
-            if i not in matched_target_indices
-        ]
+        # 2. Add deleted blocks (source blocks with no match)
+        for i in range(len(source_blocks)):
+            if i not in matched_source_indices:
+                all_results.append(
+                    self._format_block(
+                        source_block=source_blocks[i],
+                        is_matched=False,
+                        is_deleted=True,
+                        is_added=False,
+                    )
+                )
+
+        # 3. Add added blocks (target blocks with no match)
+        for i in range(len(target_blocks)):
+            if i not in matched_target_indices:
+                all_results.append(
+                    self._format_block(
+                        target_block=target_blocks[i],
+                        is_matched=False,
+                        is_deleted=False,
+                        is_added=True,
+                    )
+                )
 
         print(
-            f"Found {len(matches)} matches, "
-            f"{len(deleted_blocks)} deletions, {len(added_blocks)} additions"
+            f"Total: {len(all_results)} blocks "
+            f"({sum(1 for r in all_results if r[ColumnNames.IS_MATCHED.value])} matched, "
+            f"{sum(1 for r in all_results if r[ColumnNames.IS_DELETED.value])} deleted, "
+            f"{sum(1 for r in all_results if r[ColumnNames.IS_ADDED.value])} added)"
         )
 
-        return {"matches": matches, "deleted": deleted_blocks, "added": added_blocks}
+        return all_results
 
     def _build_target_index(self, target_blocks: list[dict]) -> dict:
         """
@@ -274,16 +310,22 @@ class CrossRevisionMatcher:
         source_block: dict | None = None,
         target_block: dict | None = None,
         similarity: float | None = None,
+        is_matched: bool = False,
+        is_deleted: bool = False,
+        is_added: bool = False,
     ) -> dict:
-        """Format a block with consistent structure.
+        """Format a block with consistent structure and boolean flags.
 
         Args:
             source_block: Source (previous) block, or None for added blocks
             target_block: Target (current) block, or None for deleted blocks
             similarity: Similarity score, or None for deleted/added blocks
+            is_matched: True if this is a matched pair
+            is_deleted: True if this block was deleted
+            is_added: True if this block was added
 
         Returns:
-            Formatted block dictionary with prev_* and curr_* fields
+            Formatted block dictionary with prev_*, curr_* fields and boolean flags
         """
         # Base field names and their corresponding prev_/curr_ column names
         FIELD_MAPPING = [
@@ -297,7 +339,12 @@ class CrossRevisionMatcher:
             (ColumnNames.END_LINE, ColumnNames.PREV_END_LINE, ColumnNames.CURR_END_LINE),
         ]
 
-        result = {ColumnNames.SIMILARITY.value: similarity}
+        result = {
+            ColumnNames.SIMILARITY.value: similarity,
+            ColumnNames.IS_MATCHED.value: is_matched,
+            ColumnNames.IS_DELETED.value: is_deleted,
+            ColumnNames.IS_ADDED.value: is_added,
+        }
 
         # Add prev_ and curr_ fields
         for base, prev, curr in FIELD_MAPPING:
