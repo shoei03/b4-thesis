@@ -16,11 +16,11 @@ class MethodTracker:
         similarity_threshold: float = 0.7,
         n_gram_size: int = 5,
         filter_threshold: float = 0.1,
-    ) -> dict[str, pd.DataFrame]:
+    ) -> pd.DataFrame:
         """Track methods across revisions.
 
         Returns:
-            Dictionary with keys "matches", "deleted", "added" mapping to DataFrames
+            Single DataFrame with all tracking data and boolean flags
         """
         cross_revision_matcher = CrossRevisionMatcher(
             n_gram_size=n_gram_size,
@@ -30,10 +30,8 @@ class MethodTracker:
 
         revisions = self.revision_manager.get_revisions(data_dir)
 
-        # 全結果を保存するリスト
-        all_matches: list[pd.DataFrame] = []
-        all_deleted: list[pd.DataFrame] = []
-        all_added: list[pd.DataFrame] = []
+        # Collect all results
+        all_results: list[dict] = []
 
         # 最初のリビジョンをロード
         prev_revision = revisions[0]
@@ -60,24 +58,16 @@ class MethodTracker:
                 source_blocks, target_blocks
             )
 
-            all_matches.append(pd.DataFrame(match_results["matches"]))
-            all_deleted.append(pd.DataFrame(match_results["deleted"]))
-            all_added.append(pd.DataFrame(match_results["added"]))
+            # Accumulate results
+            all_results.extend(match_results)
 
             # 次のイテレーションの準備
             prev_revision = curr_revision
             prev_code_blocks = curr_code_blocks.drop(ColumnNames.REVISION_ID.value, axis=1)
 
-        # 空の場合は空のDataFrameを返す
-        if len(all_matches) == 0:
-            return {
-                "matches": pd.DataFrame(),
-                "deleted": pd.DataFrame(),
-                "added": pd.DataFrame(),
-            }
+        # Return empty DataFrame if no results
+        if len(all_results) == 0:
+            return pd.DataFrame()
 
-        return {
-            "matches": pd.concat(all_matches, ignore_index=True),
-            "deleted": pd.concat(all_deleted, ignore_index=True),
-            "added": pd.concat(all_added, ignore_index=True),
-        }
+        # Convert to DataFrame
+        return pd.DataFrame(all_results)
