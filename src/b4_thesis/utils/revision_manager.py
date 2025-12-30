@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from b4_thesis.const.column import ColumnNames
+from b4_thesis.core.track.validate import validate_code_block
 import pandas as pd
 
 
@@ -16,39 +18,53 @@ class RevisionInfo:
 class RevisionManager:
     REQUIRED_FILES = ("clone_pairs.csv", "code_blocks.csv")
 
-    def load_revision_data(self, revision: RevisionInfo) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def load_code_blocks(self, revision: RevisionInfo) -> pd.DataFrame:
         code_blocks = pd.read_csv(
             revision.code_blocks_path,
             header=None,
             names=[
-                "block_id",
-                "file_path",
-                "start_line",
-                "end_line",
-                "function_name",
-                "return_type",
-                "parameters",
+                ColumnNames.TOKEN_HASH.value,
+                ColumnNames.FILE_PATH.value,
+                ColumnNames.START_LINE.value,
+                ColumnNames.END_LINE.value,
+                ColumnNames.METHOD_NAME.value,
+                ColumnNames.RETURN_TYPE.value,
+                ColumnNames.PARAMETERS.value,
                 "commit_hash",
-                "token_sequence",
+                ColumnNames.TOKEN_SEQUENCE.value,
             ],
             dtype={
-                "start_line": int,
-                "end_line": int,
+                ColumnNames.START_LINE.value: int,
+                ColumnNames.END_LINE.value: int,
             },
         )
 
+        code_blocks[ColumnNames.TOKEN_SEQUENCE.value] = (
+            code_blocks[ColumnNames.TOKEN_SEQUENCE.value]
+            .str[1:-1]
+            .str.split(";")
+            .apply(lambda x: [int(i) for i in x])
+        )
+
+        try:
+            validate_code_block(code_blocks)
+        except Exception as e:
+            print(f"Warning: Code block validation failed: {e}")
+
+        return code_blocks
+
+    def load_clone_pairs(self, revision: RevisionInfo) -> pd.DataFrame:
         clone_pairs = pd.read_csv(
             revision.clone_pairs_path,
             header=None,
             names=[
-                "block_id_1",
-                "block_id_2",
-                "ngram_similarity",
-                "lcs_similarity",
+                ColumnNames.TOKEN_HASH_1.value,
+                ColumnNames.TOKEN_HASH_2.value,
+                ColumnNames.NGRAM_OVERLAP.value,
+                ColumnNames.VERIFY_SIMILARITY.value,
             ],
         )
-
-        return code_blocks, clone_pairs
+        return clone_pairs
 
     def get_revisions(self, data_dir: Path) -> list[RevisionInfo]:
         if not data_dir.exists():
