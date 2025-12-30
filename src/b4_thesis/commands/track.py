@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.merge_splits import MergeSplitsTracker
 from b4_thesis.core.track.method import MethodTracker
 import pandas as pd
@@ -191,16 +192,9 @@ def track():
     required=True,
     help="Output directory for CSV files",
 )
-@click.option(
-    "--output-file",
-    type=click.Path(file_okay=True, dir_okay=False),
-    default="method_tracking_multi.csv",
-    help="Output CSV file name (default: method_tracking_multi.csv)",
-)
 def methods(
     input: str,
     output: str,
-    output_file: str,
     similarity: float,
     n_gram_size: int,
     filter_threshold: float,
@@ -208,78 +202,48 @@ def methods(
     """Track method evolution across revisions."""
     try:
         method_tracker = MethodTracker()
-        result = method_tracker.track(
+        results = method_tracker.track(
             Path(input),
             similarity_threshold=similarity,
             n_gram_size=n_gram_size,
             filter_threshold=filter_threshold,
         )
-        result.sort_values(
-            by=[
-                "prev_revision",
-                "prev_block_id",
-                "prev_file_path",
-                "prev_start_line",
-                "prev_end_line",
-                "prev_function_name",
-            ]
-        )
+
+        # 共通のソートキー（prev_が存在する場合に使用）
+        sort_keys = [
+            ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.PREV_TOKEN_HASH.value,
+            ColumnNames.PREV_FILE_PATH.value,
+            ColumnNames.PREV_START_LINE.value,
+            ColumnNames.PREV_END_LINE.value,
+            ColumnNames.PREV_METHOD_NAME.value,
+        ]
+
+        # 出力ファイル名のマッピング
+        output_files = {
+            "matches": "matches_methods.csv",
+            "deleted": "deleted_methods.csv",
+            "added": "added_methods.csv",
+        }
 
         output_path = Path(output)
         output_path.mkdir(parents=True, exist_ok=True)
-        output_file_path = output_path / output_file
-        result.to_csv(output_file_path, index=False)
 
-        console.print(f"[green]Results saved to:[/green] {output_file_path} rows:{len(result)}")
+        for key, df in results.items():
+            # ソート（prev_列が存在する場合のみ）
+            existing_keys = [k for k in sort_keys if k in df.columns]
+            if existing_keys:
+                df = df.sort_values(by=existing_keys)
+
+            # CSV保存
+            file_path = output_path / output_files[key]
+            df.to_csv(file_path, index=False)
+
+            console.print(f"[green]Results saved to:[/green] {output_path}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
-    # # Apply optimization defaults
-    # use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
-    #     optimize, use_lsh, use_optimized_similarity, progressive_thresholds
-    # )
-
-    # # Parse progressive thresholds
-    # try:
-    #     parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
-    # except ValueError as e:
-    #     console.print(f"[red]Error:[/red] {e}")
-    #     raise click.Abort()
-
-    # try:
-    #     # Initialize tracker
-    #     tracker = MethodTracker(
-    #         input,
-    #         similarity_threshold=similarity,
-    #         use_lsh=use_lsh,
-    #         lsh_threshold=lsh_threshold,
-    #         lsh_num_perm=lsh_num_perm,
-    #         top_k=top_k,
-    #         use_optimized_similarity=use_optimized_similarity,
-    #         progressive_thresholds=parsed_progressive_thresholds,
-    #     )
-
-    #     # Track methods
-    #     with console.status("Tracking methods..."):
-    #         df = tracker.track(
-    #             start_date=start_date,
-    #             end_date=end_date,
-    #             parallel=parallel,
-    #             max_workers=max_workers,
-    #         )
-
-    #     output_file = Path(output) / "method_tracking.csv"
-    #     df.to_csv(output_file, index=False)
-
-    #     console.print("[green]✓[/green] Method tracking complete!")
-    #     console.print(f"[green]Results saved to:[/green] {output_file} row:{df.shape[0]}")
-
-    # except Exception as e:
-    #     console.print(f"[red]Error:[/red] {e}")
-    #     if verbose:
-    #         console.print_exception()
-    #     raise click.Abort()
 
 
 @track.command()
@@ -288,14 +252,14 @@ def methods(
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
     default="./output/versions/method_tracking_multi.csv",
-    help="Input CSV file with method tracking results (default: ./output/versions/method_tracking_multi.csv)",
+    help="Input CSV file with method tracking results",
 )
 @click.option(
     "--output-file",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
     default="./output/versions/method_tracking_merge_splits.csv",
-    help="Output CSV file for merged code blocks (default: ./output/versions/method_tracking_merge_splits.csv)",
+    help="Output CSV file for merged code blocks",
 )
 @click.option(
     "--verify-threshold",
@@ -313,82 +277,3 @@ def merge_splits(input_file: str, output_file: str, verify_threshold: float) -> 
     console.print(
         f"[green]Results saved to:[/green] {output_file} rows:{len(method_tracking_multi_df)}"
     )
-
-
-# @track.command()
-# @optimization_options
-# @click.option(
-#     "--overlap",
-#     type=click.FloatRange(0.0, 1.0),
-#     default=0.5,
-#     help="Overlap threshold for group matching (0.0-1.0, default: 0.5)",
-# )
-# @click.option(
-#     "--similarity",
-#     type=click.IntRange(0, 100),
-#     default=70,
-#     help="Similarity threshold for group detection (0-100, default: 70)",
-# )
-# @common_tracking_options
-# def groups(
-#     input: str,
-#     output: str,
-#     start_date: datetime | None,
-#     end_date: datetime | None,
-#     similarity: int,
-#     overlap: float,
-#     verbose: bool,
-#     use_lsh: bool,
-#     lsh_threshold: float,
-#     lsh_num_perm: int,
-#     top_k: int,
-#     use_optimized_similarity: bool,
-#     progressive_thresholds: str | None,
-#     optimize: bool,
-# ) -> None:
-#     """Track clone group evolution across revisions."""
-#     # Apply optimization defaults
-#     use_lsh, use_optimized_similarity, progressive_thresholds = _apply_optimization_defaults(
-#         optimize, use_lsh, use_optimized_similarity, progressive_thresholds
-#     )
-
-#     # Parse progressive thresholds
-#     try:
-#         parsed_progressive_thresholds = _parse_progressive_thresholds(progressive_thresholds)
-#     except ValueError as e:
-#         console.print(f"[red]Error:[/red] {e}")
-#         raise click.Abort()
-
-#     try:
-#         # Initialize tracker
-#         tracker = CloneGroupTracker(
-#             input,
-#             similarity_threshold=similarity,
-#             overlap_threshold=overlap,
-#             use_lsh=use_lsh,
-#             lsh_threshold=lsh_threshold,
-#             lsh_num_perm=lsh_num_perm,
-#             top_k=top_k,
-#             use_optimized_similarity=use_optimized_similarity,
-#             progressive_thresholds=parsed_progressive_thresholds,
-#         )
-
-#         # Track groups
-#         with console.status("Tracking clone groups..."):
-#             group_df, membership_df = tracker.track(start_date=start_date, end_date=end_date)
-
-#         group_file = output / "group_tracking.csv"
-#         membership_file = output / "group_membership.csv"
-#         group_df.to_csv(group_file, index=False)
-#         membership_df.to_csv(membership_file, index=False)
-
-#         console.print("[green]✓[/green] Group tracking complete!")
-#         console.print("[green]Results saved to:[/green]")
-#         console.print(f"  - {group_file}")
-#         console.print(f"  - {membership_file}")
-
-#     except Exception as e:
-#         console.print(f"[red]Error:[/red] {e}")
-#         if verbose:
-#             console.print_exception()
-#         raise click.Abort()
