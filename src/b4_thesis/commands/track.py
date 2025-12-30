@@ -202,44 +202,50 @@ def methods(
     """Track method evolution across revisions."""
     try:
         method_tracker = MethodTracker()
-        results = method_tracker.track(
+        result_df = method_tracker.track(
             Path(input),
             similarity_threshold=similarity,
             n_gram_size=n_gram_size,
             filter_threshold=filter_threshold,
         )
 
-        # 共通のソートキー（prev_が存在する場合に使用）
+        # Define sort keys for consistent ordering
+        # Sort by prev_* columns first (matches and deletes), then curr_* (adds)
         sort_keys = [
             ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.CURR_REVISION_ID.value,
             ColumnNames.PREV_TOKEN_HASH.value,
+            ColumnNames.CURR_TOKEN_HASH.value,
             ColumnNames.PREV_FILE_PATH.value,
+            ColumnNames.CURR_FILE_PATH.value,
             ColumnNames.PREV_START_LINE.value,
-            ColumnNames.PREV_END_LINE.value,
-            ColumnNames.PREV_METHOD_NAME.value,
+            ColumnNames.CURR_START_LINE.value,
         ]
 
-        # 出力ファイル名のマッピング
-        output_files = {
-            "matches": "matches_methods.csv",
-            "deleted": "deleted_methods.csv",
-            "added": "added_methods.csv",
-        }
+        # Sort using existing columns
+        existing_keys = [k for k in sort_keys if k in result_df.columns]
+        if existing_keys:
+            result_df = result_df.sort_values(by=existing_keys)
 
+        # Create output directory
         output_path = Path(output)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        for key, df in results.items():
-            # ソート（prev_列が存在する場合のみ）
-            existing_keys = [k for k in sort_keys if k in df.columns]
-            if existing_keys:
-                df = df.sort_values(by=existing_keys)
+        # Save single unified CSV file
+        file_path = output_path / "methods_tracking.csv"
+        result_df.to_csv(file_path, index=False)
 
-            # CSV保存
-            file_path = output_path / output_files[key]
-            df.to_csv(file_path, index=False)
+        # Print summary statistics
+        total_rows = len(result_df)
+        matched_count = result_df[ColumnNames.IS_MATCHED.value].sum()
+        deleted_count = result_df[ColumnNames.IS_DELETED.value].sum()
+        added_count = result_df[ColumnNames.IS_ADDED.value].sum()
 
-            console.print(f"[green]Results saved to:[/green] {output_path}")
+        console.print(f"[green]Results saved to:[/green] {file_path}")
+        console.print(f"[blue]Total rows:[/blue] {total_rows}")
+        console.print(f"  - Matched: {matched_count}")
+        console.print(f"  - Deleted: {deleted_count}")
+        console.print(f"  - Added: {added_count}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -251,7 +257,7 @@ def methods(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/method_tracking_multi.csv",
+    default="./output/methods_tracking.csv",
     help="Input CSV file with method tracking results",
 )
 @click.option(
@@ -269,11 +275,14 @@ def methods(
 )
 def merge_splits(input_file: str, output_file: str, verify_threshold: float) -> None:
     """Merge split code blocks across revisions."""
-    method_tracking_multi_df = pd.read_csv(input_file)
-    merger = MergeSplitsTracker()
-    method_tracking_multi_df = merger.merge_splits(method_tracking_multi_df, verify_threshold)
+    method_tracking_df = pd.read_csv(input_file)
 
-    method_tracking_multi_df.to_csv(output_file, index=False)
-    console.print(
-        f"[green]Results saved to:[/green] {output_file} rows:{len(method_tracking_multi_df)}"
-    )
+    # Filter to only matched rows for merge/split detection
+    # (deleted and added rows don't participate in merge/split analysis)
+    matched_df = method_tracking_df[method_tracking_df[ColumnNames.IS_MATCHED.value]]
+
+    merger = MergeSplitsTracker()
+    merged_df = merger.merge_splits(matched_df, verify_threshold)
+
+    merged_df.to_csv(output_file, index=False)
+    console.print(f"[green]Results saved to:[/green] {output_file} rows:{len(merged_df)}")
