@@ -23,6 +23,7 @@ class ColumnNames(Enum):
     PREV_PARAMETERS = "prev_parameters"
     PREV_TOKEN_HASH = "prev_token_hash"
     PREV_TOKEN_SEQUENCE = "prev_token_sequence"
+    PREV_LOC = "prev_loc"
 
     CURR_REVISION_ID = "curr_revision_id"
     CURR_FILE_PATH = "curr_file_path"
@@ -34,11 +35,15 @@ class ColumnNames(Enum):
     CURR_PARAMETERS = "curr_parameters"
     CURR_TOKEN_HASH = "curr_token_hash"
     CURR_TOKEN_SEQUENCE = "curr_token_sequence"
+    CURR_LOC = "curr_loc"
 
     SIMILARITY = "similarity"
     IS_MATCHED = "is_matched"
     IS_DELETED = "is_deleted"
     IS_ADDED = "is_added"
+    IS_SPLIT = "is_split"
+    IS_MERGED = "is_merged"
+    IS_MODIFIED = "is_modified"
 
     TOKEN_HASH_1 = "token_hash_1"
     TOKEN_HASH_2 = "token_hash_2"
