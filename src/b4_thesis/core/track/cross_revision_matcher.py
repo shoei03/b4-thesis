@@ -147,13 +147,6 @@ class CrossRevisionMatcher:
                     )
                 )
 
-        print(
-            f"Total: {len(all_results)} blocks "
-            f"({sum(1 for r in all_results if r[ColumnNames.IS_MATCHED.value])} matched, "
-            f"{sum(1 for r in all_results if r[ColumnNames.IS_DELETED.value])} deleted, "
-            f"{sum(1 for r in all_results if r[ColumnNames.IS_ADDED.value])} added)"
-        )
-
         return all_results
 
     def _build_target_index(self, target_blocks: list[dict]) -> dict:

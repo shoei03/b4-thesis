@@ -210,7 +210,6 @@ def methods(
         )
 
         # Define sort keys for consistent ordering
-        # Sort by prev_* columns first (matches and deletes), then curr_* (adds)
         sort_keys = [
             ColumnNames.PREV_REVISION_ID.value,
             ColumnNames.CURR_REVISION_ID.value,
@@ -222,30 +221,17 @@ def methods(
             ColumnNames.CURR_START_LINE.value,
         ]
 
-        # Sort using existing columns
         existing_keys = [k for k in sort_keys if k in result_df.columns]
         if existing_keys:
             result_df = result_df.sort_values(by=existing_keys)
 
-        # Create output directory
         output_path = Path(output)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        # Save single unified CSV file
-        file_path = output_path / "methods_tracking.csv"
+        file_path = output_path / "methods_tracking_with_merge_splits.csv"
         result_df.to_csv(file_path, index=False)
 
-        # Print summary statistics
-        total_rows = len(result_df)
-        matched_count = result_df[ColumnNames.IS_MATCHED.value].sum()
-        deleted_count = result_df[ColumnNames.IS_DELETED.value].sum()
-        added_count = result_df[ColumnNames.IS_ADDED.value].sum()
-
         console.print(f"[green]Results saved to:[/green] {file_path}")
-        console.print(f"[blue]Total rows:[/blue] {total_rows}")
-        console.print(f"  - Matched: {matched_count}")
-        console.print(f"  - Deleted: {deleted_count}")
-        console.print(f"  - Added: {added_count}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
