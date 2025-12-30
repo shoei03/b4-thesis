@@ -12,7 +12,7 @@ class ColumnNames(Enum):
     PARAMETERS = "parameters"
     TOKEN_HASH = "token_hash"
     TOKEN_SEQUENCE = "token_sequence"
-    
+
     PREV_REVISION_ID = "prev_revision_id"
     PREV_FILE_PATH = "prev_file_path"
     PREV_START_LINE = "prev_start_line"
@@ -23,7 +23,7 @@ class ColumnNames(Enum):
     PREV_PARAMETERS = "prev_parameters"
     PREV_TOKEN_HASH = "prev_token_hash"
     PREV_TOKEN_SEQUENCE = "prev_token_sequence"
-    
+
     CURR_REVISION_ID = "curr_revision_id"
     CURR_FILE_PATH = "curr_file_path"
     CURR_START_LINE = "curr_start_line"
@@ -34,9 +34,9 @@ class ColumnNames(Enum):
     CURR_PARAMETERS = "curr_parameters"
     CURR_TOKEN_HASH = "curr_token_hash"
     CURR_TOKEN_SEQUENCE = "curr_token_sequence"
-    
+
     SIMILARITY = "similarity"
-    
+
     TOKEN_HASH_1 = "token_hash_1"
     TOKEN_HASH_2 = "token_hash_2"
     NGRAM_OVERLAP = "ngram_overlap"
