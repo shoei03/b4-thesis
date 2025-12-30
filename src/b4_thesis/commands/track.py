@@ -3,7 +3,9 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from b4_thesis.core.track.merge_splits import MergeSplitsTracker
 from b4_thesis.core.track.method import MethodTracker
+import pandas as pd
 
 console = Console()
 
@@ -278,6 +280,39 @@ def methods(
     #     if verbose:
     #         console.print_exception()
     #     raise click.Abort()
+
+
+@track.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/method_tracking_multi.csv",
+    help="Input CSV file with method tracking results (default: ./output/versions/method_tracking_multi.csv)",
+)
+@click.option(
+    "--output-file",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/method_tracking_merge_splits.csv",
+    help="Output CSV file for merged code blocks (default: ./output/versions/method_tracking_merge_splits.csv)",
+)
+@click.option(
+    "--verify-threshold",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.7,
+    help="Verification threshold for merging splits (0.0-1.0, default: 0.7)",
+)
+def merge_splits(input_file: str, output_file: str, verify_threshold: float) -> None:
+    """Merge split code blocks across revisions."""
+    method_tracking_multi_df = pd.read_csv(input_file)
+    merger = MergeSplitsTracker()
+    method_tracking_multi_df = merger.merge_splits(method_tracking_multi_df, verify_threshold)
+
+    method_tracking_multi_df.to_csv(output_file, index=False)
+    console.print(
+        f"[green]Results saved to:[/green] {output_file} rows:{len(method_tracking_multi_df)}"
+    )
 
 
 # @track.command()
