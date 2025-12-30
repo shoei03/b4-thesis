@@ -36,6 +36,9 @@ class ColumnNames(Enum):
     CURR_TOKEN_SEQUENCE = "curr_token_sequence"
 
     SIMILARITY = "similarity"
+    IS_MATCHED = "is_matched"
+    IS_DELETED = "is_deleted"
+    IS_ADDED = "is_added"
 
     TOKEN_HASH_1 = "token_hash_1"
     TOKEN_HASH_2 = "token_hash_2"
