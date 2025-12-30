@@ -1,6 +1,5 @@
 """Tests for CsvValidator."""
 
-
 import pytest
 
 from b4_thesis.analysis.validation.csv_validator import (
