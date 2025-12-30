@@ -7,6 +7,8 @@ across different revisions, reducing complexity from O(N×M) to O((N+M)log(N+M))
 import bisect
 from collections import defaultdict
 
+from b4_thesis.const.column import ColumnNames
+
 
 class CrossRevisionMatcher:
     """Matches code blocks across revisions using NIL's 3-phase strategy.
@@ -37,82 +39,86 @@ class CrossRevisionMatcher:
         self.filter_threshold = filter_threshold
         self.verify_threshold = verify_threshold
 
-    def match_revisions(
+    def match_revisions_with_changes(
         self,
         source_blocks: list[dict],
         target_blocks: list[dict],
-    ) -> list[dict]:
-        """Match source blocks to target blocks across revisions.
+    ) -> dict:
+        """Match blocks and track deletions/additions."""
 
-        Args:
-            source_blocks: List of blocks from previous revision
-                          Each dict must have: block_id, token_sequence
-            target_blocks: List of blocks from current revision
-                          Each dict must have: block_id, token_sequence
+        # 空チェック
+        if not source_blocks and not target_blocks:
+            return {"matches": [], "deleted": [], "added": []}
 
-        Returns:
-            List of match dictionaries with keys:
-            - prev_block_id: ID of source block
-            - curr_block_id: ID of target block
-            - similarity: Similarity score (0.0-1.0)
+        if not source_blocks:
+            added = [self._format_block(target_block=block) for block in target_blocks]
+            return {"matches": [], "deleted": [], "added": added}
 
-            Note: One source block can match multiple target blocks.
-                  Same prev_block_id may appear multiple times in results.
-        """
-        if not source_blocks or not target_blocks:
-            return []
+        if not target_blocks:
+            deleted = [self._format_block(source_block=block) for block in source_blocks]
+            return {"matches": [], "deleted": deleted, "added": []}
 
-        # Phase 1: Build inverted index from target revision
+        # Phase 1: Build inverted index
         print(f"Building N-gram index for {len(target_blocks)} target blocks...")
         inverted_index = self._build_target_index(target_blocks)
 
+        # インデックスで追跡（軽量なデータ構造）
+        matched_source_indices = set()
+        matched_target_indices = set()
+        match_pairs = []  # [(source_idx, target_idx, similarity), ...]
+
         # Phase 2-4: Match each source block
         print(f"Matching {len(source_blocks)} source blocks...")
-        matches = []
-
-        for i, source_block in enumerate(source_blocks):
-            # Location: Find candidates via N-gram index
+        for source_idx, source_block in enumerate(source_blocks):
+            # Location
             candidates = self._find_candidates_for_source(source_block, inverted_index)
 
             if not candidates:
                 continue
 
-            # Filtration: Filter by N-gram overlap
+            # Filtration
             qualified = self._filter_by_ngram_overlap(
-                source_block["token_sequence"], candidates, target_blocks
+                source_block[ColumnNames.TOKEN_SEQUENCE.value], candidates, target_blocks
             )
 
-            # Verification: Verify with LCS similarity
+            # Verification
             verified_matches = self._verify_similarity(
-                source_block["token_sequence"], qualified, target_blocks
+                source_block[ColumnNames.TOKEN_SEQUENCE.value], qualified, target_blocks
             )
 
-            # Append all verified matches
-            for match in verified_matches:
-                matches.append(
-                    {
-                        "similarity": match["similarity"],
-                        "prev_revision": source_block["revision"],
-                        "prev_block_id": source_block["block_id"],
-                        "prev_file_path": source_block["file_path"],
-                        "prev_function_name": source_block["function_name"],
-                        "prev_return_type": source_block["return_type"],
-                        "prev_parameters": source_block["parameters"],
-                        "prev_start_line": source_block["start_line"],
-                        "prev_end_line": source_block["end_line"],
-                        "curr_revision": target_blocks[match["target_idx"]]["revision"],
-                        "curr_block_id": target_blocks[match["target_idx"]]["block_id"],
-                        "curr_file_path": target_blocks[match["target_idx"]]["file_path"],
-                        "curr_function_name": target_blocks[match["target_idx"]]["function_name"],
-                        "curr_return_type": target_blocks[match["target_idx"]]["return_type"],
-                        "curr_parameters": target_blocks[match["target_idx"]]["parameters"],
-                        "curr_start_line": target_blocks[match["target_idx"]]["start_line"],
-                        "curr_end_line": target_blocks[match["target_idx"]]["end_line"],
-                    }
-                )
+            # マッチがあればインデックスと類似度を記録
+            if verified_matches:
+                matched_source_indices.add(source_idx)
 
-        print(f"Found {len(matches)} matches (threshold >= {self.verify_threshold})")
-        return matches
+                for match in verified_matches:
+                    target_idx = match["target_idx"]
+                    matched_target_indices.add(target_idx)
+                    match_pairs.append((source_idx, target_idx, match["similarity"]))
+
+        # 最後にまとめてフォーマット
+        matches = [
+            self._format_block(source_blocks[src_idx], target_blocks[tgt_idx], similarity)
+            for src_idx, tgt_idx, similarity in match_pairs
+        ]
+
+        deleted_blocks = [
+            self._format_block(source_block=source_blocks[i])
+            for i in range(len(source_blocks))
+            if i not in matched_source_indices
+        ]
+
+        added_blocks = [
+            self._format_block(target_block=target_blocks[i])
+            for i in range(len(target_blocks))
+            if i not in matched_target_indices
+        ]
+
+        print(
+            f"Found {len(matches)} matches, "
+            f"{len(deleted_blocks)} deletions, {len(added_blocks)} additions"
+        )
+
+        return {"matches": matches, "deleted": deleted_blocks, "added": added_blocks}
 
     def _build_target_index(self, target_blocks: list[dict]) -> dict:
         """
@@ -122,7 +128,7 @@ class CrossRevisionMatcher:
         inverted_index = defaultdict(list)
 
         for idx, block in enumerate(target_blocks):
-            token_seq = block["token_sequence"]
+            token_seq = block[ColumnNames.TOKEN_SEQUENCE.value]
             ngrams = self._generate_ngrams(token_seq)
 
             for gram in ngrams:
@@ -136,7 +142,7 @@ class CrossRevisionMatcher:
         [cite_start]Algorithm 1 Lines 3-12 [cite: 366-390].
         """
         candidates = set()
-        source_ngrams = self._generate_ngrams(source_block["token_sequence"])
+        source_ngrams = self._generate_ngrams(source_block[ColumnNames.TOKEN_SEQUENCE.value])
 
         for gram in source_ngrams:
             if gram in inverted_index:
@@ -168,7 +174,7 @@ class CrossRevisionMatcher:
 
         for candidate_idx in candidate_indices:
             target_block = target_blocks[candidate_idx]
-            target_ngrams = self._generate_ngrams(target_block["token_sequence"])
+            target_ngrams = self._generate_ngrams(target_block[ColumnNames.TOKEN_SEQUENCE.value])
 
             # Calculate filtration_sim
             common_ngrams = len(source_ngrams.intersection(target_ngrams))
@@ -202,7 +208,7 @@ class CrossRevisionMatcher:
 
         for candidate_idx in candidate_indices:
             target_block = target_blocks[candidate_idx]
-            target_tokens = target_block["token_sequence"]
+            target_tokens = target_block[ColumnNames.TOKEN_SEQUENCE.value]
 
             if not target_tokens:
                 continue
@@ -262,3 +268,40 @@ class CrossRevisionMatcher:
                 tails.append(idx)
 
         return len(tails)
+
+    def _format_block(
+        self,
+        source_block: dict | None = None,
+        target_block: dict | None = None,
+        similarity: float | None = None,
+    ) -> dict:
+        """Format a block with consistent structure.
+
+        Args:
+            source_block: Source (previous) block, or None for added blocks
+            target_block: Target (current) block, or None for deleted blocks
+            similarity: Similarity score, or None for deleted/added blocks
+
+        Returns:
+            Formatted block dictionary with prev_* and curr_* fields
+        """
+        # Base field names and their corresponding prev_/curr_ column names
+        FIELD_MAPPING = [
+            (ColumnNames.REVISION_ID, ColumnNames.PREV_REVISION_ID, ColumnNames.CURR_REVISION_ID),
+            (ColumnNames.TOKEN_HASH, ColumnNames.PREV_TOKEN_HASH, ColumnNames.CURR_TOKEN_HASH),
+            (ColumnNames.FILE_PATH, ColumnNames.PREV_FILE_PATH, ColumnNames.CURR_FILE_PATH),
+            (ColumnNames.METHOD_NAME, ColumnNames.PREV_METHOD_NAME, ColumnNames.CURR_METHOD_NAME),
+            (ColumnNames.RETURN_TYPE, ColumnNames.PREV_RETURN_TYPE, ColumnNames.CURR_RETURN_TYPE),
+            (ColumnNames.PARAMETERS, ColumnNames.PREV_PARAMETERS, ColumnNames.CURR_PARAMETERS),
+            (ColumnNames.START_LINE, ColumnNames.PREV_START_LINE, ColumnNames.CURR_START_LINE),
+            (ColumnNames.END_LINE, ColumnNames.PREV_END_LINE, ColumnNames.CURR_END_LINE),
+        ]
+
+        result = {ColumnNames.SIMILARITY.value: similarity}
+
+        # Add prev_ and curr_ fields
+        for base, prev, curr in FIELD_MAPPING:
+            result[prev.value] = source_block[base.value] if source_block else None
+            result[curr.value] = target_block[base.value] if target_block else None
+
+        return result
