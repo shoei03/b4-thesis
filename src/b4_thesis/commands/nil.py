@@ -54,7 +54,7 @@ def nil():
 @click.option(
     "--output",
     "-o",
-    default="./output/versions/methods_tracking_by_nil.csv",
+    default="./output/versions/nil/methods_tracking_by_nil.csv",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
     help="Output directory for CSV files",
@@ -106,8 +106,8 @@ def track(
     "--input",
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    required=True,
-    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    required=False,
+    default="./output/versions/nil/methods_tracking_by_nil.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -115,7 +115,7 @@ def track(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/tmp.json",
+    default="./output/versions/nil/tmp.json",
     help="Output file for classified results",
 )
 def evaluate(input: str, output: str) -> None:
@@ -270,7 +270,7 @@ def evaluate(input: str, output: str) -> None:
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/methods_tracking_by_nil.csv",
+    default="./output/versions/nil/methods_tracking_by_nil.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -278,7 +278,7 @@ def evaluate(input: str, output: str) -> None:
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
     help="Output file for classified results",
 )
 @click.option(
