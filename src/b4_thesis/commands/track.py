@@ -6,6 +6,7 @@ from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.method import MethodTracker
+from b4_thesis.utils.revision_manager import RevisionManager
 import pandas as pd
 import numpy as np
 
@@ -367,3 +368,59 @@ def stats(input: str, output: str) -> None:
     console.print(f"  - Entries with matched references: {count_matched_with_matched}")
     console.print(f"Total added entries: {len(added_false_positives)}")
     console.print(f"  - Entries with matched references: {count_added_with_matched}")
+
+
+@track.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    default="./data/versions",
+    help="Input directory containing revision subdirectories",
+)
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/clones/methods_with_clone_flag.csv",
+    help="Output file for CSV data",
+)
+def clones(
+    input: str,
+    input_file: str,
+    output: str,
+) -> None:
+    """Track clone group evolution across revisions."""
+    df = pd.read_csv(input_file)
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path(input))
+
+    rev_clone_hashes = {}
+    for rev in revisions:
+        clone_pairs = revision_manager.load_clone_pairs(rev)
+        hashes = set(clone_pairs[ColumnNames.TOKEN_HASH_1.value]) | set(
+            clone_pairs[ColumnNames.TOKEN_HASH_2.value]
+        )
+        rev_clone_hashes[str(rev.timestamp)] = hashes
+
+    prev_rev_col = ColumnNames.PREV_REVISION_ID.value
+    prev_hash_col = ColumnNames.PREV_TOKEN_HASH.value
+
+    df["has_clone"] = False
+    for rev_id, hashes in rev_clone_hashes.items():
+        mask = df[prev_rev_col] == rev_id
+        matched = df.loc[mask, prev_hash_col].isin(hashes)
+        df.loc[mask, "has_clone"] = matched
+
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    console.print(f"[green]Results saved to:[/green] {output_path}")
