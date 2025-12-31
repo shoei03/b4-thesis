@@ -107,149 +107,6 @@ def track(
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/methods_tracking_by_nil.csv",
-    help="Input file containing tracked methods data",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=True, dir_okay=False),
-    required=False,
-    default="./output/versions/methods_tracking_with_merge_splits.csv",
-    help="Output file for classified results",
-)
-@click.option(
-    "--verify-threshold",
-    type=click.FloatRange(0.0, 1.0),
-    default=0.7,
-    help="Threshold for verifying splits/merges (0.0-1.0, default: 0.7)",
-)
-def track_merge_splits(
-    input: str,
-    output: str,
-    verify_threshold: float,
-) -> None:
-    """Classify tracked methods into categories including merges and splits."""
-    df = pd.read_csv(input)
-
-    merge_splits_df = merge_splits(df, verify_threshold=verify_threshold)
-
-    merge_splits_df.to_csv(output, index=False)
-    console.print(f"[green]Results with merge/split classification saved to:[/green] {output}")
-
-
-@nil.command()
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    required=True,
-    default="./output/versions/methods_tracking_with_merge_splits.csv",
-    help="Input file containing tracked methods data",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=True, dir_okay=False),
-    required=False,
-    default="./output/versions/methods_classified.csv",
-    help="Output file for classified results",
-)
-def classify(
-    input: str,
-    output: str,
-) -> None:
-    df = pd.read_csv(
-        input,
-        usecols=[
-            ColumnNames.PREV_REVISION_ID.value,
-            ColumnNames.CURR_REVISION_ID.value,
-            ColumnNames.IS_MATCHED.value,
-            ColumnNames.IS_DELETED.value,
-            ColumnNames.IS_ADDED.value,
-            ColumnNames.IS_SPLIT.value,
-            ColumnNames.IS_MERGED.value,
-            ColumnNames.IS_MODIFIED.value,
-            "has_clone",
-        ],
-    )
-
-    prev_col = ColumnNames.PREV_REVISION_ID.value
-    curr_col = ColumnNames.CURR_REVISION_ID.value
-
-    # ステップ1: 両方存在する行でグループを作成
-    both_exist_mask = df[prev_col].notna() & df[curr_col].notna()
-    df_both = df[both_exist_mask].copy()
-    df_nan = df[~both_exist_mask].copy()
-
-    # 両方存在する組み合わせのユニークなペアを取得
-    unique_pairs = df_both[[prev_col, curr_col]].drop_duplicates()
-
-    # グループキーを作成（タプルの文字列表現）
-    df_both["group_key"] = df_both[prev_col].astype(str) + "___" + df_both[curr_col].astype(str)
-
-    # ステップ2: NaNを含む行を既存グループにマッピング
-    # PREVまたはCURRが既存ペアに一致するかチェック
-    prev_to_group = {}
-    curr_to_group = {}
-
-    for _, row in unique_pairs.iterrows():
-        group_key = str(row[prev_col]) + "___" + str(row[curr_col])
-        prev_val = row[prev_col]
-        curr_val = row[curr_col]
-
-        # 同じPREVまたはCURRを持つグループをマッピング
-        if prev_val not in prev_to_group:
-            prev_to_group[prev_val] = group_key
-        if curr_val not in curr_to_group:
-            curr_to_group[curr_val] = group_key
-
-    # NaN行にグループキーを割り当て
-    def assign_group(row):
-        prev_val = row[prev_col]
-        curr_val = row[curr_col]
-
-        # PREVが存在する場合
-        if pd.notna(prev_val) and prev_val in prev_to_group:
-            return prev_to_group[prev_val]
-        # CURRが存在する場合
-        if pd.notna(curr_val) and curr_val in curr_to_group:
-            return curr_to_group[curr_val]
-        # どちらも既存グループに該当しない場合
-        if pd.notna(prev_val):
-            return str(prev_val) + "___nan"
-        if pd.notna(curr_val):
-            return "nan___" + str(curr_val)
-        return "nan___nan"
-
-    df_nan["group_key"] = df_nan.apply(assign_group, axis=1)
-
-    # 結合
-    df_result = pd.concat([df_both, df_nan], ignore_index=True)
-
-    # グループ化して集計
-    result = df_result.groupby("group_key").sum()[
-        [
-            ColumnNames.IS_MATCHED.value,
-            ColumnNames.IS_DELETED.value,
-            ColumnNames.IS_ADDED.value,
-            ColumnNames.IS_SPLIT.value,
-            ColumnNames.IS_MERGED.value,
-            ColumnNames.IS_MODIFIED.value,
-            "has_clone",
-        ]
-    ]
-
-    # CSVとして保存（インデックス（group_key）も含める）
-    result.to_csv(output)
-
-
-@nil.command()
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    required=True,
     default="./output/versions/methods_tracking_with_merge_splits.csv",
     help="Input file containing tracked methods data",
 )
@@ -261,8 +118,8 @@ def classify(
     default="./output/versions/tmp.json",
     help="Output file for classified results",
 )
-def stats(input: str, output: str) -> None:
-    """Display statistics of method tracking results."""
+def evaluate(input: str, output: str) -> None:
+    """Evaluate false positives in method tracking results."""
     df = pd.read_csv(input, low_memory=False)
 
     # NaNを除外したユニークなリビジョン
@@ -405,6 +262,149 @@ def stats(input: str, output: str) -> None:
     console.print(f"  - Entries with matched references: {count_matched_with_matched}")
     console.print(f"Total added entries: {len(added_false_positives)}")
     console.print(f"  - Entries with matched references: {count_added_with_matched}")
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/methods_tracking_by_nil.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    help="Output file for classified results",
+)
+@click.option(
+    "--verify-threshold",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.7,
+    help="Threshold for verifying splits/merges (0.0-1.0, default: 0.7)",
+)
+def track_merge_splits(
+    input: str,
+    output: str,
+    verify_threshold: float,
+) -> None:
+    """Classify tracked methods into categories including merges and splits."""
+    df = pd.read_csv(input)
+
+    merge_splits_df = merge_splits(df, verify_threshold=verify_threshold)
+
+    merge_splits_df.to_csv(output, index=False)
+    console.print(f"[green]Results with merge/split classification saved to:[/green] {output}")
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/methods_classified.csv",
+    help="Output file for classified results",
+)
+def classify(
+    input: str,
+    output: str,
+) -> None:
+    df = pd.read_csv(
+        input,
+        usecols=[
+            ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.CURR_REVISION_ID.value,
+            ColumnNames.IS_MATCHED.value,
+            ColumnNames.IS_DELETED.value,
+            ColumnNames.IS_ADDED.value,
+            ColumnNames.IS_SPLIT.value,
+            ColumnNames.IS_MERGED.value,
+            ColumnNames.IS_MODIFIED.value,
+            "has_clone",
+        ],
+    )
+
+    prev_col = ColumnNames.PREV_REVISION_ID.value
+    curr_col = ColumnNames.CURR_REVISION_ID.value
+
+    # ステップ1: 両方存在する行でグループを作成
+    both_exist_mask = df[prev_col].notna() & df[curr_col].notna()
+    df_both = df[both_exist_mask].copy()
+    df_nan = df[~both_exist_mask].copy()
+
+    # 両方存在する組み合わせのユニークなペアを取得
+    unique_pairs = df_both[[prev_col, curr_col]].drop_duplicates()
+
+    # グループキーを作成（タプルの文字列表現）
+    df_both["group_key"] = df_both[prev_col].astype(str) + "___" + df_both[curr_col].astype(str)
+
+    # ステップ2: NaNを含む行を既存グループにマッピング
+    # PREVまたはCURRが既存ペアに一致するかチェック
+    prev_to_group = {}
+    curr_to_group = {}
+
+    for _, row in unique_pairs.iterrows():
+        group_key = str(row[prev_col]) + "___" + str(row[curr_col])
+        prev_val = row[prev_col]
+        curr_val = row[curr_col]
+
+        # 同じPREVまたはCURRを持つグループをマッピング
+        if prev_val not in prev_to_group:
+            prev_to_group[prev_val] = group_key
+        if curr_val not in curr_to_group:
+            curr_to_group[curr_val] = group_key
+
+    # NaN行にグループキーを割り当て
+    def assign_group(row):
+        prev_val = row[prev_col]
+        curr_val = row[curr_col]
+
+        # PREVが存在する場合
+        if pd.notna(prev_val) and prev_val in prev_to_group:
+            return prev_to_group[prev_val]
+        # CURRが存在する場合
+        if pd.notna(curr_val) and curr_val in curr_to_group:
+            return curr_to_group[curr_val]
+        # どちらも既存グループに該当しない場合
+        if pd.notna(prev_val):
+            return str(prev_val) + "___nan"
+        if pd.notna(curr_val):
+            return "nan___" + str(curr_val)
+        return "nan___nan"
+
+    df_nan["group_key"] = df_nan.apply(assign_group, axis=1)
+
+    # 結合
+    df_result = pd.concat([df_both, df_nan], ignore_index=True)
+
+    # グループ化して集計
+    result = df_result.groupby("group_key").sum()[
+        [
+            ColumnNames.IS_MATCHED.value,
+            ColumnNames.IS_DELETED.value,
+            ColumnNames.IS_ADDED.value,
+            ColumnNames.IS_SPLIT.value,
+            ColumnNames.IS_MERGED.value,
+            ColumnNames.IS_MODIFIED.value,
+            "has_clone",
+        ]
+    ]
+
+    # CSVとして保存（インデックス（group_key）も含める）
+    result.to_csv(output)
 
 
 @nil.command()
