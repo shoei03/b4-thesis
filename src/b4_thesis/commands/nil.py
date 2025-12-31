@@ -17,7 +17,7 @@ def nil():
     """Track method and clone group evolution across revisions.
 
     This command group provides subcommands for tracking:
-    - methods: Track individual method evolution
+    - track: Track individual method evolution
     - groups: Track clone group evolution
     """
     pass
@@ -47,12 +47,14 @@ def nil():
     "-i",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     required=True,
+    default="./data/versions",
     help="Input directory containing revision subdirectories",
 )
 @click.option(
     "--output",
     "-o",
-    type=click.Path(file_okay=False, dir_okay=True),
+    default="./output/versions/methods_tracking_by_nil.csv",
+    type=click.Path(file_okay=True, dir_okay=False),
     required=True,
     help="Output directory for CSV files",
 )
@@ -89,13 +91,9 @@ def track(
         if existing_keys:
             result_df = result_df.sort_values(by=existing_keys)
 
-        output_path = Path(output)
-        output_path.mkdir(parents=True, exist_ok=True)
+        result_df.to_csv(output, index=False)
 
-        file_path = output_path / "methods_tracking_with_merge_splits.csv"
-        result_df.to_csv(file_path, index=False)
-
-        console.print(f"[green]Results saved to:[/green] {file_path}")
+        console.print(f"[green]Results saved to:[/green] {output}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
