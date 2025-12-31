@@ -344,4 +344,27 @@ class CrossRevisionMatcher:
             result[prev.value] = source_block[base.value] if source_block else None
             result[curr.value] = target_block[base.value] if target_block else None
 
-        return result
+        sorted_result = result.reindex(
+            columns=[
+                ColumnNames.PREV_REVISION_ID.value,
+                ColumnNames.CURR_REVISION_ID.value,
+                ColumnNames.PREV_FILE_PATH.value,
+                ColumnNames.CURR_FILE_PATH.value,
+                ColumnNames.PREV_METHOD_NAME.value,
+                ColumnNames.CURR_METHOD_NAME.value,
+                ColumnNames.PREV_RETURN_TYPE.value,
+                ColumnNames.CURR_RETURN_TYPE.value,
+                ColumnNames.PREV_PARAMETERS.value,
+                ColumnNames.CURR_PARAMETERS.value,
+                ColumnNames.PREV_START_LINE.value,
+                ColumnNames.CURR_START_LINE.value,
+                ColumnNames.PREV_END_LINE.value,
+                ColumnNames.CURR_END_LINE.value,
+                ColumnNames.SIMILARITY.value,
+                ColumnNames.IS_ADDED.value,
+                ColumnNames.IS_DELETED.value,
+                ColumnNames.IS_MATCHED.value,
+            ]
+        )
+
+        return sorted_result
