@@ -5,6 +5,7 @@ import click
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
+from b4_thesis.core.track.classify.merge_splits import merge_splits
 from b4_thesis.core.track.method import MethodTracker
 from b4_thesis.utils.revision_manager import RevisionManager
 import pandas as pd
@@ -98,6 +99,43 @@ def track(
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise click.Abort()
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/methods_tracking_by_nil.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    help="Output file for classified results",
+)
+@click.option(
+    "--verify-threshold",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.7,
+    help="Threshold for verifying splits/merges (0.0-1.0, default: 0.7)",
+)
+def track_merge_splits(
+    input: str,
+    output: str,
+    verify_threshold: float,
+) -> None:
+    """Classify tracked methods into categories including merges and splits."""
+    df = pd.read_csv(input)
+
+    merge_splits_df = merge_splits(df, verify_threshold=verify_threshold)
+
+    merge_splits_df.to_csv(output, index=False)
+    console.print(f"[green]Results with merge/split classification saved to:[/green] {output}")
 
 
 @nil.command()
