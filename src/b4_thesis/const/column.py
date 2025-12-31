@@ -44,6 +44,7 @@ class ColumnNames(Enum):
     IS_SPLIT = "is_split"
     IS_MERGED = "is_merged"
     IS_MODIFIED = "is_modified"
+    HAS_CLONE = "has_clone"
 
     TOKEN_HASH_1 = "token_hash_1"
     TOKEN_HASH_2 = "token_hash_2"

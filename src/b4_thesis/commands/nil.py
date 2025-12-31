@@ -322,6 +322,7 @@ def classify(
     input: str,
     output: str,
 ) -> None:
+    """Count and classify method tracking results."""
     df = pd.read_csv(
         input,
         usecols=[
@@ -333,7 +334,7 @@ def classify(
             ColumnNames.IS_SPLIT.value,
             ColumnNames.IS_MERGED.value,
             ColumnNames.IS_MODIFIED.value,
-            "has_clone",
+            ColumnNames.HAS_CLONE.value,
         ],
     )
 
@@ -399,7 +400,7 @@ def classify(
             ColumnNames.IS_SPLIT.value,
             ColumnNames.IS_MERGED.value,
             ColumnNames.IS_MODIFIED.value,
-            "has_clone",
+            ColumnNames.HAS_CLONE.value,
         ]
     ]
 
@@ -419,7 +420,7 @@ def classify(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -427,7 +428,7 @@ def classify(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/clones/methods_with_clone_flag.csv",
+    default="./output/versions/nil/methods_tracking_with_clone.csv",
     help="Output file for CSV data",
 )
 def clones(
@@ -436,18 +437,7 @@ def clones(
     output: str,
 ) -> None:
     """Track clone group evolution across revisions."""
-    df = pd.read_csv(
-        input_file,
-        # usecols=[
-        #     ColumnNames.PREV_REVISION_ID.value,
-        #     ColumnNames.PREV_TOKEN_HASH.value,
-        #     ColumnNames.IS_ADDED.value,
-        #     ColumnNames.IS_DELETED.value,
-        #     ColumnNames.IS_MERGED.value,
-        #     ColumnNames.IS_SPLIT.value,
-        #     ColumnNames.IS_MODIFIED.value,
-        # ],
-    )
+    df = pd.read_csv(input_file)
     revision_manager = RevisionManager()
     revisions = revision_manager.get_revisions(Path(input))
 
@@ -462,11 +452,11 @@ def clones(
     prev_rev_col = ColumnNames.PREV_REVISION_ID.value
     prev_hash_col = ColumnNames.PREV_TOKEN_HASH.value
 
-    df["has_clone"] = False
+    df[ColumnNames.HAS_CLONE.value] = False
     for rev_id, hashes in rev_clone_hashes.items():
         mask = df[prev_rev_col] == rev_id
         matched = df.loc[mask, prev_hash_col].isin(hashes)
-        df.loc[mask, "has_clone"] = matched
+        df.loc[mask, ColumnNames.HAS_CLONE.value] = matched
 
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -482,7 +472,7 @@ def clones(
     #             ColumnNames.IS_MERGED.value,
     #             ColumnNames.IS_SPLIT.value,
     #             ColumnNames.IS_MODIFIED.value,
-    #             "has_clone",
+    #             ColumnNames.HAS_CLONE.value,
     #         ]
     #     ).size()
     # )
