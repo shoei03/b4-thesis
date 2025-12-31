@@ -4,10 +4,10 @@ from pathlib import Path
 import shutil
 
 from click.testing import CliRunner
-import pandas as pd
 import pytest
 
-from b4_thesis.commands.track import track
+from b4_thesis.commands.nil import track
+import pandas as pd
 
 
 @pytest.fixture

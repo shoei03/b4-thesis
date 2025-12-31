@@ -9,10 +9,10 @@ from pathlib import Path
 import time
 
 from click.testing import CliRunner
-import pandas as pd
 import pytest
 
-from b4_thesis.commands.track import track
+from b4_thesis.commands.nil import track
+import pandas as pd
 
 # Path to real data directory
 REAL_DATA_DIR = Path(__file__).parent.parent.parent / "data" / "clone_NIL"

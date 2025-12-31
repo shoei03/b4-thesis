@@ -1,5 +1,5 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -8,13 +8,12 @@ from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.method import MethodTracker
 from b4_thesis.utils.revision_manager import RevisionManager
 import pandas as pd
-import numpy as np
 
 console = Console()
 
 
 @click.group()
-def track():
+def nil():
     """Track method and clone group evolution across revisions.
 
     This command group provides subcommands for tracking:
@@ -24,7 +23,7 @@ def track():
     pass
 
 
-@track.command()
+@nil.command()
 @click.option(
     "--similarity",
     type=click.FloatRange(0.0, 1.0),
@@ -57,7 +56,7 @@ def track():
     required=True,
     help="Output directory for CSV files",
 )
-def methods(
+def track(
     input: str,
     output: str,
     similarity: float,
@@ -103,7 +102,7 @@ def methods(
         raise click.Abort()
 
 
-@track.command()
+@nil.command()
 @click.option(
     "--input",
     "-i",
@@ -135,6 +134,7 @@ def classify(
             ColumnNames.IS_SPLIT.value,
             ColumnNames.IS_MERGED.value,
             ColumnNames.IS_MODIFIED.value,
+            "has_clone",
         ],
     )
 
@@ -200,6 +200,7 @@ def classify(
             ColumnNames.IS_SPLIT.value,
             ColumnNames.IS_MERGED.value,
             ColumnNames.IS_MODIFIED.value,
+            "has_clone",
         ]
     ]
 
@@ -207,7 +208,7 @@ def classify(
     result.to_csv(output)
 
 
-@track.command()
+@nil.command()
 @click.option(
     "--input",
     "-i",
@@ -370,7 +371,7 @@ def stats(input: str, output: str) -> None:
     console.print(f"  - Entries with matched references: {count_added_with_matched}")
 
 
-@track.command()
+@nil.command()
 @click.option(
     "--input",
     "-i",
@@ -399,7 +400,18 @@ def clones(
     output: str,
 ) -> None:
     """Track clone group evolution across revisions."""
-    df = pd.read_csv(input_file)
+    df = pd.read_csv(
+        input_file,
+        # usecols=[
+        #     ColumnNames.PREV_REVISION_ID.value,
+        #     ColumnNames.PREV_TOKEN_HASH.value,
+        #     ColumnNames.IS_ADDED.value,
+        #     ColumnNames.IS_DELETED.value,
+        #     ColumnNames.IS_MERGED.value,
+        #     ColumnNames.IS_SPLIT.value,
+        #     ColumnNames.IS_MODIFIED.value,
+        # ],
+    )
     revision_manager = RevisionManager()
     revisions = revision_manager.get_revisions(Path(input))
 
@@ -424,3 +436,17 @@ def clones(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
+
+    # console.print("\nOverall clone presence:")
+    # console.print(
+    #     df.groupby(
+    #         [
+    #             ColumnNames.IS_ADDED.value,
+    #             ColumnNames.IS_DELETED.value,
+    #             ColumnNames.IS_MERGED.value,
+    #             ColumnNames.IS_SPLIT.value,
+    #             ColumnNames.IS_MODIFIED.value,
+    #             "has_clone",
+    #         ]
+    #     ).size()
+    # )

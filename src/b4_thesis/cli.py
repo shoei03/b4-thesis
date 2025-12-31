@@ -8,11 +8,11 @@ from b4_thesis.commands import (
     convert,
     extract,
     label,
+    nil,
     predict,
     refactoring,
     report,
     stats,
-    track,
     visualize,
 )
 
@@ -39,7 +39,7 @@ main.add_command(label.label)
 main.add_command(refactoring.refactoring)
 main.add_command(report.report)
 main.add_command(stats.stats)
-main.add_command(track.track)
+main.add_command(nil.nil)
 main.add_command(visualize.visualize)
 
 
