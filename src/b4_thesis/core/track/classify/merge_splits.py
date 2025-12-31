@@ -2,9 +2,7 @@ from b4_thesis.const.column import ColumnNames
 import pandas as pd
 
 
-def merge_splits(
-    method_tracking_df: pd.DataFrame, verify_threshold: float = 0.7
-) -> pd.DataFrame:
+def merge_splits(method_tracking_df: pd.DataFrame, verify_threshold: float = 0.7) -> pd.DataFrame:
     # マッチした行のマスクを作成
     is_matched = method_tracking_df[ColumnNames.IS_MATCHED.value] == True
 

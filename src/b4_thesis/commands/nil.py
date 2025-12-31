@@ -305,6 +305,76 @@ def track_merge_splits(
 @click.option(
     "--input",
     "-i",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    default="./data/versions",
+    help="Input directory containing revision subdirectories",
+)
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/methods_tracking_with_clone.csv",
+    help="Output file for CSV data",
+)
+def track_clone(
+    input: str,
+    input_file: str,
+    output: str,
+) -> None:
+    """Track clone presence in method tracking results."""
+    df = pd.read_csv(input_file)
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path(input))
+
+    rev_clone_hashes = {}
+    for rev in revisions:
+        clone_pairs = revision_manager.load_clone_pairs(rev)
+        hashes = set(clone_pairs[ColumnNames.TOKEN_HASH_1.value]) | set(
+            clone_pairs[ColumnNames.TOKEN_HASH_2.value]
+        )
+        rev_clone_hashes[str(rev.timestamp)] = hashes
+
+    prev_rev_col = ColumnNames.PREV_REVISION_ID.value
+    prev_hash_col = ColumnNames.PREV_TOKEN_HASH.value
+
+    df[ColumnNames.HAS_CLONE.value] = False
+    for rev_id, hashes in rev_clone_hashes.items():
+        mask = df[prev_rev_col] == rev_id
+        matched = df.loc[mask, prev_hash_col].isin(hashes)
+        df.loc[mask, ColumnNames.HAS_CLONE.value] = matched
+
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    console.print(f"[green]Results saved to:[/green] {output_path}")
+
+    # console.print("\nOverall clone presence:")
+    # console.print(
+    #     df.groupby(
+    #         [
+    #             ColumnNames.IS_ADDED.value,
+    #             ColumnNames.IS_DELETED.value,
+    #             ColumnNames.IS_MERGED.value,
+    #             ColumnNames.IS_SPLIT.value,
+    #             ColumnNames.IS_MODIFIED.value,
+    #             ColumnNames.HAS_CLONE.value,
+    #         ]
+    #     ).size()
+    # )
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
     default="./output/versions/methods_tracking_with_merge_splits.csv",
@@ -406,73 +476,3 @@ def classify(
 
     # CSVとして保存（インデックス（group_key）も含める）
     result.to_csv(output)
-
-
-@nil.command()
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    required=True,
-    default="./data/versions",
-    help="Input directory containing revision subdirectories",
-)
-@click.option(
-    "--input-file",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
-    help="Input file containing tracked methods data",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=True, dir_okay=False),
-    required=True,
-    default="./output/versions/nil/methods_tracking_with_clone.csv",
-    help="Output file for CSV data",
-)
-def clones(
-    input: str,
-    input_file: str,
-    output: str,
-) -> None:
-    """Track clone group evolution across revisions."""
-    df = pd.read_csv(input_file)
-    revision_manager = RevisionManager()
-    revisions = revision_manager.get_revisions(Path(input))
-
-    rev_clone_hashes = {}
-    for rev in revisions:
-        clone_pairs = revision_manager.load_clone_pairs(rev)
-        hashes = set(clone_pairs[ColumnNames.TOKEN_HASH_1.value]) | set(
-            clone_pairs[ColumnNames.TOKEN_HASH_2.value]
-        )
-        rev_clone_hashes[str(rev.timestamp)] = hashes
-
-    prev_rev_col = ColumnNames.PREV_REVISION_ID.value
-    prev_hash_col = ColumnNames.PREV_TOKEN_HASH.value
-
-    df[ColumnNames.HAS_CLONE.value] = False
-    for rev_id, hashes in rev_clone_hashes.items():
-        mask = df[prev_rev_col] == rev_id
-        matched = df.loc[mask, prev_hash_col].isin(hashes)
-        df.loc[mask, ColumnNames.HAS_CLONE.value] = matched
-
-    output_path = Path(output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    console.print(f"[green]Results saved to:[/green] {output_path}")
-
-    # console.print("\nOverall clone presence:")
-    # console.print(
-    #     df.groupby(
-    #         [
-    #             ColumnNames.IS_ADDED.value,
-    #             ColumnNames.IS_DELETED.value,
-    #             ColumnNames.IS_MERGED.value,
-    #             ColumnNames.IS_SPLIT.value,
-    #             ColumnNames.IS_MODIFIED.value,
-    #             ColumnNames.HAS_CLONE.value,
-    #         ]
-    #     ).size()
-    # )
