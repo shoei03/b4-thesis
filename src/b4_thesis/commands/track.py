@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import click
 from rich.console import Console
@@ -6,6 +7,7 @@ from rich.console import Console
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.method import MethodTracker
 import pandas as pd
+import numpy as np
 
 console = Console()
 
@@ -202,3 +204,194 @@ def classify(
 
     # CSVとして保存（インデックス（group_key）も含める）
     result.to_csv(output)
+
+
+@track.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/tmp.json",
+    help="Output file for classified results",
+)
+def stats(input: str, output: str) -> None:
+    """Display statistics of method tracking results."""
+    df = pd.read_csv(input, low_memory=False)
+
+    # NaNを除外したユニークなリビジョン
+    unique_revisions = df[ColumnNames.PREV_REVISION_ID.value].dropna().unique()
+    unique_revisions = sorted(unique_revisions)
+
+    prev_file_col = ColumnNames.PREV_FILE_PATH.value
+    prev_method_col = ColumnNames.PREV_METHOD_NAME.value
+    curr_file_col = ColumnNames.CURR_FILE_PATH.value
+    curr_method_col = ColumnNames.CURR_METHOD_NAME.value
+
+    # 各タイプごとに辞書を分ける
+    deleted_false_positives = {}
+    matched_false_positives = {}
+    added_false_positives = {}
+
+    # 全てのリビジョンペアに対して処理
+    for i in range(len(unique_revisions) - 1):
+        print(f"Processing revision pair: {unique_revisions[i]} -> {unique_revisions[i + 1]}")
+        prev_rev = unique_revisions[i]
+        curr_rev = unique_revisions[i + 1]
+
+        # フィルタリングでグループを取得
+        is_matched_df = df[
+            (df[ColumnNames.PREV_REVISION_ID.value] == prev_rev)
+            & (df[ColumnNames.CURR_REVISION_ID.value] == curr_rev)
+        ]
+        is_deleted_df = df[
+            (df[ColumnNames.PREV_REVISION_ID.value] == prev_rev)
+            & (df[ColumnNames.CURR_REVISION_ID.value].isna())
+        ]
+        is_added_df = df[
+            (df[ColumnNames.PREV_REVISION_ID.value].isna())
+            & (df[ColumnNames.CURR_REVISION_ID.value] == curr_rev)
+        ]
+
+        # ===== is_deleted_dfとマッチするものを選ぶ処理 =====
+        deleted_with_key = is_deleted_df[[prev_file_col, prev_method_col]].copy()
+        deleted_with_key["del_idx"] = is_deleted_df.index
+
+        # matchedとの結合
+        matched_with_key = is_matched_df[[curr_file_col, curr_method_col]].copy()
+        matched_with_key["matched_idx"] = is_matched_df.index
+        matched_merge = deleted_with_key.merge(
+            matched_with_key,
+            left_on=[prev_file_col, prev_method_col],
+            right_on=[curr_file_col, curr_method_col],
+            how="left",
+        )
+
+        # addedとの結合
+        added_with_key = is_added_df[[curr_file_col, curr_method_col]].copy()
+        added_with_key["added_idx"] = is_added_df.index
+        added_merge = deleted_with_key.merge(
+            added_with_key,
+            left_on=[prev_file_col, prev_method_col],
+            right_on=[curr_file_col, curr_method_col],
+            how="left",
+        )
+
+        # グループ化して辞書を構築
+        matched_grouped = matched_merge.groupby("del_idx")["matched_idx"].apply(
+            lambda x: x.dropna().astype(int).to_list()
+        )
+        added_grouped = added_merge.groupby("del_idx")["added_idx"].apply(
+            lambda x: x.dropna().astype(int).to_list()
+        )
+
+        # deleted用の辞書に追加
+        for idx in is_deleted_df.index:
+            deleted_false_positives[idx] = {
+                "matched": matched_grouped.get(idx, []),
+                "added": added_grouped.get(idx, []),
+            }
+
+        # ===== is_matched_dfとマッチするものを選ぶ処理 =====
+        # matched_dfの両方のファイルパス・メソッド名を使用
+        matched_prev_with_key = is_matched_df[[prev_file_col, prev_method_col]].copy()
+        matched_prev_with_key["matched_idx"] = is_matched_df.index
+
+        matched_curr_with_key = is_matched_df[[curr_file_col, curr_method_col]].copy()
+        matched_curr_with_key["matched_idx"] = is_matched_df.index
+        matched_prev_curr_merge = matched_prev_with_key.merge(
+            matched_curr_with_key,
+            left_on=[prev_file_col, prev_method_col],
+            right_on=[curr_file_col, curr_method_col],
+            how="left",
+            suffixes=("_prev", "_curr"),
+        )
+
+        # グループ化して辞書を構築
+        matched_prev_corr_grouped = matched_prev_curr_merge.groupby("matched_idx_prev")[
+            "matched_idx_curr"
+        ].apply(lambda x: x.dropna().astype(int).to_list())
+
+        # matched用の辞書に追加
+        for idx in is_matched_df.index:
+            matched_false_positives[idx] = {
+                "matched": matched_prev_corr_grouped.get(idx, []),
+            }
+
+        # ===== is_added_dfとマッチするものを選ぶ処理 =====
+        added_curr_with_key = is_added_df[[curr_file_col, curr_method_col]].copy()
+        added_curr_with_key["added_idx"] = is_added_df.index
+
+        # deletedとの結合（curr側で照合）
+        deleted_with_key = is_deleted_df[[prev_file_col, prev_method_col]].copy()
+        deleted_with_key["deleted_idx"] = is_deleted_df.index
+        deleted_merge = added_curr_with_key.merge(
+            deleted_with_key,
+            left_on=[curr_file_col, curr_method_col],
+            right_on=[prev_file_col, prev_method_col],
+            how="left",
+        )
+
+        # matchedとの結合（prev側で照合）
+        matched_with_key = is_matched_df[[prev_file_col, prev_method_col]].copy()
+        matched_with_key["matched_idx"] = is_matched_df.index
+        matched_merge = added_curr_with_key.merge(
+            matched_with_key,
+            left_on=[curr_file_col, curr_method_col],
+            right_on=[prev_file_col, prev_method_col],
+            how="left",
+        )
+
+        # グループ化して辞書を構築
+        deleted_grouped = deleted_merge.groupby("added_idx")["deleted_idx"].apply(
+            lambda x: x.dropna().astype(int).to_list()
+        )
+        matched_grouped = matched_merge.groupby("added_idx")["matched_idx"].apply(
+            lambda x: x.dropna().astype(int).to_list()
+        )
+
+        # added用の辞書に追加
+        for idx in is_added_df.index:
+            added_false_positives[idx] = {
+                "deleted": deleted_grouped.get(idx, []),
+                "matched": matched_grouped.get(idx, []),
+            }
+
+    # 辞書のキーをintからstrに変換（JSONシリアライズのため）
+    output_data = {
+        "deleted": {str(k): v for k, v in deleted_false_positives.items()},
+        "matched": {str(k): v for k, v in matched_false_positives.items()},
+        "added": {str(k): v for k, v in added_false_positives.items()},
+    }
+
+    # deleted内のmatchedとaddedを持つエントリの個数（空のリストは除外）
+    count_deleted_with_matched = sum(1 for v in deleted_false_positives.values() if v["matched"])
+    count_deleted_with_added = sum(1 for v in deleted_false_positives.values() if v["added"])
+
+    count_matched_with_matched = sum(1 for v in matched_false_positives.values() if v["matched"])
+
+    count_added_with_deleted = sum(1 for v in added_false_positives.values() if v["deleted"])
+    count_added_with_matched = sum(1 for v in added_false_positives.values() if v["matched"])
+
+    # JSONファイルに保存
+    output_path = Path(output)
+    with open(output_path, "w") as f:
+        json.dump(output_data, f, indent=2)
+
+    console.print(f"[green]False positives saved to:[/green] {output_path}")
+    console.print(f"Total deleted entries: {len(deleted_false_positives)}")
+    console.print(f"  - Entries with matched references: {count_deleted_with_matched}")
+    console.print(f"  - Entries with added references: {count_deleted_with_added}")
+    console.print(f"Total matched entries: {len(matched_false_positives)}")
+    console.print(f"  - Entries with matched references: {count_matched_with_matched}")
+    console.print(f"Total added entries: {len(added_false_positives)}")
+    console.print(f"  - Entries with deleted references: {count_added_with_deleted}")
+    console.print(f"  - Entries with matched references: {count_added_with_matched}")
