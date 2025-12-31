@@ -377,7 +377,7 @@ def track_clone(
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/methods_tracking_with_merge_splits.csv",
+    default="./output/versions/nil/methods_tracking_with_clone.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -385,14 +385,14 @@ def track_clone(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/methods_classified.csv",
+    default="./output/versions/nil/methods_classified_count.csv",
     help="Output file for classified results",
 )
-def classify(
+def count_classified(
     input: str,
     output: str,
 ) -> None:
-    """Count and classify method tracking results."""
+    """Count classified method tracking results by groups."""
     df = pd.read_csv(
         input,
         usecols=[
