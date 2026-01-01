@@ -411,68 +411,51 @@ def count_classified(
     prev_col = ColumnNames.PREV_REVISION_ID.value
     curr_col = ColumnNames.CURR_REVISION_ID.value
 
-    # ステップ1: 両方存在する行でグループを作成
-    both_exist_mask = df[prev_col].notna() & df[curr_col].notna()
-    df_both = df[both_exist_mask].copy()
-    df_nan = df[~both_exist_mask].copy()
+    unique_revisions = df[prev_col].dropna().unique()
+    unique_revisions = sorted(unique_revisions)
 
-    # 両方存在する組み合わせのユニークなペアを取得
-    unique_pairs = df_both[[prev_col, curr_col]].drop_duplicates()
+    all_results = []
+    for i in range(len(unique_revisions) - 1):
+        prev_rev = unique_revisions[i]
+        curr_rev = unique_revisions[i + 1]
 
-    # グループキーを作成（タプルの文字列表現）
-    df_both["group_key"] = df_both[prev_col].astype(str) + "___" + df_both[curr_col].astype(str)
+        is_matched_df = df[(df[prev_col] == prev_rev) & (df[curr_col] == curr_rev)]
+        is_deleted_df = df[(df[prev_col] == prev_rev) & (df[curr_col].isna())]
+        is_added_df = df[(df[prev_col].isna()) & (df[curr_col] == curr_rev)]
 
-    # ステップ2: NaNを含む行を既存グループにマッピング
-    # PREVまたはCURRが既存ペアに一致するかチェック
-    prev_to_group = {}
-    curr_to_group = {}
+        rev_df = pd.concat([is_matched_df, is_deleted_df, is_added_df], join="outer")
 
-    for _, row in unique_pairs.iterrows():
-        group_key = str(row[prev_col]) + "___" + str(row[curr_col])
-        prev_val = row[prev_col]
-        curr_val = row[curr_col]
+        count_df = (
+            rev_df.groupby(
+                [
+                    ColumnNames.IS_DELETED.value,
+                    ColumnNames.IS_ADDED.value,
+                    ColumnNames.IS_SPLIT.value,
+                    ColumnNames.IS_MERGED.value,
+                    ColumnNames.IS_MODIFIED.value,
+                    ColumnNames.HAS_CLONE.value,
+                ]
+            )
+            .size()
+            .reset_index(name="count")
+        )
 
-        # 同じPREVまたはCURRを持つグループをマッピング
-        if prev_val not in prev_to_group:
-            prev_to_group[prev_val] = group_key
-        if curr_val not in curr_to_group:
-            curr_to_group[curr_val] = group_key
-
-    # NaN行にグループキーを割り当て
-    def assign_group(row):
-        prev_val = row[prev_col]
-        curr_val = row[curr_col]
-
-        # PREVが存在する場合
-        if pd.notna(prev_val) and prev_val in prev_to_group:
-            return prev_to_group[prev_val]
-        # CURRが存在する場合
-        if pd.notna(curr_val) and curr_val in curr_to_group:
-            return curr_to_group[curr_val]
-        # どちらも既存グループに該当しない場合
-        if pd.notna(prev_val):
-            return str(prev_val) + "___nan"
-        if pd.notna(curr_val):
-            return "nan___" + str(curr_val)
-        return "nan___nan"
-
-    df_nan["group_key"] = df_nan.apply(assign_group, axis=1)
-
-    # 結合
-    df_result = pd.concat([df_both, df_nan], ignore_index=True)
-
-    # グループ化して集計
-    result = df_result.groupby("group_key").sum()[
-        [
-            ColumnNames.IS_MATCHED.value,
-            ColumnNames.IS_DELETED.value,
-            ColumnNames.IS_ADDED.value,
-            ColumnNames.IS_SPLIT.value,
-            ColumnNames.IS_MERGED.value,
-            ColumnNames.IS_MODIFIED.value,
-            ColumnNames.HAS_CLONE.value,
+        labels = [
+            "added_no_clone",
+            "deleted_no_clone",
+            "deleted_with_clone",
+            "split_no_clone",
+            "split_with_clone",
+            "merged_no_clone",
+            "merged_with_clone",
+            "modified_no_clone",
+            "modified_with_clone",
         ]
-    ]
 
-    # CSVとして保存（インデックス（group_key）も含める）
-    result.to_csv(output)
+        counts_dict = dict(zip(labels, count_df["count"].values))
+        all_results.append(counts_dict)
+
+    final_df = pd.DataFrame(all_results)
+
+    final_df.to_csv(output, index=False)
+    console.print(f"[green]Classified counts saved to:[/green] {output}")
