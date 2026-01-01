@@ -3,6 +3,8 @@ from enum import Enum
 
 class ColumnNames(Enum):
     REVISION_ID = "revision_id"
+    COMMIT_HASH = "commit_hash"
+    COMMIT_MESSAGE = "commit_message"
     FILE_PATH = "file_path"
     START_LINE = "start_line"
     END_LINE = "end_line"

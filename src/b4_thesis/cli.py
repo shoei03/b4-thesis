@@ -7,6 +7,7 @@ from b4_thesis.commands import (
     analyze,
     convert,
     extract,
+    git,
     label,
     nil,
     predict,
@@ -39,6 +40,7 @@ main.add_command(label.label)
 main.add_command(refactoring.refactoring)
 main.add_command(report.report)
 main.add_command(stats.stats)
+main.add_command(git.git)
 main.add_command(nil.nil)
 main.add_command(visualize.visualize)
 
