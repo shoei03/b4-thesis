@@ -115,6 +115,62 @@ def track(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
+    default="./output/versions/nil/methods_tracking_sig.csv",
+    help="Output file for classified results",
+)
+def track_sig(
+    input: str,
+    output: str,
+) -> None:
+    df = pd.read_csv(input)
+
+    # is_sig_matchedカラムを事前に作成（デフォルトFalse）
+    df["is_sig_matched"] = False
+
+    rev_group = df.groupby(ColumnNames.PREV_REVISION_ID.value)
+
+    from itertools import pairwise
+
+    for (prev_rev, prev_df), (curr_rev, curr_df) in pairwise(rev_group):
+        print(f"Processing revision pair: {prev_rev} -> {curr_rev}")
+
+        # マッチするインデックスを取得
+        matched_mask = prev_df.set_index(
+            [
+                ColumnNames.PREV_FILE_PATH.value,
+                ColumnNames.PREV_METHOD_NAME.value,
+            ]
+        ).index.isin(
+            curr_df.set_index(
+                [
+                    ColumnNames.PREV_FILE_PATH.value,
+                    ColumnNames.PREV_METHOD_NAME.value,
+                ]
+            ).index
+        )
+
+        # 元のdfに直接書き込み
+        df.loc[prev_df.index[matched_mask], "is_sig_matched"] = True
+
+        print(f"Matched: {matched_mask.sum()}, Unmatched: {(~matched_mask).sum()}")
+
+    df.to_csv(output, index=False)
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/nil/methods_tracking_by_nil.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
     default="./output/versions/nil/tmp.json",
     help="Output file for classified results",
 )
@@ -439,32 +495,33 @@ def track_avg_similarity(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
-    
+
     # カテゴリ列を作成
-    output_df['category'] = ''
-    output_df.loc[output_df['is_matched'] == True, 'category'] = 'Matched'
-    output_df.loc[output_df['is_deleted'] == True, 'category'] = 'Deleted'
-    output_df.loc[output_df['is_added'] == True, 'category'] = 'Added'
+    output_df["category"] = ""
+    output_df.loc[output_df["is_matched"] == True, "category"] = "Matched"
+    output_df.loc[output_df["is_deleted"] == True, "category"] = "Deleted"
+    output_df.loc[output_df["is_added"] == True, "category"] = "Added"
 
     # カテゴリごとのデータを準備
     data = [
-        output_df[output_df['category'] == 'Matched']['avg_similarity'].dropna(),
-        output_df[output_df['category'] == 'Deleted']['avg_similarity'].dropna(),
-        output_df[output_df['category'] == 'Added']['avg_similarity'].dropna()
+        output_df[output_df["category"] == "Matched"]["avg_similarity"].dropna(),
+        output_df[output_df["category"] == "Deleted"]["avg_similarity"].dropna(),
+        output_df[output_df["category"] == "Added"]["avg_similarity"].dropna(),
     ]
 
     import matplotlib.pyplot as plt
+
     # プロット
     plt.figure(figsize=(10, 6))
-    plt.boxplot(data, labels=['Matched', 'Deleted', 'Added'])
+    plt.boxplot(data, labels=["Matched", "Deleted", "Added"])
 
-    plt.xlabel('Category')
-    plt.ylabel('Similarity')
-    plt.title('Similarity Distribution by Category')
-    plt.grid(True, alpha=0.3, axis='y')
+    plt.xlabel("Category")
+    plt.ylabel("Similarity")
+    plt.title("Similarity Distribution by Category")
+    plt.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
 
-    output_image = output.replace('.csv', '.png')
+    output_image = output.replace(".csv", ".png")
     plt.savefig(output_image, dpi=300)
     print(f"Plot saved: {output_image}")
 
