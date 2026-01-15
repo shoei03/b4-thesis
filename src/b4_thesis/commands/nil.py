@@ -439,6 +439,34 @@ def track_avg_similarity(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
+    
+    # カテゴリ列を作成
+    output_df['category'] = ''
+    output_df.loc[output_df['is_matched'] == True, 'category'] = 'Matched'
+    output_df.loc[output_df['is_deleted'] == True, 'category'] = 'Deleted'
+    output_df.loc[output_df['is_added'] == True, 'category'] = 'Added'
+
+    # カテゴリごとのデータを準備
+    data = [
+        output_df[output_df['category'] == 'Matched']['avg_similarity'].dropna(),
+        output_df[output_df['category'] == 'Deleted']['avg_similarity'].dropna(),
+        output_df[output_df['category'] == 'Added']['avg_similarity'].dropna()
+    ]
+
+    import matplotlib.pyplot as plt
+    # プロット
+    plt.figure(figsize=(10, 6))
+    plt.boxplot(data, labels=['Matched', 'Deleted', 'Added'])
+
+    plt.xlabel('Category')
+    plt.ylabel('Similarity')
+    plt.title('Similarity Distribution by Category')
+    plt.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+
+    output_image = output.replace('.csv', '.png')
+    plt.savefig(output_image, dpi=300)
+    print(f"Plot saved: {output_image}")
 
 
 @nil.command()
