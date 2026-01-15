@@ -100,5 +100,16 @@ def classify_is_deleted(input_file: Path, input: Path, output_file: Path) -> Non
         deleted_file_paths
     )
 
-    deleted_df.to_csv(output_file, index=False)
-    console.print(f"[bold green]Updated file saved to {output_file}[/bold green]")
+    deleted_df["is_private"] = deleted_df[ColumnNames.PREV_METHOD_NAME.value].str.contains("_")
+    deleted_df["is_test_method"] = deleted_df[ColumnNames.PREV_FILE_PATH.value].str.contains(
+        "test_"
+    ) | deleted_df[ColumnNames.PREV_FILE_PATH.value].str.contains("_test")
+
+    # deleted_df.to_csv(output_file, index=False)
+    # console.print(f"[bold green]Updated file saved to {output_file}[/bold green]")
+
+    print(
+        deleted_df.groupby(
+            ["is_test_method", "is_private", ColumnNames.HAS_CLONE.value, "is_file_deleted"]
+        ).size()
+    )
