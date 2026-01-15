@@ -143,14 +143,12 @@ def track_sig(
             curr_code_blocks,
             left_on=[ColumnNames.PREV_FILE_PATH.value, ColumnNames.PREV_METHOD_NAME.value],
             right_on=[ColumnNames.CURR_FILE_PATH.value, ColumnNames.CURR_METHOD_NAME.value],
-            how="left",
+            how="outer",
         )
 
-        # nullが入っている行（マージできなかった行）にはis_sig_deletedをTrue
+        matched_df["is_sig_matched"] = matched_df[ColumnNames.PREV_FILE_PATH.value].notnull() & matched_df[ColumnNames.CURR_FILE_PATH.value].notnull()
         matched_df["is_sig_deleted"] = matched_df[ColumnNames.CURR_FILE_PATH.value].isnull()
-
-        # nullが入っていない行（マージできた行）にはis_sig_matchedをTrue
-        matched_df["is_sig_matched"] = matched_df[ColumnNames.CURR_FILE_PATH.value].notnull()
+        matched_df["is_sig_added"] = matched_df[ColumnNames.PREV_FILE_PATH.value].isnull()
 
         df = pd.concat([df, matched_df], ignore_index=True)
 
@@ -158,7 +156,7 @@ def track_sig(
         output,
         index=False,
     )
-    print(df.groupby(["is_sig_deleted", "is_sig_matched"]).size())
+    print(df.groupby(["is_sig_matched", "is_sig_deleted", "is_sig_added"]).size())
 
 
 @nil.command()
