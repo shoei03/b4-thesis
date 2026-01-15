@@ -105,10 +105,10 @@ def track(
 @click.option(
     "--input",
     "-i",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    required=False,
-    default="./output/versions/nil/methods_tracking_by_nil.csv",
-    help="Input file containing tracked methods data",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    default="./data/versions",
+    help="Input directory containing revision subdirectories",
 )
 @click.option(
     "--output",
@@ -122,39 +122,43 @@ def track_sig(
     input: str,
     output: str,
 ) -> None:
-    df = pd.read_csv(input)
+    df = pd.DataFrame()
 
-    # is_sig_matchedカラムを事前に作成（デフォルトFalse）
-    df["is_sig_matched"] = False
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path(input))
 
-    rev_group = df.groupby(ColumnNames.PREV_REVISION_ID.value)
+    for prev_rev, curr_rev in zip(revisions, revisions[1:]):
+        print(f"Processing revision pair: {prev_rev.timestamp} -> {curr_rev.timestamp}")
 
-    from itertools import pairwise
+        prev_code_blocks = revision_manager.load_code_blocks(prev_rev)
+        curr_code_blocks = revision_manager.load_code_blocks(curr_rev)
 
-    for (prev_rev, prev_df), (curr_rev, curr_df) in pairwise(rev_group):
-        print(f"Processing revision pair: {prev_rev} -> {curr_rev}")
+        prev_code_blocks[ColumnNames.REVISION_ID.value] = prev_rev.timestamp
+        curr_code_blocks[ColumnNames.REVISION_ID.value] = curr_rev.timestamp
 
-        # マッチするインデックスを取得
-        matched_mask = prev_df.set_index(
-            [
-                ColumnNames.PREV_FILE_PATH.value,
-                ColumnNames.PREV_METHOD_NAME.value,
-            ]
-        ).index.isin(
-            curr_df.set_index(
-                [
-                    ColumnNames.PREV_FILE_PATH.value,
-                    ColumnNames.PREV_METHOD_NAME.value,
-                ]
-            ).index
+        prev_code_blocks = prev_code_blocks.add_prefix("prev_")
+        curr_code_blocks = curr_code_blocks.add_prefix("curr_")
+
+        matched_df = prev_code_blocks.merge(
+            curr_code_blocks,
+            left_on=[ColumnNames.PREV_FILE_PATH.value, ColumnNames.PREV_METHOD_NAME.value],
+            right_on=[ColumnNames.CURR_FILE_PATH.value, ColumnNames.CURR_METHOD_NAME.value],
+            how="left",
         )
 
-        # 元のdfに直接書き込み
-        df.loc[prev_df.index[matched_mask], "is_sig_matched"] = True
+        # nullが入っている行（マージできなかった行）にはis_sig_deletedをTrue
+        matched_df["is_sig_deleted"] = matched_df[ColumnNames.CURR_FILE_PATH.value].isnull()
 
-        print(f"Matched: {matched_mask.sum()}, Unmatched: {(~matched_mask).sum()}")
+        # nullが入っていない行（マージできた行）にはis_sig_matchedをTrue
+        matched_df["is_sig_matched"] = matched_df[ColumnNames.CURR_FILE_PATH.value].notnull()
 
-    df.to_csv(output, index=False)
+        df = pd.concat([df, matched_df], ignore_index=True)
+
+    df.to_csv(
+        output,
+        index=False,
+    )
+    print(df.groupby(["is_sig_deleted", "is_sig_matched"]).size())
 
 
 @nil.command()
