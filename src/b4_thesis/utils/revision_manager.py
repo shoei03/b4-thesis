@@ -34,8 +34,15 @@ class RevisionManager:
                 ColumnNames.TOKEN_SEQUENCE.value,
             ],
             dtype={
-                ColumnNames.START_LINE.value: int,
-                ColumnNames.END_LINE.value: int,
+                ColumnNames.TOKEN_HASH.value: "string",
+                ColumnNames.FILE_PATH.value: "string",
+                ColumnNames.START_LINE.value: "Int64",
+                ColumnNames.END_LINE.value: "Int64",
+                ColumnNames.METHOD_NAME.value: "string",
+                ColumnNames.RETURN_TYPE.value: "string",
+                ColumnNames.PARAMETERS.value: "string",
+                "commit_hash": "string",
+                ColumnNames.TOKEN_SEQUENCE.value: "string",
             },
         )
 
