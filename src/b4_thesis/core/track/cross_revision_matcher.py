@@ -6,6 +6,8 @@ across different revisions, reducing complexity from O(N×M) to O((N+M)log(N+M))
 
 import bisect
 from collections import defaultdict
+import numpy as np
+from numba import njit
 
 from rich.progress import track
 
@@ -259,6 +261,61 @@ class CrossRevisionMatcher:
                 verified.append({"target_idx": candidate_idx, "similarity": round(similarity, 2)})
 
         return verified
+    
+    # def _verify_similarity(
+    #     self, source_tokens: list[int], candidate_indices: list[int], target_blocks: list[dict]
+    # ) -> list[dict]:
+    #     """Verify candidates by LCS similarity (Numba-optimized version).
+
+    #     Args:
+    #         source_tokens: Source token sequence
+    #         candidate_indices: Candidate target block indices
+    #         target_blocks: All target blocks
+
+    #     Returns:
+    #         List of matches with similarity scores
+    #         [{"target_idx": int, "similarity": float}, ...]
+    #     """
+    #     if not source_tokens:
+    #         return []
+
+    #     verified = []
+        
+    #     # Convert source to numpy array once (Numba requires numpy arrays)
+    #     source_arr = np.array(source_tokens, dtype=np.int32)
+    #     source_len = len(source_tokens)
+    #     column_name = ColumnNames.TOKEN_SEQUENCE.value
+
+    #     for candidate_idx in candidate_indices:
+    #         target_tokens = target_blocks[candidate_idx][column_name]
+
+    #         if not target_tokens:
+    #             continue
+
+    #         # Convert target to numpy array
+    #         target_arr = np.array(target_tokens, dtype=np.int32)
+    #         target_len = len(target_arr)
+
+    #         # Calculate minimum required LCS length
+    #         denominator = min(source_len, target_len)
+    #         if denominator == 0:
+    #             continue
+            
+    #         min_lcs_required = int(self.verify_threshold * denominator)
+
+    #         # Compute LCS using Numba-optimized function
+    #         lcs_len = _compute_lcs_numba(source_arr, target_arr, min_lcs_required)
+
+    #         # Check if it meets the threshold
+    #         if lcs_len < min_lcs_required:
+    #             continue
+
+    #         similarity = lcs_len / denominator
+
+    #         if similarity >= self.verify_threshold:
+    #             verified.append({"target_idx": candidate_idx, "similarity": round(similarity, 2)})
+
+    #     return verified
 
     def _generate_ngrams(self, token_seq: list[int]) -> set[tuple]:
         """Generates a set of N-grams from a token sequence."""
@@ -336,9 +393,9 @@ class CrossRevisionMatcher:
 
         result = {
             ColumnNames.SIMILARITY.value: similarity,
-            ColumnNames.IS_MATCHED.value: is_matched,
-            ColumnNames.IS_DELETED.value: is_deleted,
-            ColumnNames.IS_ADDED.value: is_added,
+            "is_sim_matched": is_matched,
+            "is_sim_deleted": is_deleted,
+            "is_sim_added": is_added,
         }
 
         # Add prev_ and curr_ fields
@@ -365,10 +422,51 @@ class CrossRevisionMatcher:
             ColumnNames.PREV_END_LINE.value,
             ColumnNames.CURR_END_LINE.value,
             ColumnNames.SIMILARITY.value,
-            ColumnNames.IS_MATCHED.value,
-            ColumnNames.IS_DELETED.value,
-            ColumnNames.IS_ADDED.value,
+            "is_sim_matched",
+            "is_sim_deleted",
+            "is_sim_added",
         ]
         sorted_result = {key: result[key] for key in ordered_keys if key in result}
 
         return sorted_result
+    
+@njit
+def _compute_lcs_numba(source: np.ndarray, target: np.ndarray, min_required: int) -> int:
+    """Numba-optimized LCS calculation with early termination.
+    
+    Args:
+        source: Source token array (dtype=int32)
+        target: Target token array (dtype=int32)
+        min_required: Minimum LCS length required (for early exit)
+    
+    Returns:
+        LCS length
+    """
+    m, n = len(source), len(target)
+    if m == 0 or n == 0:
+        return 0
+    
+    # Space-optimized: only keep previous row
+    prev = np.zeros(n + 1, dtype=np.int32)
+    
+    for i in range(1, m + 1):
+        curr = np.zeros(n + 1, dtype=np.int32)
+        max_in_row = 0
+        
+        for j in range(1, n + 1):
+            if source[i - 1] == target[j - 1]:
+                curr[j] = prev[j - 1] + 1
+            else:
+                curr[j] = max(prev[j], curr[j - 1])
+            
+            if curr[j] > max_in_row:
+                max_in_row = curr[j]
+        
+        # Early termination: cannot reach required LCS length with remaining rows
+        remaining_rows = m - i
+        if max_in_row + remaining_rows < min_required:
+            return max_in_row
+        
+        prev = curr
+    
+    return int(prev[n])
