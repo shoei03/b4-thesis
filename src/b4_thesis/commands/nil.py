@@ -7,7 +7,7 @@ from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.classify.merge_splits import merge_splits
-from b4_thesis.core.track.method import MethodTracker
+from b4_thesis.core.track.cross_revision_matcher import CrossRevisionMatcher
 from b4_thesis.utils.revision_manager import RevisionManager
 
 console = Console()
@@ -67,32 +67,45 @@ def track(
     filter_threshold: float,
 ) -> None:
     """Track method evolution across revisions."""
+    revision_manager = RevisionManager()
     try:
-        method_tracker = MethodTracker()
-        result_df = method_tracker.track(
-            Path(input),
-            similarity_threshold=similarity,
+        cross_revision_matcher = CrossRevisionMatcher(
             n_gram_size=n_gram_size,
             filter_threshold=filter_threshold,
+            verify_threshold=similarity,
         )
 
-        # Define sort keys for consistent ordering
-        sort_keys = [
-            ColumnNames.PREV_REVISION_ID.value,
-            ColumnNames.CURR_REVISION_ID.value,
-            ColumnNames.PREV_TOKEN_HASH.value,
-            ColumnNames.CURR_TOKEN_HASH.value,
-            ColumnNames.PREV_FILE_PATH.value,
-            ColumnNames.CURR_FILE_PATH.value,
-            ColumnNames.PREV_START_LINE.value,
-            ColumnNames.CURR_START_LINE.value,
-        ]
+        revisions = revision_manager.get_revisions(Path(input))
 
-        existing_keys = [k for k in sort_keys if k in result_df.columns]
-        if existing_keys:
-            result_df = result_df.sort_values(by=existing_keys)
+        # Collect all results
+        all_results: list[dict] = []
 
-        result_df.to_csv(output, index=False)
+        # Iterate through revision pairs
+        for prev_revision, curr_revision in zip(revisions[:-1], revisions[1:]):
+            prev_code_blocks = revision_manager.load_code_blocks(prev_revision)
+            curr_code_blocks = revision_manager.load_code_blocks(curr_revision)
+
+            prev_code_blocks[ColumnNames.REVISION_ID.value] = prev_revision.timestamp
+            curr_code_blocks[ColumnNames.REVISION_ID.value] = curr_revision.timestamp
+
+            # Convert DataFrames to list of dicts for NIL-based matching
+            source_blocks = prev_code_blocks.to_dict("records")
+            target_blocks = curr_code_blocks.to_dict("records")
+
+            print(
+                f"Revision {prev_revision.timestamp} -> {curr_revision.timestamp}: "
+                f"{len(source_blocks)}×{len(target_blocks)} blocks to match"
+            )
+
+            # Use NIL-based cross-revision matching
+            match_results = cross_revision_matcher.match_revisions_with_changes(
+                source_blocks, target_blocks
+            )
+
+            # Accumulate results
+            all_results.extend(match_results)
+
+        pd.DataFrame(all_results).to_csv(output, index=False)
 
         console.print(f"[green]Results saved to:[/green] {output}")
 
