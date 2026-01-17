@@ -44,10 +44,20 @@ def validate_code_block(code_block: pd.DataFrame) -> None:
 
     # token_hashの重複チェック
     if ColumnNames.TOKEN_HASH.value in code_block.columns:
-        duplicates = code_block[code_block[ColumnNames.TOKEN_HASH.value].duplicated()]
+        duplicates = code_block[
+            code_block.duplicated(
+                subset=[
+                    ColumnNames.FILE_PATH.value,
+                    ColumnNames.METHOD_NAME.value,
+                    ColumnNames.START_LINE.value,
+                    ColumnNames.END_LINE.value,
+                    ColumnNames.RETURN_TYPE.value,
+                    ColumnNames.PARAMETERS.value,
+                ]
+            )
+        ]
         if not duplicates.empty:
-            dup_ids = duplicates[ColumnNames.TOKEN_HASH.value].tolist()
-            errors.append(f"{ColumnNames.TOKEN_HASH.value}に重複が{len(dup_ids)}件あります")
+            errors.append(f"[red]重複が{len(duplicates)}件あります[/red]")
 
     # 必須カラムの欠損値チェック
     non_nullable_columns = [
