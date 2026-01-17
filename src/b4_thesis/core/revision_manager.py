@@ -136,7 +136,7 @@ class RevisionManager:
                 "file_path",
                 "start_line",
                 "end_line",
-                "function_name",
+                "method_name",
                 "return_type",
                 "parameters",
                 "token_hash",
