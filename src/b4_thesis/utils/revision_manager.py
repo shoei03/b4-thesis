@@ -2,9 +2,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from rich.console import Console
+
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.validate import validate_code_block
 import pandas as pd
+
+console = Console()
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,12 +55,31 @@ class RevisionManager:
             .str[1:-1]
             .str.split(";")
             .apply(lambda x: [int(i) for i in x])
+        ).astype("string")
+
+        # 重複する関数定義があれば、関数名の末尾に番号を付与する
+        dup_columns = [
+            ColumnNames.FILE_PATH.value,
+            ColumnNames.METHOD_NAME.value,
+            ColumnNames.RETURN_TYPE.value,
+            ColumnNames.PARAMETERS.value,
+        ]
+        # NaN を扱えるように fillna で一時的に置換してから groupby
+        code_blocks["_dup_count"] = code_blocks.groupby(dup_columns, dropna=False).cumcount()
+        code_blocks["_is_dup"] = code_blocks.duplicated(subset=dup_columns, keep=False)
+        code_blocks[ColumnNames.METHOD_NAME.value] = code_blocks[
+            ColumnNames.METHOD_NAME.value
+        ].where(
+            ~code_blocks["_is_dup"],
+            code_blocks[ColumnNames.METHOD_NAME.value]
+            + "_"
+            + (code_blocks["_dup_count"] + 1).astype(str),
         )
 
         try:
             validate_code_block(code_blocks)
         except Exception as e:
-            print(f"Warning: Code block validation failed: {e}")
+            console.print(f"[red]Warning[/red]: Code block validation failed: {e}")
 
         return code_blocks
 
