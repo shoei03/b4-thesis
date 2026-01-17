@@ -185,9 +185,17 @@ def track_sig(
         matched_df["is_sig_added"] = matched_df[ColumnNames.PREV_FILE_PATH.value].isnull()
 
         df = pd.concat([df, matched_df], ignore_index=True)
-        
-        if (len(prev_code_blocks) != matched_df['is_sig_matched'].sum() + matched_df['is_sig_deleted'].sum()) or (len(curr_code_blocks) != matched_df['is_sig_matched'].sum() + matched_df['is_sig_added'].sum()):
-            console.print(f"[red]Mismatch in counts detected for revisions {prev_rev.timestamp} -> {curr_rev.timestamp}[/red]")
+
+        if (
+            len(prev_code_blocks)
+            != matched_df["is_sig_matched"].sum() + matched_df["is_sig_deleted"].sum()
+        ) or (
+            len(curr_code_blocks)
+            != matched_df["is_sig_matched"].sum() + matched_df["is_sig_added"].sum()
+        ):
+            console.print(
+                f"[red]Mismatch in counts detected for revisions {prev_rev.timestamp} -> {curr_rev.timestamp}[/red]"
+            )
 
     df.to_csv(output, index=False)
     print(df.groupby(["is_sig_matched", "is_sig_deleted", "is_sig_added"]).size())
