@@ -2,12 +2,12 @@ from pathlib import Path
 from typing import Iterator
 
 import click
+import pandas as pd
 from pydriller import Repository
 from rich.console import Console
 from tqdm import tqdm
 
 from b4_thesis.const.column import ColumnNames
-import pandas as pd
 
 console = Console()
 

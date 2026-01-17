@@ -1,9 +1,10 @@
 from pathlib import Path
 
+import pandas as pd
+
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.cross_revision_matcher import CrossRevisionMatcher
 from b4_thesis.utils.revision_manager import RevisionManager
-import pandas as pd
 
 
 class MethodTracker:

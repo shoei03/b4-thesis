@@ -2,13 +2,13 @@ import json
 from pathlib import Path
 
 import click
+import pandas as pd
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.classify.merge_splits import merge_splits
 from b4_thesis.core.track.method import MethodTracker
 from b4_thesis.utils.revision_manager import RevisionManager
-import pandas as pd
 
 console = Console()
 
