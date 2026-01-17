@@ -136,6 +136,23 @@ def track_sig(
         prev_code_blocks[ColumnNames.REVISION_ID.value] = prev_rev.timestamp
         curr_code_blocks[ColumnNames.REVISION_ID.value] = curr_rev.timestamp
 
+        prev_code_blocks = prev_code_blocks[
+            [
+                ColumnNames.REVISION_ID.value,
+                ColumnNames.TOKEN_HASH.value,
+                ColumnNames.FILE_PATH.value,
+                ColumnNames.METHOD_NAME.value,
+            ]
+        ]
+        curr_code_blocks = curr_code_blocks[
+            [
+                ColumnNames.REVISION_ID.value,
+                ColumnNames.TOKEN_HASH.value,
+                ColumnNames.FILE_PATH.value,
+                ColumnNames.METHOD_NAME.value,
+            ]
+        ]
+
         prev_code_blocks = prev_code_blocks.add_prefix("prev_")
         curr_code_blocks = curr_code_blocks.add_prefix("curr_")
 
@@ -146,16 +163,16 @@ def track_sig(
             how="outer",
         )
 
-        matched_df["is_sig_matched"] = matched_df[ColumnNames.PREV_FILE_PATH.value].notnull() & matched_df[ColumnNames.CURR_FILE_PATH.value].notnull()
+        matched_df["is_sig_matched"] = (
+            matched_df[ColumnNames.PREV_FILE_PATH.value].notnull()
+            & matched_df[ColumnNames.CURR_FILE_PATH.value].notnull()
+        )
         matched_df["is_sig_deleted"] = matched_df[ColumnNames.CURR_FILE_PATH.value].isnull()
         matched_df["is_sig_added"] = matched_df[ColumnNames.PREV_FILE_PATH.value].isnull()
 
         df = pd.concat([df, matched_df], ignore_index=True)
 
-    df.to_csv(
-        output,
-        index=False,
-    )
+    df.to_csv(output, index=False)
     print(df.groupby(["is_sig_matched", "is_sig_deleted", "is_sig_added"]).size())
 
 
