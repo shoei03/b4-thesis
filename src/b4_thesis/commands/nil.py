@@ -142,6 +142,8 @@ def track_sig(
                 ColumnNames.TOKEN_HASH.value,
                 ColumnNames.FILE_PATH.value,
                 ColumnNames.METHOD_NAME.value,
+                ColumnNames.RETURN_TYPE.value,
+                ColumnNames.PARAMETERS.value,
             ]
         ]
         curr_code_blocks = curr_code_blocks[
@@ -150,6 +152,8 @@ def track_sig(
                 ColumnNames.TOKEN_HASH.value,
                 ColumnNames.FILE_PATH.value,
                 ColumnNames.METHOD_NAME.value,
+                ColumnNames.RETURN_TYPE.value,
+                ColumnNames.PARAMETERS.value,
             ]
         ]
 
@@ -158,8 +162,18 @@ def track_sig(
 
         matched_df = prev_code_blocks.merge(
             curr_code_blocks,
-            left_on=[ColumnNames.PREV_FILE_PATH.value, ColumnNames.PREV_METHOD_NAME.value],
-            right_on=[ColumnNames.CURR_FILE_PATH.value, ColumnNames.CURR_METHOD_NAME.value],
+            left_on=[
+                ColumnNames.PREV_FILE_PATH.value,
+                ColumnNames.PREV_METHOD_NAME.value,
+                ColumnNames.PREV_RETURN_TYPE.value,
+                ColumnNames.PREV_PARAMETERS.value,
+            ],
+            right_on=[
+                ColumnNames.CURR_FILE_PATH.value,
+                ColumnNames.CURR_METHOD_NAME.value,
+                ColumnNames.CURR_RETURN_TYPE.value,
+                ColumnNames.CURR_PARAMETERS.value,
+            ],
             how="outer",
         )
 
@@ -171,6 +185,9 @@ def track_sig(
         matched_df["is_sig_added"] = matched_df[ColumnNames.PREV_FILE_PATH.value].isnull()
 
         df = pd.concat([df, matched_df], ignore_index=True)
+        
+        if (len(prev_code_blocks) != matched_df['is_sig_matched'].sum() + matched_df['is_sig_deleted'].sum()) or (len(curr_code_blocks) != matched_df['is_sig_matched'].sum() + matched_df['is_sig_added'].sum()):
+            console.print(f"[red]Mismatch in counts detected for revisions {prev_rev.timestamp} -> {curr_rev.timestamp}[/red]")
 
     df.to_csv(output, index=False)
     print(df.groupby(["is_sig_matched", "is_sig_deleted", "is_sig_added"]).size())
