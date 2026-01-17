@@ -83,7 +83,7 @@ def classify_is_deleted(input_file: Path, input: Path, output_file: Path) -> Non
 
     # is_deletedがTrueの行だけフィルタリング
     deleted_df = methods_tracking_df[
-        methods_tracking_df[ColumnNames.IS_DELETED.value] == True
+        methods_tracking_df[ColumnNames.IS_DELETED.value]
     ].copy()
 
     # deleted_file_dfのファイルパスをセットに変換（O(1)の検索）

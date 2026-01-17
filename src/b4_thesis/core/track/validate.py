@@ -81,7 +81,8 @@ def validate_code_block(code_block: pd.DataFrame) -> None:
         ]
         if not invalid_lines.empty:
             errors.append(
-                f"{ColumnNames.START_LINE.value} > {ColumnNames.END_LINE.value}の不正なデータが{len(invalid_lines)}件あります"
+                f"{ColumnNames.START_LINE.value} > {ColumnNames.END_LINE.value}"
+                f"の不正なデータが{len(invalid_lines)}件あります"
             )
 
     # 行番号の正数チェック

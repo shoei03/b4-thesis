@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.validate import validate_code_block
-import pandas as pd
 
 console = Console()
 

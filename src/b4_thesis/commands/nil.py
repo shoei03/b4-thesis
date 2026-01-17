@@ -194,7 +194,8 @@ def track_sig(
             != matched_df["is_sig_matched"].sum() + matched_df["is_sig_added"].sum()
         ):
             console.print(
-                f"[red]Mismatch in counts detected for revisions {prev_rev.timestamp} -> {curr_rev.timestamp}[/red]"
+                f"[red]Mismatch in counts detected for revisions "
+                f"{prev_rev.timestamp} -> {curr_rev.timestamp}[/red]"
             )
 
     df.to_csv(output, index=False)
@@ -239,7 +240,8 @@ def evaluate(input: str, output: str) -> None:
     # 全てのリビジョンペアに対して処理
     for i in range(len(unique_revisions) - 2):
         print(
-            f"Processing revision pair: {unique_revisions[i]} -> {unique_revisions[i + 1]} -> {unique_revisions[i + 2]} "
+            f"Processing revision pair: {unique_revisions[i]} -> "
+            f"{unique_revisions[i + 1]} -> {unique_revisions[i + 2]} "
         )
         prev_rev = unique_revisions[i]
         curr_rev = unique_revisions[i + 1]
@@ -542,9 +544,9 @@ def track_avg_similarity(
 
     # カテゴリ列を作成
     output_df["category"] = ""
-    output_df.loc[output_df["is_matched"] == True, "category"] = "Matched"
-    output_df.loc[output_df["is_deleted"] == True, "category"] = "Deleted"
-    output_df.loc[output_df["is_added"] == True, "category"] = "Added"
+    output_df.loc[output_df["is_matched"], "category"] = "Matched"
+    output_df.loc[output_df["is_deleted"], "category"] = "Deleted"
+    output_df.loc[output_df["is_added"], "category"] = "Added"
 
     # カテゴリごとのデータを準備
     data = [
