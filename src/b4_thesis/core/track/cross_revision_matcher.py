@@ -7,6 +7,8 @@ across different revisions, reducing complexity from O(N×M) to O((N+M)log(N+M))
 import bisect
 from collections import defaultdict
 
+from rich.progress import track
+
 from b4_thesis.const.column import ColumnNames
 
 
@@ -81,7 +83,7 @@ class CrossRevisionMatcher:
 
         # Phase 2-4: Match each source block
         print(f"Matching {len(source_blocks)} source blocks...")
-        for source_idx, source_block in enumerate(source_blocks):
+        for source_idx, source_block in track(enumerate(source_blocks)):
             # Location
             candidates = self._find_candidates_for_source(source_block, inverted_index)
 
