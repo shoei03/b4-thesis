@@ -55,7 +55,7 @@ class RevisionManager:
             .str[1:-1]
             .str.split(";")
             .apply(lambda x: [int(i) for i in x])
-        ).astype("string")
+        )
 
         # 重複する関数定義があれば、関数名の末尾に番号を付与する
         dup_columns = [
