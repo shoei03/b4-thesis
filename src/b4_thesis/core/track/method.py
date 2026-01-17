@@ -34,12 +34,9 @@ class MethodTracker:
         # Collect all results
         all_results: list[dict] = []
 
-        # 最初のリビジョンをロード
-        prev_revision = revisions[0]
-        prev_code_blocks = self.revision_manager.load_code_blocks(prev_revision)
-
-        # 2番目以降のリビジョンを順にずらして処理
-        for curr_revision in revisions[1:]:
+        # Iterate through revision pairs
+        for prev_revision, curr_revision in zip(revisions[:-1], revisions[1:]):
+            prev_code_blocks = self.revision_manager.load_code_blocks(prev_revision)
             curr_code_blocks = self.revision_manager.load_code_blocks(curr_revision)
 
             prev_code_blocks[ColumnNames.REVISION_ID.value] = prev_revision.timestamp
@@ -62,15 +59,5 @@ class MethodTracker:
             # Accumulate results
             all_results.extend(match_results)
 
-            # 次のイテレーションの準備
-            prev_revision = curr_revision
-            prev_code_blocks = curr_code_blocks.drop(ColumnNames.REVISION_ID.value, axis=1)
-
-        # Return empty DataFrame if no results
-        if len(all_results) == 0:
-            return pd.DataFrame()
-
-        all_results_df = pd.DataFrame(all_results)
-
         # Convert to DataFrame
-        return all_results_df
+        return pd.DataFrame(all_results)
