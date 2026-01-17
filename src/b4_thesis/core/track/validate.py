@@ -49,8 +49,6 @@ def validate_code_block(code_block: pd.DataFrame) -> None:
                 subset=[
                     ColumnNames.FILE_PATH.value,
                     ColumnNames.METHOD_NAME.value,
-                    ColumnNames.START_LINE.value,
-                    ColumnNames.END_LINE.value,
                     ColumnNames.RETURN_TYPE.value,
                     ColumnNames.PARAMETERS.value,
                 ]
