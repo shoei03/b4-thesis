@@ -59,7 +59,7 @@ def nil():
     required=True,
     help="Output directory for CSV files",
 )
-def track(
+def track_sim(
     input: str,
     output: str,
     similarity: float,
