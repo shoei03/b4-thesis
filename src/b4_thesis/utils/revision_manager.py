@@ -93,6 +93,12 @@ class RevisionManager:
                 ColumnNames.NGRAM_OVERLAP.value,
                 ColumnNames.VERIFY_SIMILARITY.value,
             ],
+            dtype={
+                ColumnNames.TOKEN_HASH_1.value: "string",
+                ColumnNames.TOKEN_HASH_2.value: "string",
+                ColumnNames.NGRAM_OVERLAP.value: "float64",
+                ColumnNames.VERIFY_SIMILARITY.value: "float64",
+            },
         )
         return clone_pairs
 
