@@ -8,6 +8,7 @@ from rich.console import Console
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.classify.merge_splits import merge_splits
 from b4_thesis.core.track.cross_revision_matcher import CrossRevisionMatcher
+from b4_thesis.core.track.union_find import UnionFind
 from b4_thesis.utils.revision_manager import RevisionManager
 
 console = Console()
@@ -242,42 +243,50 @@ def track_sig(
 def track_sim_sig(
     input_sim: str,
     input_sig: str,
-    output:str,
+    output: str,
 ):
     """Evaluate false positives in method tracking results."""
-    df_sim = pd.read_csv(input_sim, usecols=[
-        ColumnNames.PREV_REVISION_ID.value,
-        ColumnNames.PREV_TOKEN_HASH.value,
-        ColumnNames.PREV_FILE_PATH.value,
-        ColumnNames.PREV_METHOD_NAME.value,
-        ColumnNames.PREV_RETURN_TYPE.value,
-        ColumnNames.PREV_PARAMETERS.value,
-        "similarity",
-        "is_sim_matched",
-        "is_sim_deleted",
-        "is_sim_added",
-    ])
-    df_sig = pd.read_csv(input_sig, usecols=[
-        ColumnNames.PREV_REVISION_ID.value,
-        ColumnNames.PREV_TOKEN_HASH.value,
-        ColumnNames.PREV_FILE_PATH.value,
-        ColumnNames.PREV_METHOD_NAME.value,
-        ColumnNames.PREV_RETURN_TYPE.value,
-        ColumnNames.PREV_PARAMETERS.value,
-        "is_sig_matched",
-        "is_sig_deleted",
-        "is_sig_added",
-    ])
-    
-    df_sim = df_sim.drop_duplicates([
-        ColumnNames.PREV_REVISION_ID.value,
-        ColumnNames.PREV_TOKEN_HASH.value,
-        ColumnNames.PREV_FILE_PATH.value,
-        ColumnNames.PREV_METHOD_NAME.value,
-        ColumnNames.PREV_RETURN_TYPE.value,
-        ColumnNames.PREV_PARAMETERS.value,
-    ])
-    
+    df_sim = pd.read_csv(
+        input_sim,
+        usecols=[
+            ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.PREV_TOKEN_HASH.value,
+            ColumnNames.PREV_FILE_PATH.value,
+            ColumnNames.PREV_METHOD_NAME.value,
+            ColumnNames.PREV_RETURN_TYPE.value,
+            ColumnNames.PREV_PARAMETERS.value,
+            "similarity",
+            "is_sim_matched",
+            "is_sim_deleted",
+            "is_sim_added",
+        ],
+    )
+    df_sig = pd.read_csv(
+        input_sig,
+        usecols=[
+            ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.PREV_TOKEN_HASH.value,
+            ColumnNames.PREV_FILE_PATH.value,
+            ColumnNames.PREV_METHOD_NAME.value,
+            ColumnNames.PREV_RETURN_TYPE.value,
+            ColumnNames.PREV_PARAMETERS.value,
+            "is_sig_matched",
+            "is_sig_deleted",
+            "is_sig_added",
+        ],
+    )
+
+    df_sim = df_sim.drop_duplicates(
+        [
+            ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.PREV_TOKEN_HASH.value,
+            ColumnNames.PREV_FILE_PATH.value,
+            ColumnNames.PREV_METHOD_NAME.value,
+            ColumnNames.PREV_RETURN_TYPE.value,
+            ColumnNames.PREV_PARAMETERS.value,
+        ]
+    )
+
     print(f"df_sim: {len(df_sim)}")
     print(f"    df_sim matched: {df_sim['is_sim_matched'].sum()}")
     print(f"    df_sim deleted: {df_sim['is_sim_deleted'].sum()}")
@@ -286,7 +295,7 @@ def track_sim_sig(
     print(f"    df_sig matched: {df_sig['is_sig_matched'].sum()}")
     print(f"    df_sig deleted: {df_sig['is_sig_deleted'].sum()}")
     print(f"    df_sig added: {df_sig['is_sig_added'].sum()}")
-    
+
     df_merged = df_sig.merge(
         df_sim,
         on=[
@@ -297,12 +306,23 @@ def track_sim_sig(
             ColumnNames.PREV_RETURN_TYPE.value,
             ColumnNames.PREV_PARAMETERS.value,
         ],
-        how="left",   
+        how="left",
     )
     df_merged.to_csv(output, index=False)
-    print(f"{df_merged.groupby(
-        ['is_sig_matched', 'is_sig_deleted', 'is_sig_added',
-         'is_sim_matched', 'is_sim_deleted', 'is_sim_added']).size()}")
+    print(
+        f"{
+            df_merged.groupby(
+                [
+                    'is_sig_matched',
+                    'is_sig_deleted',
+                    'is_sig_added',
+                    'is_sim_matched',
+                    'is_sim_deleted',
+                    'is_sim_added',
+                ]
+            ).size()
+        }"
+    )
 
 
 @nil.command()
@@ -518,7 +538,7 @@ def track_merge_splits(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
+    default="./output/versions/nil/3_sim_sig_match.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -526,7 +546,7 @@ def track_merge_splits(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/methods_tracking_with_clone.csv",
+    default="./output/versions/nil/4_has_clone.csv",
     help="Output file for CSV data",
 )
 def track_clone(
@@ -561,19 +581,88 @@ def track_clone(
     df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
 
-    # console.print("\nOverall clone presence:")
-    # console.print(
-    #     df.groupby(
-    #         [
-    #             ColumnNames.IS_ADDED.value,
-    #             ColumnNames.IS_DELETED.value,
-    #             ColumnNames.IS_MERGED.value,
-    #             ColumnNames.IS_SPLIT.value,
-    #             ColumnNames.IS_MODIFIED.value,
-    #             ColumnNames.HAS_CLONE.value,
-    #         ]
-    #     ).size()
-    # )
+    console.print("\nOverall clone presence:")
+    console.print(
+        df.groupby(
+            [
+                "is_sig_matched",
+                "is_sig_deleted",
+                "is_sim_matched",
+                "is_sim_deleted",
+                ColumnNames.HAS_CLONE.value,
+            ]
+        ).size()
+    )
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    default="./data/versions",
+    help="Input directory containing revision subdirectories",
+)
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/4_has_clone.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/5_has_clone_classified.csv",
+    help="Output file for CSV data",
+)
+def classify_clone(
+    input_file: str,
+    input: str,
+    output: str,
+):
+    """Classify method tracking results based on clone presence."""
+    df = pd.read_csv(input_file)
+
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path(input))
+
+    uf = UnionFind()
+
+    all_df = pd.DataFrame()
+    for rev in revisions:
+        clone_pairs = revision_manager.load_clone_pairs(rev)
+
+        for _, row in clone_pairs.iterrows():
+            uf.union(row[ColumnNames.TOKEN_HASH_1.value], row[ColumnNames.TOKEN_HASH_2.value])
+
+        groups = {root: i for i, root in enumerate(set(uf.find(t) for t in uf.parent))}
+
+        result_df = pd.DataFrame(
+            [
+                {
+                    "prev_token_hash": t,
+                    "prev_revision_id": str(rev.timestamp),
+                    "group_id": int(groups[uf.find(t)]),
+                }
+                for t in uf.parent
+            ]
+        )
+
+        all_df = pd.concat([all_df, result_df], ignore_index=True)
+
+    all_df.sort_values([ColumnNames.PREV_REVISION_ID.value, "group_id"], inplace=True)
+
+    merge_df = df.merge(
+        all_df,
+        on=[ColumnNames.PREV_REVISION_ID.value, ColumnNames.PREV_TOKEN_HASH.value],
+        how="left",
+    )
+
+    merge_df.to_csv(output, index=False)
+    console.print(f"[green]Results saved to:[/green] {output}")
 
 
 def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
