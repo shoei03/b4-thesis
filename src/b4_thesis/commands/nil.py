@@ -217,6 +217,96 @@ def track_sig(
 
 @nil.command()
 @click.option(
+    "--input-sim",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/nil/methods_tracking_by_nil.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--input-sig",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/nil/methods_tracking_sig.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/nil/111.csv",
+    help="Output file for classified results",
+)
+def evaluate_false_positives(
+    input_sim: str,
+    input_sig: str,
+    output:str,
+):
+    """Evaluate false positives in method tracking results."""
+    df_sim = pd.read_csv(input_sim, usecols=[
+        ColumnNames.PREV_REVISION_ID.value,
+        ColumnNames.PREV_TOKEN_HASH.value,
+        ColumnNames.PREV_FILE_PATH.value,
+        ColumnNames.PREV_METHOD_NAME.value,
+        ColumnNames.PREV_RETURN_TYPE.value,
+        ColumnNames.PREV_PARAMETERS.value,
+        "similarity",
+        "is_sim_matched",
+        "is_sim_deleted",
+        "is_sim_added",
+    ])
+    df_sig = pd.read_csv(input_sig, usecols=[
+        ColumnNames.PREV_REVISION_ID.value,
+        ColumnNames.PREV_TOKEN_HASH.value,
+        ColumnNames.PREV_FILE_PATH.value,
+        ColumnNames.PREV_METHOD_NAME.value,
+        ColumnNames.PREV_RETURN_TYPE.value,
+        ColumnNames.PREV_PARAMETERS.value,
+        "is_sig_matched",
+        "is_sig_deleted",
+        "is_sig_added",
+    ])
+    
+    df_sim = df_sim.drop_duplicates([
+        ColumnNames.PREV_REVISION_ID.value,
+        ColumnNames.PREV_TOKEN_HASH.value,
+        ColumnNames.PREV_FILE_PATH.value,
+        ColumnNames.PREV_METHOD_NAME.value,
+        ColumnNames.PREV_RETURN_TYPE.value,
+        ColumnNames.PREV_PARAMETERS.value,
+    ])
+    
+    print(f"df_sim: {len(df_sim)}")
+    print(f"    df_sim matched: {df_sim['is_sim_matched'].sum()}")
+    print(f"    df_sim deleted: {df_sim['is_sim_deleted'].sum()}")
+    print(f"    df_sim added: {df_sim['is_sim_added'].sum()}")
+    print(f"df_sig: {len(df_sig)}")
+    print(f"    df_sig matched: {df_sig['is_sig_matched'].sum()}")
+    print(f"    df_sig deleted: {df_sig['is_sig_deleted'].sum()}")
+    print(f"    df_sig added: {df_sig['is_sig_added'].sum()}")
+    
+    df_merged = df_sig.merge(
+        df_sim,
+        on=[
+            ColumnNames.PREV_REVISION_ID.value,
+            ColumnNames.PREV_TOKEN_HASH.value,
+            ColumnNames.PREV_FILE_PATH.value,
+            ColumnNames.PREV_METHOD_NAME.value,
+            ColumnNames.PREV_RETURN_TYPE.value,
+            ColumnNames.PREV_PARAMETERS.value,
+        ],
+        how="left",   
+    )
+    df_merged.to_csv(output, index=False)
+    print(f"{df_merged.groupby(
+        ['is_sig_matched', 'is_sig_deleted', 'is_sig_added',
+         'is_sim_matched', 'is_sim_deleted', 'is_sim_added']).size()}")
+
+
+@nil.command()
+@click.option(
     "--input",
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
