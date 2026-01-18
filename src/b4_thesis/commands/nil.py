@@ -671,6 +671,70 @@ def classify_clone(
     console.print(f"[green]Results saved to:[/green] {output}")
 
 
+@nil.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/5_has_clone_classified.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/6_avg_similarity.csv",
+    help="Output file for CSV data",
+)
+def track_deletion_status(
+    input_file: str,
+    output: str,
+):
+    df = pd.read_csv(input_file)
+    has_clone_df = df[df["has_clone"]]
+    
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path("./data/versions"))
+    
+    # 結果を格納するための新しいカラムを初期化
+    has_clone_df = has_clone_df.copy()
+    has_clone_df["is_all_deleted"] = False
+    has_clone_df["is_partial_deleted"] = False
+    
+    for rev in revisions:
+        rev_df = has_clone_df[has_clone_df["prev_revision_id"] == str(rev.timestamp)]
+        
+        if len(rev_df) == 0:
+            continue
+        
+        # group_idごとにis_deletedの状態を集計
+        group_status = rev_df.groupby("group_id")["is_deleted"].agg(
+            all_deleted="all",
+            any_deleted="any"
+        )
+        
+        # 全てTrue → is_all_deleted = True
+        all_deleted_groups = group_status[group_status["all_deleted"]].index
+        has_clone_df.loc[
+            has_clone_df["group_id"].isin(all_deleted_groups), 
+            "is_all_deleted"
+        ] = True
+        
+        # 一部True、一部False → is_partial_deleted = True
+        # (any_deleted=True かつ all_deleted=False)
+        partial_deleted_groups = group_status[
+            group_status["any_deleted"] & ~group_status["all_deleted"]
+        ].index
+        has_clone_df.loc[
+            has_clone_df["group_id"].isin(partial_deleted_groups),
+            "is_partial_deleted"
+        ] = True
+    
+    # 結果を出力
+    has_clone_df.to_csv(output, index=False)
+    
+    
+
 def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
     """Add a unified similarity column to clone_pairs DataFrame."""
     clone_pairs["similarity"] = clone_pairs[ColumnNames.VERIFY_SIMILARITY.value].fillna(
