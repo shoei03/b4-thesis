@@ -308,7 +308,6 @@ def track_sim_sig(
         ],
         how="left",
     )
-    df_merged.to_csv(output, index=False)
     print(
         f"{
             df_merged.groupby(
@@ -323,6 +322,13 @@ def track_sim_sig(
             ).size()
         }"
     )
+
+    df_merged["is_matched"] = df_merged["is_sig_matched"] | df_merged["is_sim_matched"]
+    df_merged["is_deleted"] = df_merged["is_sig_deleted"] & df_merged["is_sim_deleted"]
+    df_merged["is_added"] = ~df_merged["is_matched"] & ~df_merged["is_deleted"]
+
+    df_merged.to_csv(output, index=False)
+    print(df_merged.groupby(["is_matched", "is_deleted", "is_added"]).size())
 
 
 @nil.command()
