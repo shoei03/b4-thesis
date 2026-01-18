@@ -54,7 +54,7 @@ def nil():
 @click.option(
     "--output",
     "-o",
-    default="./output/versions/nil/methods_tracking_by_nil.csv",
+    default="./output/versions/nil/1_sim_match.csv",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
     help="Output directory for CSV files",
@@ -128,7 +128,7 @@ def track_sim(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/methods_tracking_sig.csv",
+    default="./output/versions/nil/2_sig_match.csv",
     help="Output file for classified results",
 )
 def track_sig(
@@ -221,14 +221,14 @@ def track_sig(
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/methods_tracking_by_nil.csv",
+    default="./output/versions/nil/1_sim_match.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
     "--input-sig",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/methods_tracking_sig.csv",
+    default="./output/versions/nil/2_sig_match.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -236,10 +236,10 @@ def track_sig(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/111.csv",
+    default="./output/versions/nil/3_sim_sig_match.csv",
     help="Output file for classified results",
 )
-def evaluate_false_positives(
+def track_sim_sig(
     input_sim: str,
     input_sig: str,
     output:str,
