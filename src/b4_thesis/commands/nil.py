@@ -246,89 +246,93 @@ def track_sim_sig(
     output: str,
 ):
     """Evaluate false positives in method tracking results."""
+    
+    merge_cols = [
+        ColumnNames.PREV_REVISION_ID.value,
+        ColumnNames.PREV_TOKEN_HASH.value,
+        ColumnNames.PREV_FILE_PATH.value,
+        ColumnNames.PREV_METHOD_NAME.value,
+        ColumnNames.PREV_RETURN_TYPE.value,
+        ColumnNames.PREV_PARAMETERS.value,
+    ]
+    
     df_sim = pd.read_csv(
         input_sim,
-        usecols=[
-            ColumnNames.PREV_REVISION_ID.value,
-            ColumnNames.PREV_TOKEN_HASH.value,
-            ColumnNames.PREV_FILE_PATH.value,
-            ColumnNames.PREV_METHOD_NAME.value,
-            ColumnNames.PREV_RETURN_TYPE.value,
-            ColumnNames.PREV_PARAMETERS.value,
+        usecols=merge_cols + [
+            ColumnNames.CURR_REVISION_ID.value,
+            ColumnNames.CURR_FILE_PATH.value,
+            ColumnNames.CURR_METHOD_NAME.value,
+            ColumnNames.CURR_RETURN_TYPE.value,
+            ColumnNames.CURR_PARAMETERS.value,
             "similarity",
             "is_sim_matched",
             "is_sim_deleted",
             "is_sim_added",
         ],
+        dtype={
+            **{col: "string" for col in merge_cols},
+            ColumnNames.CURR_FILE_PATH.value: "string",
+            ColumnNames.CURR_METHOD_NAME.value: "string",
+            ColumnNames.CURR_RETURN_TYPE.value: "string",
+            ColumnNames.CURR_PARAMETERS.value: "string",
+            "similarity": "float64",
+            "is_sim_matched": "boolean",
+            "is_sim_deleted": "boolean",
+            "is_sim_added": "boolean",
+        },
+        low_memory=False,
     )
+    
     df_sig = pd.read_csv(
         input_sig,
-        usecols=[
-            ColumnNames.PREV_REVISION_ID.value,
-            ColumnNames.PREV_TOKEN_HASH.value,
-            ColumnNames.PREV_FILE_PATH.value,
-            ColumnNames.PREV_METHOD_NAME.value,
-            ColumnNames.PREV_RETURN_TYPE.value,
-            ColumnNames.PREV_PARAMETERS.value,
-            "is_sig_matched",
-            "is_sig_deleted",
-            "is_sig_added",
-        ],
+        usecols=merge_cols + ["is_sig_matched", "is_sig_deleted", "is_sig_added"],
+        dtype={
+            **{col: "string" for col in merge_cols},
+            "is_sig_matched": "boolean",
+            "is_sig_deleted": "boolean",
+            "is_sig_added": "boolean",
+        }
     )
-
-    df_sim = df_sim.drop_duplicates(
-        [
-            ColumnNames.PREV_REVISION_ID.value,
-            ColumnNames.PREV_TOKEN_HASH.value,
-            ColumnNames.PREV_FILE_PATH.value,
-            ColumnNames.PREV_METHOD_NAME.value,
-            ColumnNames.PREV_RETURN_TYPE.value,
-            ColumnNames.PREV_PARAMETERS.value,
-        ]
+    
+    console.print(f"df_sim: {len(df_sim)}")
+    console.print(f"df_sig: {len(df_sig)}")
+    
+    df_sig_sorted = df_sig.sort_values(by='is_sig_matched', ascending=True)
+    
+    sig_dict = {}
+    for _, row in df_sig_sorted.iterrows():
+        key = '|'.join(str(row[col]) for col in merge_cols)
+        sig_dict[key] = (
+            row['is_sig_matched'],
+            row['is_sig_deleted'],
+            row['is_sig_added']
+        )
+        
+    console.print(f"sig_dict size: {len(sig_dict)}")
+    
+    keys = df_sim[merge_cols].astype(str).agg('|'.join, axis=1)
+    
+    sig_info = keys.map(sig_dict)
+    df_sim['is_sig_matched'] = sig_info.apply(lambda x: x[0] if x is not None else False)
+    df_sim['is_sig_deleted'] = sig_info.apply(lambda x: x[1] if x is not None else False)
+    df_sim['is_sig_added'] = sig_info.apply(lambda x: x[2] if x is not None else False)
+    
+    df_result = (
+        df_sim
+        .sort_values(by=['is_sig_matched', 'similarity'], ascending=[False, False])
+        .drop_duplicates(subset=merge_cols, keep='first')
+        .copy()
     )
-
-    print(f"df_sim: {len(df_sim)}")
-    print(f"    df_sim matched: {df_sim['is_sim_matched'].sum()}")
-    print(f"    df_sim deleted: {df_sim['is_sim_deleted'].sum()}")
-    print(f"    df_sim added: {df_sim['is_sim_added'].sum()}")
-    print(f"df_sig: {len(df_sig)}")
-    print(f"    df_sig matched: {df_sig['is_sig_matched'].sum()}")
-    print(f"    df_sig deleted: {df_sig['is_sig_deleted'].sum()}")
-    print(f"    df_sig added: {df_sig['is_sig_added'].sum()}")
-
-    df_merged = df_sig.merge(
-        df_sim,
-        on=[
-            ColumnNames.PREV_REVISION_ID.value,
-            ColumnNames.PREV_TOKEN_HASH.value,
-            ColumnNames.PREV_FILE_PATH.value,
-            ColumnNames.PREV_METHOD_NAME.value,
-            ColumnNames.PREV_RETURN_TYPE.value,
-            ColumnNames.PREV_PARAMETERS.value,
-        ],
-        how="left",
-    )
-    print(
-        f"{
-            df_merged.groupby(
-                [
-                    'is_sig_matched',
-                    'is_sig_deleted',
-                    'is_sig_added',
-                    'is_sim_matched',
-                    'is_sim_deleted',
-                    'is_sim_added',
-                ]
-            ).size()
-        }"
-    )
-
-    df_merged["is_matched"] = df_merged["is_sig_matched"] | df_merged["is_sim_matched"]
-    df_merged["is_deleted"] = df_merged["is_sig_deleted"] & df_merged["is_sim_deleted"]
-    df_merged["is_added"] = ~df_merged["is_matched"] & ~df_merged["is_deleted"]
-
-    df_merged.to_csv(output, index=False)
-    print(df_merged.groupby(["is_matched", "is_deleted", "is_added"]).size())
+    
+    console.print(f"After dropping duplicates df_sim: {len(df_result)}")
+    
+    # Calculate final flags
+    df_result["is_matched"] = df_result["is_sig_matched"] | df_result["is_sim_matched"]
+    df_result["is_deleted"] = df_result["is_sig_deleted"] & df_result["is_sim_deleted"]
+    df_result["is_added"] = ~df_result["is_matched"] & ~df_result["is_deleted"]
+    
+    df_result.to_csv(output, index=False)
+    console.print(f"[green]Results saved to:[/green] {output}")
 
 
 @nil.command()
