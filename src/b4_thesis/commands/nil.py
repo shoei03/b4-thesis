@@ -548,7 +548,7 @@ def track_merge_splits(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/3_sim_sig_match.csv",
+    default="./output/versions/nil/4_method_tracking.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -556,7 +556,7 @@ def track_merge_splits(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/4_has_clone.csv",
+    default="./output/versions/nil/5_has_clone.csv",
     help="Output file for CSV data",
 )
 def track_clone(
@@ -593,15 +593,10 @@ def track_clone(
 
     console.print("\nOverall clone presence:")
     console.print(
-        df.groupby(
-            [
-                "is_sig_matched",
-                "is_sig_deleted",
-                "is_sim_matched",
-                "is_sim_deleted",
-                ColumnNames.HAS_CLONE.value,
-            ]
-        ).size()
+        pd.crosstab(
+            df[ColumnNames.PREV_REVISION_ID.value],
+            [df[ColumnNames.HAS_CLONE.value], df["is_matched"], df["is_deleted"]],
+        )
     )
 
 
@@ -617,7 +612,7 @@ def track_clone(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/4_has_clone.csv",
+    default="./output/versions/nil/5_has_clone.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -625,7 +620,7 @@ def track_clone(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/5_has_clone_classified.csv",
+    default="./output/versions/nil/6_clone_group.csv",
     help="Output file for CSV data",
 )
 def classify_clone(
@@ -679,7 +674,7 @@ def classify_clone(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/5_has_clone_classified.csv",
+    default="./output/versions/nil/6_clone_group.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -687,7 +682,7 @@ def classify_clone(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/6_avg_similarity.csv",
+    default="./output/versions/nil/7_track_deletion_status.csv",
     help="Output file for CSV data",
 )
 def track_deletion_status(
@@ -695,6 +690,10 @@ def track_deletion_status(
     output: str,
 ):
     df = pd.read_csv(input_file)
+    df["is_all_deleted"] = False
+    df["is_partial_deleted"] = False
+    
+    no_clone_df = df[~df["has_clone"]]
     has_clone_df = df[df["has_clone"]]
     
     revision_manager = RevisionManager()
@@ -702,10 +701,10 @@ def track_deletion_status(
     
     # 結果を格納するための新しいカラムを初期化
     has_clone_df = has_clone_df.copy()
-    has_clone_df["is_all_deleted"] = False
-    has_clone_df["is_partial_deleted"] = False
     
+    rev_dfs  = pd.DataFrame()
     for rev in revisions:
+        console.print(f"Processing revision: {rev.timestamp}")
         rev_df = has_clone_df[has_clone_df["prev_revision_id"] == str(rev.timestamp)]
         
         if len(rev_df) == 0:
@@ -717,27 +716,63 @@ def track_deletion_status(
             any_deleted="any"
         )
         
-        # 全てTrue → is_all_deleted = True
+        # 全てTrue → is_all_deleted = True（is_deleted=Trueの行のみ）
         all_deleted_groups = group_status[group_status["all_deleted"]].index
-        has_clone_df.loc[
-            has_clone_df["group_id"].isin(all_deleted_groups), 
+        rev_df.loc[
+            rev_df["group_id"].isin(all_deleted_groups) & rev_df["is_deleted"], 
             "is_all_deleted"
         ] = True
-        
-        # 一部True、一部False → is_partial_deleted = True
-        # (any_deleted=True かつ all_deleted=False)
+
+        # 一部True、一部False → is_partial_deleted = True（is_deleted=Trueの行のみ）
         partial_deleted_groups = group_status[
             group_status["any_deleted"] & ~group_status["all_deleted"]
         ].index
-        has_clone_df.loc[
-            has_clone_df["group_id"].isin(partial_deleted_groups),
+        rev_df.loc[
+            rev_df["group_id"].isin(partial_deleted_groups) & rev_df["is_deleted"],
             "is_partial_deleted"
         ] = True
-    
+        
+        rev_dfs = pd.concat([rev_dfs, rev_df], ignore_index=True)
+
     # 結果を出力
-    has_clone_df.to_csv(output, index=False)
+    all_df = pd.concat([no_clone_df, rev_dfs], ignore_index=True)
     
+    console.print(pd.crosstab(
+        all_df[ColumnNames.PREV_REVISION_ID.value],
+        [ all_df["is_deleted"], all_df["is_all_deleted"], all_df["is_partial_deleted"]]
+    ))
+    all_df.to_csv(output, index=False)
     
+
+@nil.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/7_track_deletion_status.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/8_class_delete.csv",
+    help="Output file for CSV data",
+)
+def class_delete(
+    input_file: str,
+    output: str,
+):
+    df = pd.read_csv(input_file)
+    
+    result = pd.crosstab(
+        df[ColumnNames.PREV_REVISION_ID.value],
+        [df["is_matched"], df["is_deleted"], df["has_clone"]],
+    )
+    
+    result.to_csv(output, index=True)
+    console.print(f"[green]Results saved to:[/green] {output}")
+  
 
 def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
     """Add a unified similarity column to clone_pairs DataFrame."""
@@ -759,14 +794,14 @@ def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
+    default="./output/versions/nil/7_track_deletion_status.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
     "--output",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/methods_tracking_with_avg_similarity.csv",
+    default="./output/versions/nil/9_track_avg_similarity.csv",
     help="Output file for CSV data",
 )
 def track_avg_similarity(
@@ -799,7 +834,7 @@ def track_avg_similarity(
         avg_sim = pd.concat([hash_1_sim, hash_2_sim]).groupby(level=0).mean().round(1)
 
         df = df.merge(
-            avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="left"
+            avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="outer"
         )
         output_df = pd.concat([output_df, df], ignore_index=True)
 
@@ -807,35 +842,6 @@ def track_avg_similarity(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
-
-    # カテゴリ列を作成
-    output_df["category"] = ""
-    output_df.loc[output_df["is_matched"], "category"] = "Matched"
-    output_df.loc[output_df["is_deleted"], "category"] = "Deleted"
-    output_df.loc[output_df["is_added"], "category"] = "Added"
-
-    # カテゴリごとのデータを準備
-    data = [
-        output_df[output_df["category"] == "Matched"]["avg_similarity"].dropna(),
-        output_df[output_df["category"] == "Deleted"]["avg_similarity"].dropna(),
-        output_df[output_df["category"] == "Added"]["avg_similarity"].dropna(),
-    ]
-
-    import matplotlib.pyplot as plt
-
-    # プロット
-    plt.figure(figsize=(10, 6))
-    plt.boxplot(data, labels=["Matched", "Deleted", "Added"])
-
-    plt.xlabel("Category")
-    plt.ylabel("Similarity")
-    plt.title("Similarity Distribution by Category")
-    plt.grid(True, alpha=0.3, axis="y")
-    plt.tight_layout()
-
-    output_image = output.replace(".csv", ".png")
-    plt.savefig(output_image, dpi=300)
-    print(f"Plot saved: {output_image}")
 
 
 @nil.command()
