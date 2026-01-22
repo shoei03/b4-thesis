@@ -246,7 +246,7 @@ def track_sim_sig(
     output: str,
 ):
     """Evaluate false positives in method tracking results."""
-    
+
     merge_cols = [
         ColumnNames.PREV_REVISION_ID.value,
         ColumnNames.PREV_TOKEN_HASH.value,
@@ -255,10 +255,11 @@ def track_sim_sig(
         ColumnNames.PREV_RETURN_TYPE.value,
         ColumnNames.PREV_PARAMETERS.value,
     ]
-    
+
     df_sim = pd.read_csv(
         input_sim,
-        usecols=merge_cols + [
+        usecols=merge_cols
+        + [
             ColumnNames.CURR_REVISION_ID.value,
             ColumnNames.CURR_FILE_PATH.value,
             ColumnNames.CURR_METHOD_NAME.value,
@@ -282,7 +283,7 @@ def track_sim_sig(
         },
         low_memory=False,
     )
-    
+
     df_sig = pd.read_csv(
         input_sig,
         usecols=merge_cols + ["is_sig_matched", "is_sig_deleted", "is_sig_added"],
@@ -291,46 +292,41 @@ def track_sim_sig(
             "is_sig_matched": "boolean",
             "is_sig_deleted": "boolean",
             "is_sig_added": "boolean",
-        }
+        },
     )
-    
+
     console.print(f"df_sim: {len(df_sim)}")
     console.print(f"df_sig: {len(df_sig)}")
-    
-    df_sig_sorted = df_sig.sort_values(by='is_sig_matched', ascending=True)
-    
+
+    df_sig_sorted = df_sig.sort_values(by="is_sig_matched", ascending=True)
+
     sig_dict = {}
     for _, row in df_sig_sorted.iterrows():
-        key = '|'.join(str(row[col]) for col in merge_cols)
-        sig_dict[key] = (
-            row['is_sig_matched'],
-            row['is_sig_deleted'],
-            row['is_sig_added']
-        )
-        
+        key = "|".join(str(row[col]) for col in merge_cols)
+        sig_dict[key] = (row["is_sig_matched"], row["is_sig_deleted"], row["is_sig_added"])
+
     console.print(f"sig_dict size: {len(sig_dict)}")
-    
-    keys = df_sim[merge_cols].astype(str).agg('|'.join, axis=1)
-    
+
+    keys = df_sim[merge_cols].astype(str).agg("|".join, axis=1)
+
     sig_info = keys.map(sig_dict)
-    df_sim['is_sig_matched'] = sig_info.apply(lambda x: x[0] if x is not None else False)
-    df_sim['is_sig_deleted'] = sig_info.apply(lambda x: x[1] if x is not None else False)
-    df_sim['is_sig_added'] = sig_info.apply(lambda x: x[2] if x is not None else False)
-    
+    df_sim["is_sig_matched"] = sig_info.apply(lambda x: x[0] if x is not None else False)
+    df_sim["is_sig_deleted"] = sig_info.apply(lambda x: x[1] if x is not None else False)
+    df_sim["is_sig_added"] = sig_info.apply(lambda x: x[2] if x is not None else False)
+
     df_result = (
-        df_sim
-        .sort_values(by=['is_sig_matched', 'similarity'], ascending=[False, False])
-        .drop_duplicates(subset=merge_cols, keep='first')
+        df_sim.sort_values(by=["is_sig_matched", "similarity"], ascending=[False, False])
+        .drop_duplicates(subset=merge_cols, keep="first")
         .copy()
     )
-    
+
     console.print(f"After dropping duplicates df_sim: {len(df_result)}")
-    
+
     # Calculate final flags
     df_result["is_matched"] = df_result["is_sig_matched"] | df_result["is_sim_matched"]
     df_result["is_deleted"] = df_result["is_sig_deleted"] & df_result["is_sim_deleted"]
     df_result["is_added"] = ~df_result["is_matched"] & ~df_result["is_deleted"]
-    
+
     df_result.to_csv(output, index=False)
     console.print(f"[green]Results saved to:[/green] {output}")
 
@@ -692,35 +688,33 @@ def track_deletion_status(
     df = pd.read_csv(input_file)
     df["is_all_deleted"] = False
     df["is_partial_deleted"] = False
-    
+
     no_clone_df = df[~df["has_clone"]]
     has_clone_df = df[df["has_clone"]]
-    
+
     revision_manager = RevisionManager()
     revisions = revision_manager.get_revisions(Path("./data/versions"))
-    
+
     # 結果を格納するための新しいカラムを初期化
     has_clone_df = has_clone_df.copy()
-    
-    rev_dfs  = pd.DataFrame()
+
+    rev_dfs = pd.DataFrame()
     for rev in revisions:
         console.print(f"Processing revision: {rev.timestamp}")
         rev_df = has_clone_df[has_clone_df["prev_revision_id"] == str(rev.timestamp)]
-        
+
         if len(rev_df) == 0:
             continue
-        
+
         # group_idごとにis_deletedの状態を集計
         group_status = rev_df.groupby("group_id")["is_deleted"].agg(
-            all_deleted="all",
-            any_deleted="any"
+            all_deleted="all", any_deleted="any"
         )
-        
+
         # 全てTrue → is_all_deleted = True（is_deleted=Trueの行のみ）
         all_deleted_groups = group_status[group_status["all_deleted"]].index
         rev_df.loc[
-            rev_df["group_id"].isin(all_deleted_groups) & rev_df["is_deleted"], 
-            "is_all_deleted"
+            rev_df["group_id"].isin(all_deleted_groups) & rev_df["is_deleted"], "is_all_deleted"
         ] = True
 
         # 一部True、一部False → is_partial_deleted = True（is_deleted=Trueの行のみ）
@@ -729,20 +723,22 @@ def track_deletion_status(
         ].index
         rev_df.loc[
             rev_df["group_id"].isin(partial_deleted_groups) & rev_df["is_deleted"],
-            "is_partial_deleted"
+            "is_partial_deleted",
         ] = True
-        
+
         rev_dfs = pd.concat([rev_dfs, rev_df], ignore_index=True)
 
     # 結果を出力
     all_df = pd.concat([no_clone_df, rev_dfs], ignore_index=True)
-    
-    console.print(pd.crosstab(
-        all_df[ColumnNames.PREV_REVISION_ID.value],
-        [ all_df["is_deleted"], all_df["is_all_deleted"], all_df["is_partial_deleted"]]
-    ))
+
+    console.print(
+        pd.crosstab(
+            all_df[ColumnNames.PREV_REVISION_ID.value],
+            [all_df["is_deleted"], all_df["is_all_deleted"], all_df["is_partial_deleted"]],
+        )
+    )
     all_df.to_csv(output, index=False)
-    
+
 
 @nil.command()
 @click.option(
@@ -764,15 +760,15 @@ def class_delete(
     output: str,
 ):
     df = pd.read_csv(input_file)
-    
+
     result = pd.crosstab(
         df[ColumnNames.PREV_REVISION_ID.value],
         [df["is_matched"], df["is_deleted"], df["has_clone"]],
     )
-    
+
     result.to_csv(output, index=True)
     console.print(f"[green]Results saved to:[/green] {output}")
-  
+
 
 def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
     """Add a unified similarity column to clone_pairs DataFrame."""
