@@ -2,8 +2,10 @@ import json
 from pathlib import Path
 
 import click
+import matplotlib.pyplot as plt
 import pandas as pd
 from rich.console import Console
+import seaborn as sns
 
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.core.track.classify.merge_splits import merge_splits
@@ -838,6 +840,143 @@ def track_avg_similarity(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
+
+
+@nil.command()
+def sim_count():
+    df = pd.read_csv("./output/versions/nil/9_track_avg_similarity.csv")
+    high_sim_df = df[df["avg_similarity"] >= 90]
+    low_sim_df = df[(df["avg_similarity"] < 90) & (df["avg_similarity"] >= 70)]
+
+    print(pd.crosstab(high_sim_df[ColumnNames.PREV_REVISION_ID.value], [high_sim_df["is_matched"]]))
+
+    print(pd.crosstab(low_sim_df[ColumnNames.PREV_REVISION_ID.value], [low_sim_df["is_matched"]]))
+
+
+@nil.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/9_track_avg_similarity.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output-csv",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/10_deletion_survival.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output-plot",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/10_deletion_survival.pdf",
+    help="Output file for the plot",
+)
+def deletion_survival(
+    input_file: str,
+    output_csv: str,
+    output_plot: str,
+) -> None:
+    """Track avg_similarity evolution per method_id for different deletion types."""
+    cols = [
+        ColumnNames.PREV_REVISION_ID.value,
+        ColumnNames.PREV_TOKEN_HASH.value,
+        ColumnNames.PREV_FILE_PATH.value,
+        ColumnNames.PREV_METHOD_NAME.value,
+        ColumnNames.PREV_PARAMETERS.value,
+        ColumnNames.PREV_RETURN_TYPE.value,
+        "is_deleted",
+        "is_partial_deleted",
+        "is_all_deleted",
+        "is_matched",
+        "avg_similarity",
+        "method_id",
+    ]
+    df = pd.read_csv(input_file, usecols=cols)
+
+    # 各method_idの最新行でis_matchedがTrueかどうかでsurvival_groupを判定
+    latest_matched = (
+        df.sort_values(ColumnNames.PREV_REVISION_ID.value, ascending=False)
+        .groupby("method_id")["is_matched"]
+        .first()
+    )
+    df["survival_group"] = df["method_id"].map(latest_matched).fillna(False)
+
+    # similarity_category列を追加（pd.cutで効率化）
+    bins = [0, 70, 90, 100]
+    labels = ["other", "70-90", "90-100"]
+    df["similarity_category"] = pd.cut(
+        df["avg_similarity"], bins=bins, labels=labels, include_lowest=True
+    )
+
+    # 各method_idごとに相対時間を計算（最新=0）
+    df = df.sort_values(["method_id", ColumnNames.PREV_REVISION_ID.value])
+    df["relative_time"] = (
+        (
+            df.groupby("method_id").cumcount()
+            - df.groupby("method_id")["method_id"].transform("count")
+            + 1
+        )
+        .fillna(0)
+        .astype(int)
+    )
+    df.to_csv(output_csv, index=False)
+    console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
+
+    # プロット設定（論文用）
+    plt.rcParams.update(
+        {
+            "font.size": 12,
+            "axes.titlesize": 14,
+            "axes.labelsize": 12,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "legend.fontsize": 11,
+            "figure.dpi": 300,
+        }
+    )
+
+    categories = ["70-90", "90-100"]
+    _, axes = plt.subplots(2, 1, figsize=(10, 8))
+    colors = ["#ff7f0e", "#1f77b4"]  # 青とオレンジ
+
+    for ax, category in zip(axes, categories):
+        category_data = df[df["similarity_category"] == category]
+        if len(category_data) > 0:
+            sns.boxplot(
+                data=category_data,
+                x="relative_time",
+                y="avg_similarity",
+                hue="survival_group",
+                ax=ax,
+                palette=colors,
+                linewidth=1.2,
+                fliersize=3,
+            )
+            ax.set_title(f"Clone Similarity: {category}%", fontweight="bold", pad=15)
+            ax.set_xlabel("Relative Time (0 = latest)", labelpad=10)
+            ax.set_ylabel("Average Similarity (%)", labelpad=10)
+            ax.tick_params(axis="x", rotation=0)
+            ax.grid(True, alpha=0.3, linestyle="--")
+
+            # 凡例を色付きで設定
+            handles, _ = ax.get_legend_handles_labels()
+            ax.legend(
+                handles,
+                ["Deleted Methods", "Surviving Methods"],
+                loc="upper left",
+                frameon=True,
+                fancybox=True,
+                shadow=True,
+            )
+            ax.set_ylim(
+                category_data["avg_similarity"].min() - 2, category_data["avg_similarity"].max() + 2
+            )
+
+    plt.tight_layout(pad=2.0)
+    plt.savefig(output_plot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    plt.close()
+    console.print(f"[green]Plot saved to:[/green] {output_plot}")
 
 
 @nil.command()
