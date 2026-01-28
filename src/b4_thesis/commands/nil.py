@@ -978,6 +978,44 @@ def deletion_survival(
     plt.close()
     console.print(f"[green]Plot saved to:[/green] {output_plot}")
 
+    # binで区切らない場合の図も生成
+    output_plot_unbinned = output_plot.replace(".pdf", "_unbinned.pdf")
+
+    plt.figure(figsize=(12, 6))
+    sns.boxplot(
+        data=df[df["avg_similarity"].notna()],  # NaNを除外
+        x="relative_time",
+        y="avg_similarity",
+        hue="survival_group",
+        palette=colors,
+        linewidth=1.2,
+        fliersize=3,
+    )
+
+    plt.title("Clone Similarity: All Data (Unbinned)", fontweight="bold", pad=15)
+    plt.xlabel("Relative Time (0 = latest)", labelpad=10)
+    plt.ylabel("Average Similarity (%)", labelpad=10)
+    plt.tick_params(axis="x", rotation=0)
+    plt.grid(True, alpha=0.3, linestyle="--")
+
+    # 凡例を色付きで設定
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles,
+        ["Deleted Methods", "Surviving Methods"],
+        loc="upper left",
+        frameon=True,
+        fancybox=True,
+        shadow=True,
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        output_plot_unbinned, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
+    )
+    plt.close()
+    console.print(f"[green]Unbinned plot saved to:[/green] {output_plot_unbinned}")
+
 
 @nil.command()
 @click.option(
