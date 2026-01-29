@@ -4,17 +4,8 @@ import click
 from rich.console import Console
 
 from b4_thesis.commands import (
-    analyze,
-    convert,
-    extract,
     git,
-    label,
     nil,
-    predict,
-    refactoring,
-    report,
-    stats,
-    visualize,
 )
 
 console = Console()
@@ -32,17 +23,8 @@ def main(ctx):
 
 
 # Register commands
-main.add_command(analyze.analyze)
-main.add_command(convert.convert)
-main.add_command(predict.predict)
-main.add_command(extract.extract)
-main.add_command(label.label)
-main.add_command(refactoring.refactoring)
-main.add_command(report.report)
-main.add_command(stats.stats)
 main.add_command(git.git)
 main.add_command(nil.nil)
-main.add_command(visualize.visualize)
 
 
 if __name__ == "__main__":
