@@ -789,6 +789,77 @@ def class_delete(
     console.print(f"[green]Results saved to:[/green] {output}")
 
 
+@nil.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/9_track_avg_similarity.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/11_class_high_low_sim.csv",
+    help="Output file for CSV data",
+)
+def class_high_low_sim(
+    input_file: str,
+    output: str,
+):
+    df = pd.read_csv(
+        input_file,
+        usecols=[
+            ColumnNames.PREV_REVISION_ID.value,
+            "avg_similarity",
+            "is_matched",
+            "is_deleted",
+            "has_clone",
+        ],
+        dtype={
+            "is_matched": "boolean",
+            "is_deleted": "boolean",
+            "has_clone": "boolean",
+        },
+        low_memory=False,
+    )
+
+    df = df.sort_values("prev_revision_id")
+    df["high_sim"] = df["avg_similarity"] >= 90
+    df["low_sim"] = (df["avg_similarity"] < 90) & (df["avg_similarity"] >= 70)
+
+    result = pd.crosstab(
+        df[ColumnNames.PREV_REVISION_ID.value],
+        [df["is_matched"], df["high_sim"], df["low_sim"]],
+    )
+
+    # high_sim と low_sim 別の削除率を計算
+    deletion_by_high_sim = (
+        df[df["high_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_deleted"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+    deletion_by_low_sim = (
+        df[df["low_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_deleted"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+
+    # カラムとして追加（3レベルのマルチインデックスに対応）
+    result[("high_sim_deletion_rate(%)", "", "")] = deletion_by_high_sim
+    result[("low_sim_deletion_rate(%)", "", "")] = deletion_by_low_sim
+
+    avg_row = result.mean(numeric_only=True).round(2)
+    avg_row.name = "Average"
+    result = pd.concat([result, avg_row.to_frame().T])
+
+    result.to_csv(output, index=True)
+    console.print(f"[green]Results saved to:[/green] {output}")
+
+
 def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
     """Add a unified similarity column to clone_pairs DataFrame."""
     clone_pairs["similarity"] = clone_pairs[ColumnNames.VERIFY_SIMILARITY.value].fillna(
