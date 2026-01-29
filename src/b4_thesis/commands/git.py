@@ -82,9 +82,7 @@ def classify_is_deleted(input_file: Path, input: Path, output_file: Path) -> Non
     methods_tracking_df = pd.read_csv(input)
 
     # is_deletedがTrueの行だけフィルタリング
-    deleted_df = methods_tracking_df[
-        methods_tracking_df[ColumnNames.IS_DELETED.value]
-    ].copy()
+    deleted_df = methods_tracking_df[methods_tracking_df[ColumnNames.IS_DELETED.value]].copy()
 
     # deleted_file_dfのファイルパスをセットに変換（O(1)の検索）
     deleted_file_paths = set(deleted_file_df[ColumnNames.FILE_PATH.value])
