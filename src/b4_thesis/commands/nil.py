@@ -765,8 +765,25 @@ def class_delete(
 
     result = pd.crosstab(
         df[ColumnNames.PREV_REVISION_ID.value],
-        [df["is_matched"], df["is_deleted"], df["has_clone"]],
+        [df["is_matched"], df["has_clone"]],
     )
+
+    # クローン有無別の削除率
+    deletion_by_clone = (
+        df.groupby([ColumnNames.PREV_REVISION_ID.value, "has_clone"])["is_matched"]
+        .apply(lambda x: (~x).mean() * 100)
+        .unstack(fill_value=0)
+        .round(2)
+    )
+
+    # カラムとして追加
+    result[("clone_deletion_rate(%)", "")] = deletion_by_clone.get(True, 0)
+    result[("no_clone_deletion_rate(%)", "")] = deletion_by_clone.get(False, 0)
+
+    # 全リビジョンでの平均を計算
+    avg_row = result.mean(numeric_only=True).round(2)
+    avg_row.name = "Average"
+    result = pd.concat([result, avg_row.to_frame().T])
 
     result.to_csv(output, index=True)
     console.print(f"[green]Results saved to:[/green] {output}")
@@ -919,7 +936,11 @@ def deletion_survival(
     df.to_csv(output_csv, index=False)
     latest_df = df[df["relative_time"] == 0]
     console.print(latest_df.groupby(["survival_group"]).size())
-    console.print(latest_df[latest_df["avg_similarity"].notna()].groupby(["survival_group"])["avg_similarity"].mean())
+    console.print(
+        latest_df[latest_df["avg_similarity"].notna()]
+        .groupby(["survival_group"])["avg_similarity"]
+        .mean()
+    )
     console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
 
     # プロット設定（論文用）
