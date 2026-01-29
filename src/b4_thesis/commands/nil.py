@@ -917,6 +917,9 @@ def deletion_survival(
         .astype(int)
     )
     df.to_csv(output_csv, index=False)
+    latest_df = df[df["relative_time"] == 0]
+    console.print(latest_df.groupby(["survival_group"]).size())
+    console.print(latest_df[latest_df["avg_similarity"].notna()].groupby(["survival_group"])["avg_similarity"].mean())
     console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
 
     # プロット設定（論文用）
