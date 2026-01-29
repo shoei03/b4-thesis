@@ -1,3 +1,0 @@
-block_a2,src/util.py,10,20,calculate,int,[x:int;y:int],hash_a,[1;2;3;4;5]
-block_b2,src/util.py,30,42,process_data,void,[data:str;config:dict],hash_b_mod,[10;11;12;13;14]
-block_d,src/feature.py,100,110,new_func,int,[n:int],hash_d,[30;31;32]
