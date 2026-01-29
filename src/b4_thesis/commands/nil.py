@@ -869,7 +869,7 @@ def sim_count():
 @click.option(
     "--output-plot",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival.pdf",
+    default="./output/versions/nil/10_deletion_survival.png",
     help="Output file for the plot",
 )
 def deletion_survival(
@@ -880,34 +880,30 @@ def deletion_survival(
     """Track avg_similarity evolution per method_id for different deletion types."""
     cols = [
         ColumnNames.PREV_REVISION_ID.value,
-        ColumnNames.PREV_TOKEN_HASH.value,
-        ColumnNames.PREV_FILE_PATH.value,
-        ColumnNames.PREV_METHOD_NAME.value,
-        ColumnNames.PREV_PARAMETERS.value,
-        ColumnNames.PREV_RETURN_TYPE.value,
         "is_deleted",
         "is_partial_deleted",
         "is_all_deleted",
+        "is_merge",
         "is_matched",
         "avg_similarity",
         "method_id",
     ]
     df = pd.read_csv(input_file, usecols=cols)
 
-    # 各method_idの最新行でis_matchedがTrueかどうかでsurvival_groupを判定
-    latest_matched = (
+    # 各method_idの最新行で3分類: "Merged" / "Deleted" / "Matched"
+    latest = (
         df.sort_values(ColumnNames.PREV_REVISION_ID.value, ascending=False)
-        .groupby("method_id")["is_matched"]
+        .groupby("method_id")
         .first()
     )
-    df["survival_group"] = df["method_id"].map(latest_matched).fillna(False)
+    latest["survival_group"] = None
+    latest.loc[latest["is_matched"], "survival_group"] = "Matched"
+    latest.loc[latest["is_deleted"], "survival_group"] = "Deleted"
+    latest.loc[latest["is_merge"], "survival_group"] = "Merged"
 
-    # similarity_category列を追加（pd.cutで効率化）
-    bins = [0, 70, 90, 100]
-    labels = ["other", "70-90", "90-100"]
-    df["similarity_category"] = pd.cut(
-        df["avg_similarity"], bins=bins, labels=labels, include_lowest=True
-    )
+    group_map = latest["survival_group"].dropna()
+    df["survival_group"] = df["method_id"].map(group_map)
+    df = df[df["survival_group"].notna()]
 
     # 各method_idごとに相対時間を計算（最新=0）
     df = df.sort_values(["method_id", ColumnNames.PREV_REVISION_ID.value])
@@ -936,85 +932,58 @@ def deletion_survival(
         }
     )
 
-    categories = ["70-90", "90-100"]
-    _, axes = plt.subplots(2, 1, figsize=(10, 8))
-    colors = ["#ff7f0e", "#1f77b4"]  # 青とオレンジ
+    colors = {"Matched": "#1f77b4", "Merged": "#ff7f0e", "Deleted": "#d62728"}
 
-    for ax, category in zip(axes, categories):
-        category_data = df[df["similarity_category"] == category]
-        if len(category_data) > 0:
-            sns.boxplot(
-                data=category_data,
-                x="relative_time",
-                y="avg_similarity",
-                hue="survival_group",
-                ax=ax,
-                palette=colors,
-                linewidth=1.2,
-                fliersize=3,
-            )
-            ax.set_title(f"Clone Similarity: {category}%", fontweight="bold", pad=15)
-            ax.set_xlabel("Relative Time (0 = latest)", labelpad=10)
-            ax.set_ylabel("Average Similarity (%)", labelpad=10)
-            ax.tick_params(axis="x", rotation=0)
-            ax.grid(True, alpha=0.3, linestyle="--")
+    plot_df = df[df["avg_similarity"].notna()]
 
-            # 凡例を色付きで設定
-            handles, _ = ax.get_legend_handles_labels()
-            ax.legend(
-                handles,
-                ["Deleted Methods", "Surviving Methods"],
-                loc="upper left",
-                frameon=True,
-                fancybox=True,
-                shadow=True,
-            )
-            ax.set_ylim(
-                category_data["avg_similarity"].min() - 2, category_data["avg_similarity"].max() + 2
-            )
+    # サンプル数の集計
+    count_df = plot_df.groupby(["relative_time", "survival_group"]).size().reset_index(name="count")
 
-    plt.tight_layout(pad=2.0)
-    plt.savefig(output_plot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
-    plt.close()
-    console.print(f"[green]Plot saved to:[/green] {output_plot}")
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10), height_ratios=[3, 2], sharex=True)
 
-    # binで区切らない場合の図も生成
-    output_plot_unbinned = output_plot.replace(".pdf", "_unbinned.pdf")
-
-    plt.figure(figsize=(12, 6))
+    # 上段: 箱ひげ図
+    time_values = sorted(plot_df["relative_time"].unique())
     sns.boxplot(
-        data=df[df["avg_similarity"].notna()],  # NaNを除外
+        data=plot_df,
         x="relative_time",
         y="avg_similarity",
         hue="survival_group",
         palette=colors,
         linewidth=1.2,
         fliersize=3,
+        order=time_values,
+        ax=axes[0],
     )
+    axes[0].set_title("Clone Similarity", fontweight="bold", pad=15)
+    axes[0].set_xlabel("")
+    axes[0].set_ylabel("Average Similarity (%)", labelpad=10)
+    axes[0].grid(True, alpha=0.3, linestyle="--")
+    axes[0].legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
 
-    plt.title("Clone Similarity: All Data (Unbinned)", fontweight="bold", pad=15)
-    plt.xlabel("Relative Time (0 = latest)", labelpad=10)
-    plt.ylabel("Average Similarity (%)", labelpad=10)
-    plt.tick_params(axis="x", rotation=0)
-    plt.grid(True, alpha=0.3, linestyle="--")
-
-    # 凡例を色付きで設定
-    handles, labels = plt.gca().get_legend_handles_labels()
-    plt.legend(
-        handles,
-        ["Deleted Methods", "Surviving Methods"],
-        loc="upper left",
-        frameon=True,
-        fancybox=True,
-        shadow=True,
-    )
+    # 下段: サンプル数の折れ線グラフ（boxplotと同じカテゴリカル位置を使用）
+    time_to_pos = {t: i for i, t in enumerate(time_values)}
+    for group, color in colors.items():
+        group_data = count_df[count_df["survival_group"] == group].sort_values("relative_time")
+        positions = [time_to_pos[t] for t in group_data["relative_time"]]
+        axes[1].plot(
+            positions,
+            group_data["count"].values,
+            marker="o",
+            markersize=4,
+            color=color,
+            label=group,
+            linewidth=1.5,
+        )
+    axes[1].set_title("Sample Count", fontweight="bold", pad=15)
+    axes[1].set_xlabel("Relative Time (0 = latest)", labelpad=10)
+    axes[1].set_ylabel("Count", labelpad=10)
+    axes[1].grid(True, alpha=0.3, linestyle="--")
+    axes[1].legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
 
     plt.tight_layout()
-    plt.savefig(
-        output_plot_unbinned, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
-    )
+    plt.savefig(output_plot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
     plt.close()
-    console.print(f"[green]Unbinned plot saved to:[/green] {output_plot_unbinned}")
+    console.print(f"[green]Plot saved to:[/green] {output_plot}")
 
 
 @nil.command()
