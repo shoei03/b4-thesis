@@ -793,7 +793,7 @@ def class_delete(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_avg_similarity.csv",
+    default="./output/versions/nil/9_track_median_similarity.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -812,7 +812,7 @@ def class_high_low_sim(
         input_file,
         usecols=[
             ColumnNames.PREV_REVISION_ID.value,
-            "avg_similarity",
+            "median_similarity",
             "is_matched",
             "is_deleted",
             "has_clone",
@@ -826,8 +826,8 @@ def class_high_low_sim(
     )
 
     df = df.sort_values("prev_revision_id")
-    df["high_sim"] = df["avg_similarity"] >= 90
-    df["low_sim"] = (df["avg_similarity"] < 90) & (df["avg_similarity"] >= 70)
+    df["high_sim"] = df["median_similarity"] >= 90
+    df["low_sim"] = (df["median_similarity"] < 90) & (df["median_similarity"] >= 70)
 
     result = pd.crosstab(
         df[ColumnNames.PREV_REVISION_ID.value],
@@ -887,10 +887,10 @@ def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
     "--output",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_avg_similarity.csv",
+    default="./output/versions/nil/9_track_median_similarity.csv",
     help="Output file for CSV data",
 )
-def track_avg_similarity(
+def track_median_similarity(
     input: str,
     input_file: str,
     output: str,
@@ -908,16 +908,16 @@ def track_avg_similarity(
 
         hash_1_sim = (
             clone_pairs.groupby(ColumnNames.TOKEN_HASH_1.value)["similarity"]
-            .mean()
-            .rename("avg_similarity")
+            .median()
+            .rename("median_similarity")
         )
         hash_2_sim = (
             clone_pairs.groupby(ColumnNames.TOKEN_HASH_2.value)["similarity"]
-            .mean()
-            .rename("avg_similarity")
+            .median()
+            .rename("median_similarity")
         )
 
-        avg_sim = pd.concat([hash_1_sim, hash_2_sim]).groupby(level=0).mean().round(1)
+        avg_sim = pd.concat([hash_1_sim, hash_2_sim]).groupby(level=0).median().round(1)
 
         df = df.merge(
             avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="outer"
@@ -932,9 +932,9 @@ def track_avg_similarity(
 
 @nil.command()
 def sim_count():
-    df = pd.read_csv("./output/versions/nil/9_track_avg_similarity.csv")
-    high_sim_df = df[df["avg_similarity"] >= 90]
-    low_sim_df = df[(df["avg_similarity"] < 90) & (df["avg_similarity"] >= 70)]
+    df = pd.read_csv("./output/versions/nil/9_track_median_similarity.csv")
+    high_sim_df = df[df["median_similarity"] >= 90]
+    low_sim_df = df[(df["median_similarity"] < 90) & (df["median_similarity"] >= 70)]
 
     print(pd.crosstab(high_sim_df[ColumnNames.PREV_REVISION_ID.value], [high_sim_df["is_matched"]]))
 
@@ -945,27 +945,34 @@ def sim_count():
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_avg_similarity.csv",
+    default="./output/versions/nil/9_track_median_similarity.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
     "--output-csv",
     type=click.Path(file_okay=True, dir_okay=False),
     default="./output/versions/nil/10_deletion_survival.csv",
-    help="Input file containing tracked methods data",
+    help="Output file for CSV data",
 )
 @click.option(
-    "--output-plot",
+    "--output-boxplot",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival.png",
-    help="Output file for the plot",
+    default="./output/versions/nil/10_deletion_survival_boxplot.png",
+    help="Output file for the boxplot",
+)
+@click.option(
+    "--output-lineplot",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/10_deletion_survival_lineplot.png",
+    help="Output file for the line plot",
 )
 def deletion_survival(
     input_file: str,
     output_csv: str,
-    output_plot: str,
+    output_boxplot: str,
+    output_lineplot: str,
 ) -> None:
-    """Track avg_similarity evolution per method_id for different deletion types."""
+    """Track median_similarity evolution per method_id for different deletion types."""
     cols = [
         ColumnNames.PREV_REVISION_ID.value,
         "is_deleted",
@@ -973,7 +980,7 @@ def deletion_survival(
         "is_all_deleted",
         "is_merge",
         "is_matched",
-        "avg_similarity",
+        "median_similarity",
         "method_id",
     ]
     df = pd.read_csv(input_file, usecols=cols)
@@ -1008,8 +1015,8 @@ def deletion_survival(
     latest_df = df[df["relative_time"] == 0]
     console.print(latest_df.groupby(["survival_group"]).size())
     console.print(
-        latest_df[latest_df["avg_similarity"].notna()]
-        .groupby(["survival_group"])["avg_similarity"]
+        latest_df[latest_df["median_similarity"].notna()]
+        .groupby(["survival_group"])["median_similarity"]
         .mean()
     )
     console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
@@ -1017,6 +1024,7 @@ def deletion_survival(
     # プロット設定（論文用）
     plt.rcParams.update(
         {
+            "font.family": "Hiragino Sans",  # macOS用日本語フォント
             "font.size": 12,
             "axes.titlesize": 14,
             "axes.labelsize": 12,
@@ -1027,40 +1035,54 @@ def deletion_survival(
         }
     )
 
-    colors = {"Matched": "#1f77b4", "Merged": "#ff7f0e", "Deleted": "#d62728"}
+    # 日本語ラベル用のマッピング
+    label_map = {"Matched": "生存", "Merged": "統合", "Deleted": "削除"}
+    df["survival_group_ja"] = df["survival_group"].map(label_map)
 
-    plot_df = df[df["avg_similarity"].notna()]
+    colors = {"生存": "#1f77b4", "統合": "#ff7f0e", "削除": "#d62728"}
+
+    plot_df = df[df["median_similarity"].notna()]
+    time_values = sorted(plot_df["relative_time"].unique())
 
     # サンプル数の集計
-    count_df = plot_df.groupby(["relative_time", "survival_group"]).size().reset_index(name="count")
+    count_df = (
+        plot_df.groupby(["relative_time", "survival_group_ja"]).size().reset_index(name="count")
+    )
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 10), height_ratios=[3, 2], sharex=True)
-
-    # 上段: 箱ひげ図
-    time_values = sorted(plot_df["relative_time"].unique())
+    # 箱ひげ図を独立した図として作成
+    fig1, ax1 = plt.subplots(figsize=(12, 6))
     sns.boxplot(
         data=plot_df,
         x="relative_time",
-        y="avg_similarity",
-        hue="survival_group",
+        y="median_similarity",
+        hue="survival_group_ja",
         palette=colors,
         linewidth=1.2,
         fliersize=3,
         order=time_values,
-        ax=axes[0],
+        ax=ax1,
     )
-    axes[0].set_title("Clone Similarity", fontweight="bold", pad=15)
-    axes[0].set_xlabel("")
-    axes[0].set_ylabel("Average Similarity (%)", labelpad=10)
-    axes[0].grid(True, alpha=0.3, linestyle="--")
-    axes[0].legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    ax1.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
+    ax1.set_ylabel("類似度（中央値） (%)", labelpad=10)
+    ax1.grid(True, alpha=0.3, linestyle="--")
+    ax1.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
 
-    # 下段: サンプル数の折れ線グラフ（boxplotと同じカテゴリカル位置を使用）
+    # x軸の範囲を設定して位置を揃える
+    ax1.set_xlim(-0.5, len(time_values) - 0.5)
+    
+    plt.tight_layout()
+    plt.savefig(output_boxplot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    plt.close()
+    console.print(f"[green]Boxplot saved to:[/green] {output_boxplot}")
+
+    # 折れ線グラフを独立した図として作成
+    fig2, ax2 = plt.subplots(figsize=(12, 4))
+
     time_to_pos = {t: i for i, t in enumerate(time_values)}
     for group, color in colors.items():
-        group_data = count_df[count_df["survival_group"] == group].sort_values("relative_time")
+        group_data = count_df[count_df["survival_group_ja"] == group].sort_values("relative_time")
         positions = [time_to_pos[t] for t in group_data["relative_time"]]
-        axes[1].plot(
+        ax2.plot(
             positions,
             group_data["count"].values,
             marker="o",
@@ -1069,16 +1091,20 @@ def deletion_survival(
             label=group,
             linewidth=1.5,
         )
-    axes[1].set_title("Sample Count", fontweight="bold", pad=15)
-    axes[1].set_xlabel("Relative Time (0 = latest)", labelpad=10)
-    axes[1].set_ylabel("Count", labelpad=10)
-    axes[1].grid(True, alpha=0.3, linestyle="--")
-    axes[1].legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    ax2.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
+    ax2.set_ylabel("メソッド数", labelpad=10)
+    ax2.grid(True, alpha=0.3, linestyle="--")
+    ax2.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    ax2.set_xticks(range(len(time_values)))
+    ax2.set_xticklabels(time_values)
+    
+    # x軸の範囲を箱ひげ図と同じに設定
+    ax2.set_xlim(-0.5, len(time_values) - 0.5)
 
     plt.tight_layout()
-    plt.savefig(output_plot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    plt.savefig(output_lineplot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
     plt.close()
-    console.print(f"[green]Plot saved to:[/green] {output_plot}")
+    console.print(f"[green]Line plot saved to:[/green] {output_lineplot}")
 
 
 @nil.command()
