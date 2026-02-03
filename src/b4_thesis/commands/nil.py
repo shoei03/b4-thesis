@@ -955,22 +955,36 @@ def sim_count():
     help="Output file for CSV data",
 )
 @click.option(
-    "--output-boxplot",
+    "--output-boxplot-survival",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_boxplot.png",
-    help="Output file for the boxplot",
+    default="./output/versions/nil/10_deletion_survival_boxplot_survival.png",
+    help="Output file for the survival group boxplot",
 )
 @click.option(
-    "--output-lineplot",
+    "--output-boxplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_lineplot.png",
-    help="Output file for the line plot",
+    default="./output/versions/nil/10_deletion_survival_boxplot_deletion.png",
+    help="Output file for the merged+deleted group boxplot",
+)
+@click.option(
+    "--output-lineplot-survival",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/10_deletion_survival_lineplot_survival.png",
+    help="Output file for the survival group line plot",
+)
+@click.option(
+    "--output-lineplot-deletion",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/10_deletion_survival_lineplot_deletion.png",
+    help="Output file for the merged+deleted group line plot",
 )
 def deletion_survival(
     input_file: str,
     output_csv: str,
-    output_boxplot: str,
-    output_lineplot: str,
+    output_boxplot_survival: str,
+    output_boxplot_deletion: str,
+    output_lineplot_survival: str,
+    output_lineplot_deletion: str,
 ) -> None:
     """Track median_similarity evolution per method_id for different deletion types."""
     cols = [
@@ -1044,19 +1058,24 @@ def deletion_survival(
     plot_df = df[df["median_similarity"].notna()]
     time_values = sorted(plot_df["relative_time"].unique())
 
+    # DataFrameを生存群と統合+削除群に分割
+    survival_df = plot_df[plot_df["survival_group_ja"] == "生存"]
+    deletion_df = plot_df[plot_df["survival_group_ja"].isin(["統合", "削除"])]
+
     # サンプル数の集計
     count_df = (
         plot_df.groupby(["relative_time", "survival_group_ja"]).size().reset_index(name="count")
     )
+    count_survival = count_df[count_df["survival_group_ja"] == "生存"]
+    count_deletion = count_df[count_df["survival_group_ja"].isin(["統合", "削除"])]
 
-    # 箱ひげ図を独立した図として作成
+    # --- 箱ひげ図: 生存群 ---
     fig1, ax1 = plt.subplots(figsize=(12, 6))
     sns.boxplot(
-        data=plot_df,
+        data=survival_df,
         x="relative_time",
         y="median_similarity",
-        hue="survival_group_ja",
-        palette=colors,
+        color=colors["生存"],
         linewidth=1.2,
         fliersize=3,
         order=time_values,
@@ -1065,46 +1084,101 @@ def deletion_survival(
     ax1.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
     ax1.set_ylabel("類似度（中央値） (%)", labelpad=10)
     ax1.grid(True, alpha=0.3, linestyle="--")
-    ax1.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
-
-    # x軸の範囲を設定して位置を揃える
     ax1.set_xlim(-0.5, len(time_values) - 0.5)
-    
+
     plt.tight_layout()
-    plt.savefig(output_boxplot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    plt.savefig(
+        output_boxplot_survival, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
+    )
     plt.close()
-    console.print(f"[green]Boxplot saved to:[/green] {output_boxplot}")
+    console.print(f"[green]Boxplot (survival) saved to:[/green] {output_boxplot_survival}")
 
-    # 折れ線グラフを独立した図として作成
-    fig2, ax2 = plt.subplots(figsize=(12, 4))
+    # --- 箱ひげ図: 統合+削除群 ---
+    fig2, ax2 = plt.subplots(figsize=(12, 6))
+    sns.boxplot(
+        data=deletion_df,
+        x="relative_time",
+        y="median_similarity",
+        hue="survival_group_ja",
+        palette={k: colors[k] for k in ["統合", "削除"]},
+        linewidth=1.2,
+        fliersize=3,
+        order=time_values,
+        ax=ax2,
+    )
+    ax2.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
+    ax2.set_ylabel("類似度（中央値） (%)", labelpad=10)
+    ax2.grid(True, alpha=0.3, linestyle="--")
+    ax2.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    ax2.set_xlim(-0.5, len(time_values) - 0.5)
 
+    plt.tight_layout()
+    plt.savefig(
+        output_boxplot_deletion, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
+    )
+    plt.close()
+    console.print(f"[green]Boxplot (deletion) saved to:[/green] {output_boxplot_deletion}")
+
+    # --- 折れ線グラフ: 生存群 ---
     time_to_pos = {t: i for i, t in enumerate(time_values)}
-    for group, color in colors.items():
-        group_data = count_df[count_df["survival_group_ja"] == group].sort_values("relative_time")
+
+    fig3, ax3 = plt.subplots(figsize=(12, 4))
+    group_data = count_survival.sort_values("relative_time")
+    positions = [time_to_pos[t] for t in group_data["relative_time"]]
+    ax3.plot(
+        positions,
+        group_data["count"].values,
+        marker="o",
+        markersize=4,
+        color=colors["生存"],
+        label="生存",
+        linewidth=1.5,
+    )
+    ax3.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
+    ax3.set_ylabel("メソッド数", labelpad=10)
+    ax3.grid(True, alpha=0.3, linestyle="--")
+    ax3.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    ax3.set_xticks(range(len(time_values)))
+    ax3.set_xticklabels(time_values)
+    ax3.set_xlim(-0.5, len(time_values) - 0.5)
+
+    plt.tight_layout()
+    plt.savefig(
+        output_lineplot_survival, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
+    )
+    plt.close()
+    console.print(f"[green]Line plot (survival) saved to:[/green] {output_lineplot_survival}")
+
+    # --- 折れ線グラフ: 統合+削除群 ---
+    fig4, ax4 = plt.subplots(figsize=(12, 4))
+    for group in ["統合", "削除"]:
+        group_data = count_deletion[count_deletion["survival_group_ja"] == group].sort_values(
+            "relative_time"
+        )
         positions = [time_to_pos[t] for t in group_data["relative_time"]]
-        ax2.plot(
+        ax4.plot(
             positions,
             group_data["count"].values,
             marker="o",
             markersize=4,
-            color=color,
+            color=colors[group],
             label=group,
             linewidth=1.5,
         )
-    ax2.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
-    ax2.set_ylabel("メソッド数", labelpad=10)
-    ax2.grid(True, alpha=0.3, linestyle="--")
-    ax2.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
-    ax2.set_xticks(range(len(time_values)))
-    ax2.set_xticklabels(time_values)
-    
-    # x軸の範囲を箱ひげ図と同じに設定
-    ax2.set_xlim(-0.5, len(time_values) - 0.5)
+    ax4.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
+    ax4.set_ylabel("メソッド数", labelpad=10)
+    ax4.grid(True, alpha=0.3, linestyle="--")
+    ax4.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    ax4.set_xticks(range(len(time_values)))
+    ax4.set_xticklabels(time_values)
+    ax4.set_xlim(-0.5, len(time_values) - 0.5)
 
     plt.tight_layout()
-    plt.savefig(output_lineplot, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    plt.savefig(
+        output_lineplot_deletion, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
+    )
     plt.close()
-    console.print(f"[green]Line plot saved to:[/green] {output_lineplot}")
+    console.print(f"[green]Line plot (deletion) saved to:[/green] {output_lineplot_deletion}")
 
 
 @nil.command()
