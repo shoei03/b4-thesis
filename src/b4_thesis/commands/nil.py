@@ -1149,27 +1149,30 @@ def deletion_survival(
     plt.close()
     console.print(f"[green]Line plot (survival) saved to:[/green] {output_lineplot_survival}")
 
-    # --- 折れ線グラフ: 統合+削除群 ---
+    # --- 積み上げ面グラフ: 統合+削除群 ---
     fig4, ax4 = plt.subplots(figsize=(12, 4))
+
+    # 各グループのカウントをtime_valuesに揃える（欠損は0埋め）
+    stacked_data = {}
     for group in ["統合", "削除"]:
-        group_data = count_deletion[count_deletion["survival_group_ja"] == group].sort_values(
-            "relative_time"
-        )
-        positions = [time_to_pos[t] for t in group_data["relative_time"]]
-        ax4.plot(
-            positions,
-            group_data["count"].values,
-            marker="o",
-            markersize=4,
-            color=colors[group],
-            label=group,
-            linewidth=1.5,
-        )
-    ax4.set_xlabel("相対時間 (0 = 最新)", labelpad=10)
+        group_data = count_deletion[count_deletion["survival_group_ja"] == group]
+        count_by_time = dict(zip(group_data["relative_time"], group_data["count"]))
+        stacked_data[group] = [count_by_time.get(t, 0) for t in time_values]
+
+    positions = list(range(len(time_values)))
+    ax4.stackplot(
+        positions,
+        stacked_data["統合"],
+        stacked_data["削除"],
+        labels=["統合", "削除"],
+        colors=[colors["統合"], colors["削除"]],
+        alpha=0.7,
+    )
+    ax4.set_xlabel("相対時間 (0 = 最終地点)", labelpad=10)
     ax4.set_ylabel("メソッド数", labelpad=10)
     ax4.grid(True, alpha=0.3, linestyle="--")
     ax4.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
-    ax4.set_xticks(range(len(time_values)))
+    ax4.set_xticks(positions)
     ax4.set_xticklabels(time_values)
     ax4.set_xlim(-0.5, len(time_values) - 0.5)
 
