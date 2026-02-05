@@ -1,6 +1,6 @@
-
 \documentclass[submit,techrep,noauthor]{ipsj}
 
+% パッケージ読み込み
 \usepackage[dvipdfmx]{graphicx}
 \usepackage{latexsym}
 \usepackage{url}
@@ -14,12 +14,14 @@
 \usepackage{threeparttable}
 \usepackage{caption}
 
+% カウンタ定義
 \newcounter{patternID}
 
-% コード例を載せるためのあれこれ
+% コード例用の色定義
 \definecolor{lightred}{RGB}{255,230,230}
 \definecolor{lightgreen}{RGB}{230,255,230}
 
+% listings設定
 \lstset{
   basicstyle=\small\ttfamily,
   abovecaptionskip=0pt,
@@ -32,26 +34,19 @@
   escapechar=|
 }
 
-%ListingのキャプションがFigureになってしまうのをListingに直すコマンド
-\usepackage{caption}
+% ListingのキャプションがFigureになる問題の修正
 \makeatletter
 \let\MYcaption\@makecaption
-\makeatother
-\usepackage{caption}
-\makeatletter
 \let\@makecaption\MYcaption
 \makeatother
 
+% レビュー用コマンド
 \newcommand{\todo}[1]{\colorbox{yellow}{{\bf TODO}:}{\color{red} {\textbf{[#1]}}}}
 \newcommand{\memo}[1]{\colorbox{magenta!30}{{\bf MEMO}:}{\color{red!50} {\textbf{[#1]}}}}
 \newcommand{\ihara}[1]{\colorbox{green}{{\bf IHARA}:}{\color{blue} {\textbf{[#1]}}}}
 \newcommand{\iida}[1]{\colorbox{cyan}{{\bf Iida}:}{\color{red} {\textbf{[#1]}}}}
 
-\def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
-\def\endUnderline{\vphantom{y}\egroup\smash{\underline{\box0}}\\}
-\def\|{\verb|}
-%
-
+% 下線コマンド
 \def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
 \def\endUnderline{\vphantom{y}\egroup\smash{\underline{\box0}}\\}
 \def\|{\verb|}
@@ -557,7 +552,20 @@ RQ2の結果は，統合と削除における開発者の行動パターンに�
 
 \subsection{段階的収束型メソッドの特徴}
 
-\subsection{誤って統合元メソッドと判定されるケース}
+段階的収束型の統合元メソッド4,831件の定量的特徴を，一時的複製型の統合元メソッド6,711件と対比して考察する．
+
+段階的収束型メソッドは，平均6.3バージョン（中央値5）にわたって追跡されたのちに統合されたメソッドである．統合時点でのメソッド間の類似度の中央値は88\%であり，一時的複製型の100\%と比較して低い．
+また，類似度が100\%であったメソッドの割合は段階的収束型では32.7\%であるのに対し，一時的複製型では60.7\%であった．この差は，段階的収束型のメソッドが完全なコピーではなく，コードが徐々に近づいた結果として統合に至ったことを示唆している．
+
+さらに，メソッドの生存期間（lifetime）と統合時点の類似度の関係を調査した．lifetime=2のメソッド（992件）の類似度の中央値は96\%であったのに対し，lifetime=10のメソッド（117件）では83\%であった．lifetimeが長いメソッドほど，低い類似度の段階から段階的に収束していることがわかる．この傾向は，統合予測の観点から重要な示唆を持つ．すなわち，複数バージョンにわたり70\%から90\%の類似度を維持するメソッドペアは，将来の統合候補として早期に検出できる可能性がある．一方，一時的複製型のメソッドは1バージョンで消滅するため，予測対象としての意義は限定的である．したがって，統合の予測指標を構築する際には，段階的収束型に特化した分析が有効であると考えられる．
+
+% \subsection{誤って統合元メソッドと判定されるケース}
+
+% 本研究の手法では，バージョン間でメソッドを類似度により追跡し，最も類似度の高い候補メソッドが既に他のメソッドと対応付けられている場合に「統合」と判定する．しかし，統合元と判定された11,745件のうち，最終時点で類似するメソッドを持たないメソッドが757件（6.4\%）存在した．これらは統合ではなく，リファクタリングによるコード抽出の結果として誤判定された可能性がある．
+
+% 具体的な誤判定の例として，\texttt{DataFrame.\_\_init\_\_}メソッドが挙げられる．このメソッドは25バージョンにわたりシグネチャマッチで追跡されたpandasの中核メソッドである．v1.2.0からv1.3.0への遷移時に，\texttt{construction.py}内の\texttt{sanitize\_masked\_array}に類似度0.84でマッチされ，統合元と判定された．しかし実際には，\texttt{DataFrame.\_\_init\_\_}はv1.3.0以降も存在し続けている．初期化ロジックの一部が\texttt{sanitize\_masked\_array}として抽出されたことで，類似度マッチにより誤って別メソッドに対応付けられたものと考えられる．
+
+% クローンを持たない統合元757件のうち，648件は2バージョン以上追跡されたメソッドであり，そのlifetimeの中央値は7であった．また，これらの65.6\%がテストファイルに含まれていた．テストファイルではリファクタリングに伴うテストメソッドの再構成が頻繁に行われるため，誤判定が生じやすいと考えられる．ただし，誤判定率は全体の6.4\%であり，RQ1およびRQ2の統計的結論に大きな影響を与えない可能性が高い．
 
 \subsection{統合先メソッドが統合前にメソッド間の類似度が上昇しない理由}
 
