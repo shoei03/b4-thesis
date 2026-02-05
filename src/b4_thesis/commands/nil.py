@@ -1155,26 +1155,46 @@ def deletion_survival(
     plt.close()
     console.print(f"[green]Boxplot (deletion) saved to:[/green] {output_boxplot_deletion}")
 
-    # --- 面グラフ: 統合先群（中央が0） ---
+    # --- 面グラフ用のデータ準備と縦軸の最大値計算 ---
     absorber_time_to_pos = {t: i for i, t in enumerate(absorber_time_values)}
 
-    fig3, ax3 = plt.subplots(figsize=(12, 4))
+    # 統合先群のカウントデータ
     absorber_count_data = count_absorber.sort_values("relative_time")
-    if not absorber_count_data.empty:
-        # absorber_time_valuesに揃える（欠損は0埋め）
-        count_by_time = dict(
-            zip(absorber_count_data["relative_time"], absorber_count_data["count"])
-        )
-        counts = [count_by_time.get(t, 0) for t in absorber_time_values]
+    absorber_count_by_time = (
+        dict(zip(absorber_count_data["relative_time"], absorber_count_data["count"]))
+        if not absorber_count_data.empty
+        else {}
+    )
+    absorber_counts = [absorber_count_by_time.get(t, 0) for t in absorber_time_values]
+
+    # 統合元+削除群のカウントデータ
+    stacked_data = {}
+    for group in ["統合元", "削除"]:
+        group_data = count_deletion[count_deletion["survival_group_ja"] == group]
+        count_by_time = dict(zip(group_data["relative_time"], group_data["count"]))
+        stacked_data[group] = [count_by_time.get(t, 0) for t in deletion_time_values]
+
+    # 両グラフの縦軸最大値を揃える
+    max_absorber = max(absorber_counts) if absorber_counts else 0
+    max_deletion = (
+        max(a + b for a, b in zip(stacked_data["統合元"], stacked_data["削除"]))
+        if stacked_data["統合元"]
+        else 0
+    )
+    y_max = max(max_absorber, max_deletion) * 1.05  # 5%の余白
+
+    # --- 面グラフ: 統合先群（中央が0） ---
+    fig3, ax3 = plt.subplots(figsize=(12, 4))
+    if absorber_counts:
         positions = list(range(len(absorber_time_values)))
         ax3.fill_between(
             positions,
-            counts,
+            absorber_counts,
             color=colors["統合先"],
             alpha=0.7,
             label="統合先",
         )
-        ax3.plot(positions, counts, color=colors["統合先"], linewidth=1.5)
+        ax3.plot(positions, absorber_counts, color=colors["統合先"], linewidth=1.5)
     ax3.set_xlabel("相対時間 (0 = 統合直前のバージョン)", labelpad=10)
     ax3.set_ylabel("メソッド数", labelpad=10)
     ax3.grid(True, alpha=0.3, linestyle="--")
@@ -1183,6 +1203,7 @@ def deletion_survival(
     # x軸ラベルは偶数（0含む）のみ表示（目盛り線は全値に残す）
     ax3.set_xticklabels([str(t) if t % 2 == 0 else "" for t in absorber_time_values])
     ax3.set_xlim(-0.5, len(absorber_time_values) - 0.5)
+    ax3.set_ylim(0, y_max)
 
     plt.tight_layout()
     plt.savefig(
@@ -1193,13 +1214,6 @@ def deletion_survival(
 
     # --- 積み上げ面グラフ: 統合元+削除群（右端が0） ---
     fig4, ax4 = plt.subplots(figsize=(12, 4))
-
-    # 各グループのカウントをdeletion_time_valuesに揃える（欠損は0埋め）
-    stacked_data = {}
-    for group in ["統合元", "削除"]:
-        group_data = count_deletion[count_deletion["survival_group_ja"] == group]
-        count_by_time = dict(zip(group_data["relative_time"], group_data["count"]))
-        stacked_data[group] = [count_by_time.get(t, 0) for t in deletion_time_values]
 
     positions = list(range(len(deletion_time_values)))
     ax4.stackplot(
@@ -1218,6 +1232,7 @@ def deletion_survival(
     # x軸ラベルは偶数（0含む）のみ表示（目盛り線は全値に残す）
     ax4.set_xticklabels([str(t) if t % 2 == 0 else "" for t in deletion_time_values])
     ax4.set_xlim(-0.5, len(deletion_time_values) - 0.5)
+    ax4.set_ylim(0, y_max)
 
     plt.tight_layout()
     plt.savefig(
