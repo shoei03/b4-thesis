@@ -957,25 +957,25 @@ def sim_count():
 @click.option(
     "--output-boxplot-absorber",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_boxplot_absorber.png",
+    default="./output/versions/nil/10_deletion_survival_boxplot_absorber.pdf",
     help="Output file for the absorber group boxplot",
 )
 @click.option(
     "--output-boxplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_boxplot_deletion.png",
+    default="./output/versions/nil/10_deletion_survival_boxplot_deletion.pdf",
     help="Output file for the absorbed+deleted group boxplot",
 )
 @click.option(
     "--output-areaplot-absorber",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_areaplot_absorber.png",
+    default="./output/versions/nil/10_deletion_survival_areaplot_absorber.pdf",
     help="Output file for the absorber group area plot",
 )
 @click.option(
     "--output-areaplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_areaplot_deletion.png",
+    default="./output/versions/nil/10_deletion_survival_areaplot_deletion.pdf",
     help="Output file for the absorbed+deleted group stacked area plot",
 )
 def deletion_survival(
@@ -1059,7 +1059,7 @@ def deletion_survival(
     )
     console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
 
-    # プロット設定（論文用）
+    # プロット設定（論文用、PDF出力対応）
     plt.rcParams.update(
         {
             "font.family": "Hiragino Sans",  # macOS用日本語フォント
@@ -1070,6 +1070,8 @@ def deletion_survival(
             "ytick.labelsize": 10,
             "legend.fontsize": 11,
             "figure.dpi": 300,
+            "pdf.fonttype": 42,  # TrueTypeフォントを埋め込み（日本語対応）
+            "ps.fonttype": 42,
         }
     )
 
@@ -1160,7 +1162,9 @@ def deletion_survival(
     absorber_count_data = count_absorber.sort_values("relative_time")
     if not absorber_count_data.empty:
         # absorber_time_valuesに揃える（欠損は0埋め）
-        count_by_time = dict(zip(absorber_count_data["relative_time"], absorber_count_data["count"]))
+        count_by_time = dict(
+            zip(absorber_count_data["relative_time"], absorber_count_data["count"])
+        )
         counts = [count_by_time.get(t, 0) for t in absorber_time_values]
         positions = list(range(len(absorber_time_values)))
         ax3.fill_between(
