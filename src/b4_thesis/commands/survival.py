@@ -329,7 +329,7 @@ def deletion_survival(
 @click.option(
     "--input-tracking",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/method_tracker/method_tracked.csv",
+    default="./output/versions/method_tracker/methods_tracked.csv",
     help="Full tracking data with method signatures",
 )
 @click.option(
