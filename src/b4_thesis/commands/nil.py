@@ -1063,12 +1063,12 @@ def deletion_survival(
     plt.rcParams.update(
         {
             "font.family": "Hiragino Sans",  # macOS用日本語フォント
-            "font.size": 12,
-            "axes.titlesize": 14,
-            "axes.labelsize": 12,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "legend.fontsize": 11,
+            "font.size": 16,
+            "axes.titlesize": 20,
+            "axes.labelsize": 18,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+            "legend.fontsize": 16,
             "figure.dpi": 300,
             "pdf.fonttype": 42,  # TrueTypeフォントを埋め込み（日本語対応）
             "ps.fonttype": 42,
