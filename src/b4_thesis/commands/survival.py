@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from b4_thesis.const.column import ColumnNames
+from b4_thesis.utils.revision_manager import RevisionManager
 
 console = Console()
 
@@ -316,3 +317,294 @@ def deletion_survival(
     )
     plt.close()
     console.print(f"[green]Area plot (deletion) saved to:[/green] {output_areaplot_deletion}")
+
+
+@survival.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/10_deletion_survival.csv",
+    help="Input file from deletion_survival command",
+)
+@click.option(
+    "--input-tracking",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/9_track_median_similarity.csv",
+    help="Full tracking data with method signatures",
+)
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    default="./data/versions",
+    help="Input directory containing revision subdirectories",
+)
+@click.option(
+    "--output-csv",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/12_analyze_absorbed.csv",
+    help="Output CSV with absorbed method analysis",
+)
+@click.option(
+    "--output-histogram",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/12_analyze_absorbed_histogram.png",
+    help="Output histogram of lifetime distribution",
+)
+@click.option(
+    "--output-revision-breakdown",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/12_analyze_absorbed_breakdown.png",
+    help="Output per-revision breakdown chart",
+)
+def analyze_absorbed(
+    input_file: str,
+    input_tracking: str,
+    input: str,
+    output_csv: str,
+    output_histogram: str,
+    output_revision_breakdown: str,
+) -> None:
+    """Analyze Absorbed methods: lifetime distribution and origin classification."""
+    # Step 1: Load deletion_survival data and compute lifetime
+    ds_cols = [
+        ColumnNames.PREV_REVISION_ID.value,
+        "method_id",
+        "survival_group",
+        "relative_time",
+        "median_similarity",
+    ]
+    df_ds = pd.read_csv(input_file, usecols=ds_cols)
+
+    lifetime = df_ds.groupby("method_id").size().rename("lifetime")
+
+    # Step 2: Get method signatures from tracking data
+    sig_cols = [
+        "method_id",
+        ColumnNames.PREV_REVISION_ID.value,
+        ColumnNames.PREV_FILE_PATH.value,
+        ColumnNames.PREV_METHOD_NAME.value,
+        ColumnNames.PREV_RETURN_TYPE.value,
+        ColumnNames.PREV_PARAMETERS.value,
+    ]
+    has_clone_col = ColumnNames.HAS_CLONE.value
+    try:
+        df_tracking = pd.read_csv(input_tracking, usecols=sig_cols + [has_clone_col])
+    except ValueError:
+        df_tracking = pd.read_csv(input_tracking, usecols=sig_cols)
+        df_tracking[has_clone_col] = None
+
+    # Get t=0 row for each Absorbed method
+    absorbed_t0 = df_ds[(df_ds["survival_group"] == "Absorbed") & (df_ds["relative_time"] == 0)][
+        ["method_id", ColumnNames.PREV_REVISION_ID.value, "median_similarity"]
+    ].copy()
+
+    absorbed_t0 = absorbed_t0.merge(lifetime.reset_index(), on="method_id")
+
+    # Add signatures from tracking data (join on method_id + prev_revision_id)
+    # Remove duplicates to prevent row explosion during merge
+    df_tracking_dedup = df_tracking.drop_duplicates(
+        subset=["method_id", ColumnNames.PREV_REVISION_ID.value], keep="first"
+    )
+    absorbed_t0 = absorbed_t0.merge(
+        df_tracking_dedup,
+        on=["method_id", ColumnNames.PREV_REVISION_ID.value],
+        how="left",
+    )
+
+    # Step 3: Check prior revision existence for lifetime=1 methods
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path(input))
+
+    prev_rev_lookup: dict = {}
+    for i in range(1, len(revisions)):
+        prev_rev_lookup[str(revisions[i].timestamp)] = revisions[i - 1]
+
+    absorbed_t0["origin"] = "already_tracked"
+    absorbed_t0.loc[absorbed_t0["lifetime"] == 1, "origin"] = "unknown"
+
+    single_row = absorbed_t0[absorbed_t0["lifetime"] == 1]
+
+    for rev_id, group in single_row.groupby(ColumnNames.PREV_REVISION_ID.value):
+        if rev_id not in prev_rev_lookup:
+            absorbed_t0.loc[group.index, "origin"] = "first_revision"
+            continue
+
+        prev_rev = prev_rev_lookup[rev_id]
+        code_blocks = revision_manager.load_code_blocks(prev_rev)
+
+        sig_set = set(
+            zip(
+                code_blocks[ColumnNames.FILE_PATH.value],
+                code_blocks[ColumnNames.METHOD_NAME.value],
+                code_blocks[ColumnNames.RETURN_TYPE.value],
+                code_blocks[ColumnNames.PARAMETERS.value],
+            )
+        )
+
+        for idx, row in group.iterrows():
+            method_sig = (
+                row[ColumnNames.PREV_FILE_PATH.value],
+                row[ColumnNames.PREV_METHOD_NAME.value],
+                row[ColumnNames.PREV_RETURN_TYPE.value],
+                row[ColumnNames.PREV_PARAMETERS.value],
+            )
+            if method_sig in sig_set:
+                absorbed_t0.loc[idx, "origin"] = "similarity_crossed"
+            else:
+                absorbed_t0.loc[idx, "origin"] = "newly_added"
+
+    # Step 4: Print summary
+    total = len(absorbed_t0)
+    single_count = int((absorbed_t0["lifetime"] == 1).sum())
+    multi_count = int((absorbed_t0["lifetime"] >= 2).sum())
+
+    newly_added_count = int((absorbed_t0["origin"] == "newly_added").sum())
+    sim_crossed_count = int((absorbed_t0["origin"] == "similarity_crossed").sum())
+    first_rev_count = int((absorbed_t0["origin"] == "first_revision").sum())
+
+    console.print("\n[bold]Absorbed Method Analysis[/bold]")
+    console.print("=" * 40)
+    console.print(f"Total Absorbed methods: {total:,}")
+    console.print(f"  lifetime=1 (t=0 only): {single_count:,} ({single_count / total * 100:.1f}%)")
+    console.print(
+        f"    newly_added:        {newly_added_count:,} ({newly_added_count / total * 100:.1f}%)"
+    )
+    console.print(
+        f"    similarity_crossed: {sim_crossed_count:,} ({sim_crossed_count / total * 100:.1f}%)"
+    )
+    console.print(
+        f"    first_revision:     {first_rev_count:,} ({first_rev_count / total * 100:.1f}%)"
+    )
+    console.print(f"  lifetime>=2 (tracked): {multi_count:,} ({multi_count / total * 100:.1f}%)")
+    if multi_count > 0:
+        multi_lifetime = absorbed_t0[absorbed_t0["lifetime"] >= 2]["lifetime"]
+        console.print(f"    Mean lifetime: {multi_lifetime.mean():.1f}")
+        console.print(f"    Median lifetime: {multi_lifetime.median():.1f}")
+    console.print(f"\nt=0 -> t=-1 drop: {single_count:,} methods")
+
+    # # Step 5: Save CSV
+    # output_path = Path(output_csv)
+    # output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # output_cols = [
+    #     "method_id",
+    #     "lifetime",
+    #     "origin",
+    #     ColumnNames.PREV_REVISION_ID.value,
+    #     ColumnNames.PREV_FILE_PATH.value,
+    #     ColumnNames.PREV_METHOD_NAME.value,
+    #     "median_similarity",
+    #     has_clone_col,
+    # ]
+    # absorbed_t0[output_cols].to_csv(output_path, index=False)
+    # console.print(f"\n[green]Results saved to:[/green] {output_path}")
+
+    # # Step 6: Visualizations
+    # plt.rcParams.update(
+    #     {
+    #         "font.family": "Hiragino Sans",
+    #         "font.size": 12,
+    #         "axes.titlesize": 14,
+    #         "axes.labelsize": 12,
+    #         "xtick.labelsize": 10,
+    #         "ytick.labelsize": 10,
+    #         "legend.fontsize": 11,
+    #         "figure.dpi": 300,
+    #     }
+    # )
+
+    # colors = {
+    #     "newly_added": "#2ca02c",
+    #     "similarity_crossed": "#ff7f0e",
+    #     "first_revision": "#9467bd",
+    #     "already_tracked": "#1f77b4",
+    # }
+    # label_map = {
+    #     "newly_added": "新規追加",
+    #     "similarity_crossed": "類似度超過",
+    #     "first_revision": "初回リビジョン",
+    #     "already_tracked": "追跡済み",
+    # }
+
+    # # --- Histogram: lifetime distribution with origin breakdown ---
+    # fig, ax = plt.subplots(figsize=(10, 6))
+    # max_lifetime = int(absorbed_t0["lifetime"].max())
+
+    # # Stacked histogram for lifetime=1 (by origin) and lifetime>=2 (already_tracked)
+    # origin_order = ["newly_added", "similarity_crossed", "first_revision", "already_tracked"]
+    # bottom = pd.Series(0, index=range(1, max_lifetime + 1))
+
+    # for origin in origin_order:
+    #     subset = absorbed_t0[absorbed_t0["origin"] == origin]
+    #     if subset.empty:
+    #         continue
+    #     counts = subset["lifetime"].value_counts().reindex(range(1, max_lifetime + 1), fill_value=0)
+    #     ax.bar(
+    #         counts.index,
+    #         counts.values,
+    #         bottom=bottom.values,
+    #         color=colors[origin],
+    #         label=label_map[origin],
+    #         edgecolor="white",
+    #         linewidth=0.5,
+    #     )
+    #     bottom += counts
+
+    # ax.set_xlabel("ライフタイム (リビジョンペア数)")
+    # ax.set_ylabel("メソッド数")
+    # ax.legend(loc="upper right", frameon=True, fancybox=True, shadow=True)
+    # ax.set_xticks(range(1, max_lifetime + 1))
+    # ax.grid(True, alpha=0.3, linestyle="--", axis="y")
+
+    # plt.tight_layout()
+    # Path(output_histogram).parent.mkdir(parents=True, exist_ok=True)
+    # plt.savefig(output_histogram, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    # plt.close()
+    # console.print(f"[green]Histogram saved to:[/green] {output_histogram}")
+
+    # # --- Per-revision breakdown stacked bar chart ---
+    # rev_order = sorted(absorbed_t0[ColumnNames.PREV_REVISION_ID.value].dropna().unique())
+    # rev_breakdown = pd.crosstab(
+    #     absorbed_t0[ColumnNames.PREV_REVISION_ID.value],
+    #     absorbed_t0["origin"],
+    # ).reindex(index=rev_order, columns=origin_order, fill_value=0)
+
+    # fig2, ax2 = plt.subplots(figsize=(14, 6))
+    # bottom2 = pd.Series(0.0, index=rev_breakdown.index)
+
+    # for origin in origin_order:
+    #     if origin not in rev_breakdown.columns:
+    #         continue
+    #     vals = rev_breakdown[origin]
+    #     ax2.bar(
+    #         range(len(rev_order)),
+    #         vals.values,
+    #         bottom=bottom2.values,
+    #         color=colors[origin],
+    #         label=label_map[origin],
+    #         edgecolor="white",
+    #         linewidth=0.5,
+    #     )
+    #     bottom2 += vals
+
+    # ax2.set_xlabel("リビジョン")
+    # ax2.set_ylabel("Absorbed メソッド数")
+    # ax2.set_xticks(range(len(rev_order)))
+    # ax2.set_xticklabels([r[:10] for r in rev_order], rotation=45, ha="right", fontsize=8)
+    # ax2.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    # ax2.grid(True, alpha=0.3, linestyle="--", axis="y")
+
+    # plt.tight_layout()
+    # Path(output_revision_breakdown).parent.mkdir(parents=True, exist_ok=True)
+    # plt.savefig(
+    #     output_revision_breakdown,
+    #     dpi=300,
+    #     bbox_inches="tight",
+    #     facecolor="white",
+    #     edgecolor="none",
+    # )
+    # plt.close()
+    # console.print(f"[green]Revision breakdown saved to:[/green] {output_revision_breakdown}")
