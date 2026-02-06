@@ -211,7 +211,8 @@ class CrossRevisionMatcher:
 
             # Calculate filtration_sim
             common_ngrams = len(source_ngrams.intersection(target_ngrams))
-            denominator = min(source_ngram_count, len(target_ngrams))
+            # denominator = min(source_ngram_count, len(target_ngrams))
+            denominator = source_ngram_count
 
             if denominator > 0:
                 filtration_sim = common_ngrams / denominator
@@ -250,7 +251,8 @@ class CrossRevisionMatcher:
             lcs_len = self._compute_lcs_hunt_szymanski(source_tokens, target_tokens)
 
             # Calculate verification_sim
-            denominator = min(len(source_tokens), len(target_tokens))
+            # denominator = min(len(source_tokens), len(target_tokens))
+            denominator = len(source_tokens)
 
             if denominator == 0:
                 continue
@@ -298,6 +300,7 @@ class CrossRevisionMatcher:
 
     #         # Calculate minimum required LCS length
     #         denominator = min(source_len, target_len)
+    #         # denominator = source_len
     #         if denominator == 0:
     #             continue
 
