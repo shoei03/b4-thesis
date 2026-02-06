@@ -5,6 +5,7 @@ from rich.console import Console
 
 from b4_thesis.commands import (
     git,
+    method_tracker,
     nil,
 )
 
@@ -24,6 +25,7 @@ def main(ctx):
 
 # Register commands
 main.add_command(git.git)
+main.add_command(method_tracker.method_tracker)
 main.add_command(nil.nil)
 
 

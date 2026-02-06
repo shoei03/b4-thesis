@@ -1,15 +1,35 @@
-"""
-メソッドバージョン追跡システム - 一意のIDを割り当て
-
-CSVファイルからメソッドの変更履歴を読み込み、
-バージョン間でメソッドを追跡して一意のIDを割り当てます。
-"""
-
-import sys
+from pathlib import Path
 
 import pandas as pd
+import click
+from rich.console import Console
+
+console = Console()
 
 
+@click.group()
+def method_tracker():
+    """Method Tracking Command Group."""
+    pass
+
+
+@method_tracker.command()
+@click.option(
+    "--input-csv",
+    "-i",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/nil/3_sim_sig_match.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output-csv",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=False,
+    default="./output/versions/method_tracker/methods_tracked.csv",
+    help="Output file for classified results",
+)
 def assign_method_ids(input_csv: str, output_csv: str) -> dict:
     """
     CSVファイルを読み込み、メソッドに一意のIDを割り当てる
@@ -48,10 +68,11 @@ def assign_method_ids(input_csv: str, output_csv: str) -> dict:
     print("\nProcessing method tracking...")
 
     # メイン処理
-    method_to_id = {}
+    method_to_id = {}  # key → (method_id, row_index, is_identity)
     next_id = 1
     method_ids = []
-    is_merge_flags = []
+    is_absorbed_flags = [False] * len(df)
+    is_absorber_flags = [False] * len(df)
 
     # 統計情報
     stats = {
@@ -62,10 +83,11 @@ def assign_method_ids(input_csv: str, output_csv: str) -> dict:
         "matched_with_new_id": 0,
         "deleted_with_existing_id": 0,
         "deleted_with_new_id": 0,
-        "matched_merged": 0,
+        "matched_absorbed": 0,
+        "absorber_count": 0,
     }
 
-    for row in df.itertuples(index=False):
+    for idx, row in enumerate(df.itertuples(index=False)):
         # キー生成
         prev_key = (
             row.prev_file_path,
@@ -80,38 +102,56 @@ def assign_method_ids(input_csv: str, output_csv: str) -> dict:
             row.curr_parameters,
         )
 
-        is_merge = False
+        is_absorbed = False
 
         if row.is_matched:
             stats["matched"] += 1
             if prev_key in method_to_id:
                 # 既存メソッドの継続：IDを継承
-                method_id = method_to_id[prev_key]
+                method_id, _, _ = method_to_id[prev_key]
                 del method_to_id[prev_key]
                 if curr_key not in method_to_id:
-                    method_to_id[curr_key] = method_id
+                    method_to_id[curr_key] = (method_id, idx, prev_key == curr_key)
                     stats["matched_with_existing_id"] += 1
                 else:
-                    # マージ: curr_keyは既に別のマッチでIDが割り当て済み
-                    is_merge = True
-                    stats["matched_merged"] += 1
+                    # マージ: curr_keyが既に登録済み
+                    is_absorbed = True
+                    _, receiver_idx, existing_is_identity = method_to_id[curr_key]
+                    if existing_is_identity:
+                        # A→A型: 既存行がabsorber（従来通り）
+                        if not is_absorber_flags[receiver_idx]:
+                            is_absorber_flags[receiver_idx] = True
+                            stats["absorber_count"] += 1
+                    else:
+                        # A→B型: 既存行もabsorbed（absorberなし）
+                        is_absorbed_flags[receiver_idx] = True
+                    stats["matched_absorbed"] += 1
             else:
                 # 辞書にない場合：新規ID割り当て
                 method_id = next_id
                 next_id += 1
                 if curr_key not in method_to_id:
-                    method_to_id[curr_key] = method_id
+                    method_to_id[curr_key] = (method_id, idx, prev_key == curr_key)
                     stats["matched_with_new_id"] += 1
                 else:
-                    # マージ: curr_keyは既に別のマッチでIDが割り当て済み
-                    is_merge = True
-                    stats["matched_merged"] += 1
+                    # マージ: curr_keyが既に登録済み
+                    is_absorbed = True
+                    _, receiver_idx, existing_is_identity = method_to_id[curr_key]
+                    if existing_is_identity:
+                        # A→A型: 既存行がabsorber（従来通り）
+                        if not is_absorber_flags[receiver_idx]:
+                            is_absorber_flags[receiver_idx] = True
+                            stats["absorber_count"] += 1
+                    else:
+                        # A→B型: 既存行もabsorbed（absorberなし）
+                        is_absorbed_flags[receiver_idx] = True
+                    stats["matched_absorbed"] += 1
 
         elif row.is_deleted:
             stats["deleted"] += 1
             if prev_key in method_to_id:
                 # 既存メソッドの削除：IDを取得して辞書から削除
-                method_id = method_to_id[prev_key]
+                method_id, _, _ = method_to_id[prev_key]
                 del method_to_id[prev_key]
                 stats["deleted_with_existing_id"] += 1
             else:
@@ -125,7 +165,7 @@ def assign_method_ids(input_csv: str, output_csv: str) -> dict:
             # 新規メソッドの追加：新規ID割り当て
             method_id = next_id
             next_id += 1
-            method_to_id[curr_key] = method_id
+            method_to_id[curr_key] = (method_id, idx, True)
 
         else:
             # 想定外のケース（念のため）
@@ -134,11 +174,12 @@ def assign_method_ids(input_csv: str, output_csv: str) -> dict:
             next_id += 1
 
         method_ids.append(method_id)
-        is_merge_flags.append(is_merge)
+        is_absorbed_flags[idx] = is_absorbed
 
     # 結果を追加
     df["method_id"] = method_ids
-    df["is_merge"] = is_merge_flags
+    df["is_absorbed"] = is_absorbed_flags
+    df["is_absorber"] = is_absorber_flags
 
     # 出力
     df.sort_values(["method_id", "prev_revision_id"]).to_csv(output_csv, index=False)
@@ -148,7 +189,10 @@ def assign_method_ids(input_csv: str, output_csv: str) -> dict:
     stats["total_unique_ids"] = next_id - 1
     stats["active_methods_in_dict"] = len(method_to_id)
 
-    return stats
+    # 統計情報表示
+    print_statistics(stats)
+
+    print(f"Output saved to: {output_csv}")
 
 
 def print_statistics(stats: dict):
@@ -163,7 +207,8 @@ def print_statistics(stats: dict):
     print(f"Matched cases:               {stats['matched']:,}")
     print(f"  - With existing ID:        {stats['matched_with_existing_id']:,}")
     print(f"  - With new ID:             {stats['matched_with_new_id']:,}")
-    print(f"  - Merged:                  {stats['matched_merged']:,}")
+    print(f"  - Absorbed:                {stats['matched_absorbed']:,}")
+    print(f"  - Absorber:                {stats['absorber_count']:,}")
     print()
     print(f"Deleted cases:               {stats['deleted']:,}")
     print(f"  - With existing ID:        {stats['deleted_with_existing_id']:,}")
@@ -171,29 +216,3 @@ def print_statistics(stats: dict):
     print()
     print(f"Added cases:                 {stats['added']:,}")
     print("=" * 60)
-
-
-def main():
-    """メイン処理"""
-    if len(sys.argv) < 2:
-        sys.exit(1)
-
-    input_csv = sys.argv[1]
-    output_csv = sys.argv[2]
-
-    try:
-        # メイン処理実行
-        stats = assign_method_ids(input_csv, output_csv)
-
-        # 統計情報表示
-        print_statistics(stats)
-
-        print(f"Output saved to: {output_csv}")
-
-    except Exception as e:
-        print(f"\n✗ Error occurred: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
