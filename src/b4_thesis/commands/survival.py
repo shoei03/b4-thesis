@@ -323,13 +323,13 @@ def deletion_survival(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival.csv",
+    default="./output/versions/survival/deletion_survival.csv",
     help="Input file from deletion_survival command",
 )
 @click.option(
     "--input-tracking",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_median_similarity.csv",
+    default="./output/versions/method_tracker/method_tracked.csv",
     help="Full tracking data with method signatures",
 )
 @click.option(
@@ -344,19 +344,19 @@ def deletion_survival(
     "--output-csv",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/12_analyze_absorbed.csv",
+    default="./output/versions/survival/2_analyze_absorbed.csv",
     help="Output CSV with absorbed method analysis",
 )
 @click.option(
     "--output-histogram",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/12_analyze_absorbed_histogram.png",
+    default="./output/versions/survival/2_analyze_absorbed_histogram.png",
     help="Output histogram of lifetime distribution",
 )
 @click.option(
     "--output-revision-breakdown",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/12_analyze_absorbed_breakdown.png",
+    default="./output/versions/survival/2_analyze_absorbed_breakdown.png",
     help="Output per-revision breakdown chart",
 )
 def analyze_absorbed(
