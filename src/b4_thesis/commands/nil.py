@@ -334,6 +334,76 @@ def track_sim_sig(
     console.print(f"[green]Results saved to:[/green] {output}")
 
 
+def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
+    """Add a unified similarity column to clone_pairs DataFrame."""
+    clone_pairs["similarity"] = clone_pairs[ColumnNames.VERIFY_SIMILARITY.value].fillna(
+        clone_pairs[ColumnNames.NGRAM_OVERLAP.value]
+    )
+    return clone_pairs
+
+
+@nil.command()
+@click.option(
+    "--input",
+    "-i",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    default="./data/versions",
+    help="Input directory containing revision subdirectories",
+)
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/method_tracker/methods_tracked.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    default="./output/versions/nil/4_track_median_similarity.csv",
+    help="Output file for CSV data",
+)
+def track_median_similarity(
+    input: str,
+    input_file: str,
+    output: str,
+) -> None:
+    all_df = pd.read_csv(input_file)
+    revision_manager = RevisionManager()
+    revisions = revision_manager.get_revisions(Path(input))
+
+    output_df: pd.DataFrame = pd.DataFrame()
+    for rev in revisions:
+        clone_pairs = revision_manager.load_clone_pairs(rev)
+
+        clone_pairs = _add_similarity_column(clone_pairs)
+        df = all_df[all_df[ColumnNames.PREV_REVISION_ID.value] == str(rev.timestamp)].copy()
+
+        hash_1_sim = (
+            clone_pairs.groupby(ColumnNames.TOKEN_HASH_1.value)["similarity"]
+            .median()
+            .rename("median_similarity")
+        )
+        hash_2_sim = (
+            clone_pairs.groupby(ColumnNames.TOKEN_HASH_2.value)["similarity"]
+            .median()
+            .rename("median_similarity")
+        )
+
+        avg_sim = pd.concat([hash_1_sim, hash_2_sim]).groupby(level=0).median().round(1)
+
+        df = df.merge(
+            avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="outer"
+        )
+        output_df = pd.concat([output_df, df], ignore_index=True)
+
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_df.to_csv(output_path, index=False)
+    console.print(f"[green]Results saved to:[/green] {output_path}")
+
+
 @nil.command()
 @click.option(
     "--input",
@@ -861,76 +931,6 @@ def class_high_low_sim(
     console.print(f"[green]Results saved to:[/green] {output}")
 
 
-def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
-    """Add a unified similarity column to clone_pairs DataFrame."""
-    clone_pairs["similarity"] = clone_pairs[ColumnNames.VERIFY_SIMILARITY.value].fillna(
-        clone_pairs[ColumnNames.NGRAM_OVERLAP.value]
-    )
-    return clone_pairs
-
-
-@nil.command()
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    required=True,
-    default="./data/versions",
-    help="Input directory containing revision subdirectories",
-)
-@click.option(
-    "--input-file",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/7_track_deletion_status.csv",
-    help="Input file containing tracked methods data",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_median_similarity.csv",
-    help="Output file for CSV data",
-)
-def track_median_similarity(
-    input: str,
-    input_file: str,
-    output: str,
-) -> None:
-    all_df = pd.read_csv(input_file)
-    revision_manager = RevisionManager()
-    revisions = revision_manager.get_revisions(Path(input))
-
-    output_df: pd.DataFrame = pd.DataFrame()
-    for rev in revisions:
-        clone_pairs = revision_manager.load_clone_pairs(rev)
-
-        clone_pairs = _add_similarity_column(clone_pairs)
-        df = all_df[all_df[ColumnNames.PREV_REVISION_ID.value] == str(rev.timestamp)].copy()
-
-        hash_1_sim = (
-            clone_pairs.groupby(ColumnNames.TOKEN_HASH_1.value)["similarity"]
-            .median()
-            .rename("median_similarity")
-        )
-        hash_2_sim = (
-            clone_pairs.groupby(ColumnNames.TOKEN_HASH_2.value)["similarity"]
-            .median()
-            .rename("median_similarity")
-        )
-
-        avg_sim = pd.concat([hash_1_sim, hash_2_sim]).groupby(level=0).median().round(1)
-
-        df = df.merge(
-            avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="outer"
-        )
-        output_df = pd.concat([output_df, df], ignore_index=True)
-
-    output_path = Path(output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_df.to_csv(output_path, index=False)
-    console.print(f"[green]Results saved to:[/green] {output_path}")
-
-
 @nil.command()
 def sim_count():
     df = pd.read_csv("./output/versions/nil/9_track_median_similarity.csv")
@@ -946,37 +946,37 @@ def sim_count():
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_median_similarity_absorb.csv",
+    default="./output/versions/nil/9_track_median_similarity_max.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
     "--output-csv",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival.csv",
+    default="./output/versions/nil/10_deletion_survival_max.csv",
     help="Output file for CSV data",
 )
 @click.option(
     "--output-boxplot-absorber",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_boxplot_absorber.pdf",
+    default="./output/versions/nil/10_deletion_survival_boxplot_max.pdf",
     help="Output file for the absorber group boxplot",
 )
 @click.option(
     "--output-boxplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_boxplot_deletion.pdf",
+    default="./output/versions/nil/10_deletion_survival_boxplot_max_deletion.pdf",
     help="Output file for the absorbed+deleted group boxplot",
 )
 @click.option(
     "--output-areaplot-absorber",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_areaplot_absorber.pdf",
+    default="./output/versions/nil/10_deletion_survival_areaplot_max_absorber.pdf",
     help="Output file for the absorber group area plot",
 )
 @click.option(
     "--output-areaplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/10_deletion_survival_areaplot_deletion.pdf",
+    default="./output/versions/nil/10_deletion_survival_areaplot_max_deletion.pdf",
     help="Output file for the absorbed+deleted group stacked area plot",
 )
 def deletion_survival(
