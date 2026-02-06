@@ -617,7 +617,7 @@ def track_merge_splits(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/4_method_tracking.csv",
+    default="./output/versions/nil/4_track_median_similarity.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
