@@ -817,7 +817,7 @@ def track_deletion_status(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/7_track_deletion_status.csv",
+    default="./output/versions/nil/5_has_clone.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -825,7 +825,7 @@ def track_deletion_status(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/8_class_delete.csv",
+    default="./output/versions/nil/6_class_delete.csv",
     help="Output file for CSV data",
 )
 def class_delete(
@@ -864,7 +864,7 @@ def class_delete(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/9_track_median_similarity.csv",
+    default="./output/versions/nil/5_has_clone.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -872,7 +872,7 @@ def class_delete(
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/11_class_high_low_sim.csv",
+    default="./output/versions/nil/7_class_high_low_sim.csv",
     help="Output file for CSV data",
 )
 def class_high_low_sim(
