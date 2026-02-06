@@ -95,7 +95,7 @@ def track_sim(
             source_blocks = prev_code_blocks.to_dict("records")
             target_blocks = curr_code_blocks.to_dict("records")
 
-            print(
+            console.print(
                 f"Revision {prev_revision.timestamp} -> {curr_revision.timestamp}: "
                 f"{len(source_blocks)}×{len(target_blocks)} blocks to match"
             )
@@ -144,7 +144,7 @@ def track_sig(
     revisions = revision_manager.get_revisions(Path(input))
 
     for prev_rev, curr_rev in zip(revisions, revisions[1:]):
-        print(f"Processing revision pair: {prev_rev.timestamp} -> {curr_rev.timestamp}")
+        console.print(f"Processing revision pair: {prev_rev.timestamp} -> {curr_rev.timestamp}")
 
         prev_code_blocks = revision_manager.load_code_blocks(prev_rev)
         curr_code_blocks = revision_manager.load_code_blocks(curr_rev)
@@ -215,7 +215,8 @@ def track_sig(
             )
 
     df.to_csv(output, index=False)
-    print(df.groupby(["is_sig_matched", "is_sig_deleted", "is_sig_added"]).size())
+    console.print(f"[green]Results saved to:[/green] {output}")
+    console.print(df.groupby(["is_sig_matched", "is_sig_deleted", "is_sig_added"]).size())
 
 
 @nil.command()
