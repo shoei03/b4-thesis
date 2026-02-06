@@ -1417,8 +1417,12 @@ def analyze_absorbed(
     absorbed_t0 = absorbed_t0.merge(lifetime.reset_index(), on="method_id")
 
     # Add signatures from tracking data (join on method_id + prev_revision_id)
+    # Remove duplicates to prevent row explosion during merge
+    df_tracking_dedup = df_tracking.drop_duplicates(
+        subset=["method_id", ColumnNames.PREV_REVISION_ID.value], keep="first"
+    )
     absorbed_t0 = absorbed_t0.merge(
-        df_tracking,
+        df_tracking_dedup,
         on=["method_id", ColumnNames.PREV_REVISION_ID.value],
         how="left",
     )
@@ -1494,126 +1498,126 @@ def analyze_absorbed(
         console.print(f"    Median lifetime: {multi_lifetime.median():.1f}")
     console.print(f"\nt=0 -> t=-1 drop: {single_count:,} methods")
 
-    # Step 5: Save CSV
-    output_path = Path(output_csv)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # # Step 5: Save CSV
+    # output_path = Path(output_csv)
+    # output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    output_cols = [
-        "method_id",
-        "lifetime",
-        "origin",
-        ColumnNames.PREV_REVISION_ID.value,
-        ColumnNames.PREV_FILE_PATH.value,
-        ColumnNames.PREV_METHOD_NAME.value,
-        "median_similarity",
-        has_clone_col,
-    ]
-    absorbed_t0[output_cols].to_csv(output_path, index=False)
-    console.print(f"\n[green]Results saved to:[/green] {output_path}")
+    # output_cols = [
+    #     "method_id",
+    #     "lifetime",
+    #     "origin",
+    #     ColumnNames.PREV_REVISION_ID.value,
+    #     ColumnNames.PREV_FILE_PATH.value,
+    #     ColumnNames.PREV_METHOD_NAME.value,
+    #     "median_similarity",
+    #     has_clone_col,
+    # ]
+    # absorbed_t0[output_cols].to_csv(output_path, index=False)
+    # console.print(f"\n[green]Results saved to:[/green] {output_path}")
 
-    # Step 6: Visualizations
-    plt.rcParams.update(
-        {
-            "font.family": "Hiragino Sans",
-            "font.size": 12,
-            "axes.titlesize": 14,
-            "axes.labelsize": 12,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "legend.fontsize": 11,
-            "figure.dpi": 300,
-        }
-    )
+    # # Step 6: Visualizations
+    # plt.rcParams.update(
+    #     {
+    #         "font.family": "Hiragino Sans",
+    #         "font.size": 12,
+    #         "axes.titlesize": 14,
+    #         "axes.labelsize": 12,
+    #         "xtick.labelsize": 10,
+    #         "ytick.labelsize": 10,
+    #         "legend.fontsize": 11,
+    #         "figure.dpi": 300,
+    #     }
+    # )
 
-    colors = {
-        "newly_added": "#2ca02c",
-        "similarity_crossed": "#ff7f0e",
-        "first_revision": "#9467bd",
-        "already_tracked": "#1f77b4",
-    }
-    label_map = {
-        "newly_added": "新規追加",
-        "similarity_crossed": "類似度超過",
-        "first_revision": "初回リビジョン",
-        "already_tracked": "追跡済み",
-    }
+    # colors = {
+    #     "newly_added": "#2ca02c",
+    #     "similarity_crossed": "#ff7f0e",
+    #     "first_revision": "#9467bd",
+    #     "already_tracked": "#1f77b4",
+    # }
+    # label_map = {
+    #     "newly_added": "新規追加",
+    #     "similarity_crossed": "類似度超過",
+    #     "first_revision": "初回リビジョン",
+    #     "already_tracked": "追跡済み",
+    # }
 
-    # --- Histogram: lifetime distribution with origin breakdown ---
-    fig, ax = plt.subplots(figsize=(10, 6))
-    max_lifetime = int(absorbed_t0["lifetime"].max())
+    # # --- Histogram: lifetime distribution with origin breakdown ---
+    # fig, ax = plt.subplots(figsize=(10, 6))
+    # max_lifetime = int(absorbed_t0["lifetime"].max())
 
-    # Stacked histogram for lifetime=1 (by origin) and lifetime>=2 (already_tracked)
-    origin_order = ["newly_added", "similarity_crossed", "first_revision", "already_tracked"]
-    bottom = pd.Series(0, index=range(1, max_lifetime + 1))
+    # # Stacked histogram for lifetime=1 (by origin) and lifetime>=2 (already_tracked)
+    # origin_order = ["newly_added", "similarity_crossed", "first_revision", "already_tracked"]
+    # bottom = pd.Series(0, index=range(1, max_lifetime + 1))
 
-    for origin in origin_order:
-        subset = absorbed_t0[absorbed_t0["origin"] == origin]
-        if subset.empty:
-            continue
-        counts = subset["lifetime"].value_counts().reindex(range(1, max_lifetime + 1), fill_value=0)
-        ax.bar(
-            counts.index,
-            counts.values,
-            bottom=bottom.values,
-            color=colors[origin],
-            label=label_map[origin],
-            edgecolor="white",
-            linewidth=0.5,
-        )
-        bottom += counts
+    # for origin in origin_order:
+    #     subset = absorbed_t0[absorbed_t0["origin"] == origin]
+    #     if subset.empty:
+    #         continue
+    #     counts = subset["lifetime"].value_counts().reindex(range(1, max_lifetime + 1), fill_value=0)
+    #     ax.bar(
+    #         counts.index,
+    #         counts.values,
+    #         bottom=bottom.values,
+    #         color=colors[origin],
+    #         label=label_map[origin],
+    #         edgecolor="white",
+    #         linewidth=0.5,
+    #     )
+    #     bottom += counts
 
-    ax.set_xlabel("ライフタイム (リビジョンペア数)")
-    ax.set_ylabel("メソッド数")
-    ax.legend(loc="upper right", frameon=True, fancybox=True, shadow=True)
-    ax.set_xticks(range(1, max_lifetime + 1))
-    ax.grid(True, alpha=0.3, linestyle="--", axis="y")
+    # ax.set_xlabel("ライフタイム (リビジョンペア数)")
+    # ax.set_ylabel("メソッド数")
+    # ax.legend(loc="upper right", frameon=True, fancybox=True, shadow=True)
+    # ax.set_xticks(range(1, max_lifetime + 1))
+    # ax.grid(True, alpha=0.3, linestyle="--", axis="y")
 
-    plt.tight_layout()
-    Path(output_histogram).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_histogram, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
-    plt.close()
-    console.print(f"[green]Histogram saved to:[/green] {output_histogram}")
+    # plt.tight_layout()
+    # Path(output_histogram).parent.mkdir(parents=True, exist_ok=True)
+    # plt.savefig(output_histogram, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none")
+    # plt.close()
+    # console.print(f"[green]Histogram saved to:[/green] {output_histogram}")
 
-    # --- Per-revision breakdown stacked bar chart ---
-    rev_order = sorted(absorbed_t0[ColumnNames.PREV_REVISION_ID.value].dropna().unique())
-    rev_breakdown = pd.crosstab(
-        absorbed_t0[ColumnNames.PREV_REVISION_ID.value],
-        absorbed_t0["origin"],
-    ).reindex(index=rev_order, columns=origin_order, fill_value=0)
+    # # --- Per-revision breakdown stacked bar chart ---
+    # rev_order = sorted(absorbed_t0[ColumnNames.PREV_REVISION_ID.value].dropna().unique())
+    # rev_breakdown = pd.crosstab(
+    #     absorbed_t0[ColumnNames.PREV_REVISION_ID.value],
+    #     absorbed_t0["origin"],
+    # ).reindex(index=rev_order, columns=origin_order, fill_value=0)
 
-    fig2, ax2 = plt.subplots(figsize=(14, 6))
-    bottom2 = pd.Series(0.0, index=rev_breakdown.index)
+    # fig2, ax2 = plt.subplots(figsize=(14, 6))
+    # bottom2 = pd.Series(0.0, index=rev_breakdown.index)
 
-    for origin in origin_order:
-        if origin not in rev_breakdown.columns:
-            continue
-        vals = rev_breakdown[origin]
-        ax2.bar(
-            range(len(rev_order)),
-            vals.values,
-            bottom=bottom2.values,
-            color=colors[origin],
-            label=label_map[origin],
-            edgecolor="white",
-            linewidth=0.5,
-        )
-        bottom2 += vals
+    # for origin in origin_order:
+    #     if origin not in rev_breakdown.columns:
+    #         continue
+    #     vals = rev_breakdown[origin]
+    #     ax2.bar(
+    #         range(len(rev_order)),
+    #         vals.values,
+    #         bottom=bottom2.values,
+    #         color=colors[origin],
+    #         label=label_map[origin],
+    #         edgecolor="white",
+    #         linewidth=0.5,
+    #     )
+    #     bottom2 += vals
 
-    ax2.set_xlabel("リビジョン")
-    ax2.set_ylabel("Absorbed メソッド数")
-    ax2.set_xticks(range(len(rev_order)))
-    ax2.set_xticklabels([r[:10] for r in rev_order], rotation=45, ha="right", fontsize=8)
-    ax2.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
-    ax2.grid(True, alpha=0.3, linestyle="--", axis="y")
+    # ax2.set_xlabel("リビジョン")
+    # ax2.set_ylabel("Absorbed メソッド数")
+    # ax2.set_xticks(range(len(rev_order)))
+    # ax2.set_xticklabels([r[:10] for r in rev_order], rotation=45, ha="right", fontsize=8)
+    # ax2.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    # ax2.grid(True, alpha=0.3, linestyle="--", axis="y")
 
-    plt.tight_layout()
-    Path(output_revision_breakdown).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(
-        output_revision_breakdown,
-        dpi=300,
-        bbox_inches="tight",
-        facecolor="white",
-        edgecolor="none",
-    )
-    plt.close()
-    console.print(f"[green]Revision breakdown saved to:[/green] {output_revision_breakdown}")
+    # plt.tight_layout()
+    # Path(output_revision_breakdown).parent.mkdir(parents=True, exist_ok=True)
+    # plt.savefig(
+    #     output_revision_breakdown,
+    #     dpi=300,
+    #     bbox_inches="tight",
+    #     facecolor="white",
+    #     edgecolor="none",
+    # )
+    # plt.close()
+    # console.print(f"[green]Revision breakdown saved to:[/green] {output_revision_breakdown}")
