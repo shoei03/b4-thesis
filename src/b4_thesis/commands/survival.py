@@ -180,68 +180,99 @@ def _plot_boxplot_deletion(
 
 
 def _prepare_area_data(
-    count_df: pd.DataFrame,
+    nonnull_count_df: pd.DataFrame,
+    null_count_df: pd.DataFrame,
     absorber_time_values: list[int],
     deletion_time_values: list[int],
-) -> tuple[list[int], dict[str, list[int]], float]:
+) -> tuple[list[int], list[int], dict[str, list[int]], dict[str, list[int]], float]:
     """面グラフ用のカウントデータを整形し、共通のy_maxを計算する。
 
     Returns:
-        (absorber_counts, stacked_data, y_max)
+        (absorber_counts, null_absorber_counts, stacked_data, null_stacked_data, y_max)
     """
-    count_absorber = count_df[count_df["survival_group_ja"] == "統合先"]
-    count_deletion = count_df[count_df["survival_group_ja"].isin(["統合元", "削除"])]
 
-    # 統合先群のカウントデータ
-    absorber_count_data = count_absorber.sort_values("relative_time")
-    absorber_count_by_time = (
-        dict(zip(absorber_count_data["relative_time"], absorber_count_data["count"]))
-        if not absorber_count_data.empty
-        else {}
-    )
-    absorber_counts = [absorber_count_by_time.get(t, 0) for t in absorber_time_values]
-
-    # 統合元+削除群のカウントデータ
-    stacked_data: dict[str, list[int]] = {}
-    for group in ["統合元", "削除"]:
-        group_data = count_deletion[count_deletion["survival_group_ja"] == group]
+    def _extract_counts(
+        count_df: pd.DataFrame, group_name: str, time_values: list[int]
+    ) -> list[int]:
+        group_data = count_df[count_df["survival_group_ja"] == group_name]
         count_by_time = dict(zip(group_data["relative_time"], group_data["count"]))
-        stacked_data[group] = [count_by_time.get(t, 0) for t in deletion_time_values]
+        return [count_by_time.get(t, 0) for t in time_values]
 
-    # 両グラフの縦軸最大値を揃える
-    max_absorber = max(absorber_counts) if absorber_counts else 0
+    # 非nullカウント
+    absorber_counts = _extract_counts(nonnull_count_df, "統合先", absorber_time_values)
+    stacked_data = {
+        g: _extract_counts(nonnull_count_df, g, deletion_time_values) for g in ["統合元", "削除"]
+    }
+
+    # nullカウント
+    null_absorber_counts = _extract_counts(null_count_df, "統合先", absorber_time_values)
+    null_stacked_data = {
+        g: _extract_counts(null_count_df, g, deletion_time_values) for g in ["統合元", "削除"]
+    }
+
+    # 合計（非null + null）に基づくy_max
+    max_absorber = (
+        max(a + b for a, b in zip(absorber_counts, null_absorber_counts)) if absorber_counts else 0
+    )
     max_deletion = (
-        max(a + b for a, b in zip(stacked_data["統合元"], stacked_data["削除"]))
+        max(
+            a + b + c + d
+            for a, b, c, d in zip(
+                stacked_data["統合元"],
+                stacked_data["削除"],
+                null_stacked_data["統合元"],
+                null_stacked_data["削除"],
+            )
+        )
         if stacked_data["統合元"]
         else 0
     )
     y_max = max(max_absorber, max_deletion) * 1.05
 
-    return absorber_counts, stacked_data, y_max
+    return absorber_counts, null_absorber_counts, stacked_data, null_stacked_data, y_max
 
 
 def _plot_area_absorber(
     absorber_counts: list[int],
+    null_absorber_counts: list[int],
     time_values: list[int],
     y_max: float,
     output_path: str,
 ) -> None:
-    """統合先群の面グラフを描画・保存する。"""
+    """統合先群の面グラフを描画・保存する（null/非null積み上げ）。"""
     fig, ax = plt.subplots(figsize=(12, 4))
-    if absorber_counts:
+    if absorber_counts or null_absorber_counts:
         positions = list(range(len(time_values)))
+        total = [a + b for a, b in zip(absorber_counts, null_absorber_counts)]
+        color = _SURVIVAL_COLORS["統合先"]
+
+        # null層（下）
         ax.fill_between(
             positions,
-            absorber_counts,
-            color=_SURVIVAL_COLORS["統合先"],
+            null_absorber_counts,
+            color=color,
+            alpha=0.3,
+            hatch="///",
+            label="統合先（類似度なし）",
+        )
+        # 非null層（上）
+        ax.fill_between(
+            positions,
+            null_absorber_counts,
+            total,
+            color=color,
             alpha=0.7,
             label="統合先",
         )
-        ax.plot(positions, absorber_counts, color=_SURVIVAL_COLORS["統合先"], linewidth=1.5)
+        ax.plot(positions, total, color=color, linewidth=1.5)
+
     ax.set_xlabel("相対時間 (0 = 統合直前のバージョン)", labelpad=10)
     ax.set_ylabel("メソッド数", labelpad=10)
     ax.grid(True, alpha=0.3, linestyle="--")
-    ax.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles[::-1], labels[::-1], loc="upper left", frameon=True, fancybox=True, shadow=True
+    )
     ax.set_xticks(range(len(time_values)))
     ax.set_xticklabels([str(t) if t % 2 == 0 else "" for t in time_values])
     ax.set_xlim(-0.5, len(time_values) - 0.5)
@@ -255,26 +286,74 @@ def _plot_area_absorber(
 
 def _plot_area_deletion(
     stacked_data: dict[str, list[int]],
+    null_stacked_data: dict[str, list[int]],
     time_values: list[int],
     y_max: float,
     output_path: str,
 ) -> None:
-    """統合元+削除群の積み上げ面グラフを描画・保存する。"""
+    """統合元+削除群の積み上げ面グラフを描画・保存する（null/非null積み上げ）。"""
     fig, ax = plt.subplots(figsize=(12, 4))
 
     positions = list(range(len(time_values)))
-    ax.stackplot(
+
+    # 4層の累積値（下から: null統合元, 非null統合元, null削除, 非null削除）
+    nn_absorbed = stacked_data["統合元"]
+    nn_deleted = stacked_data["削除"]
+    null_absorbed = null_stacked_data["統合元"]
+    null_deleted = null_stacked_data["削除"]
+
+    y0 = [0] * len(positions)
+    y1 = list(null_absorbed)
+    y2 = [a + b for a, b in zip(y1, nn_absorbed)]
+    y3 = [a + b for a, b in zip(y2, null_deleted)]
+    y4 = [a + b for a, b in zip(y3, nn_deleted)]
+
+    # null 統合元（下、ハッチング）
+    ax.fill_between(
         positions,
-        stacked_data["統合元"],
-        stacked_data["削除"],
-        labels=["統合元", "削除"],
-        colors=[_SURVIVAL_COLORS["統合元"], _SURVIVAL_COLORS["削除"]],
-        alpha=0.7,
+        y0,
+        y1,
+        color=_SURVIVAL_COLORS["統合元"],
+        alpha=0.3,
+        hatch="///",
+        label="統合元（類似度なし）",
     )
+    # 非null 統合元
+    ax.fill_between(
+        positions,
+        y1,
+        y2,
+        color=_SURVIVAL_COLORS["統合元"],
+        alpha=0.7,
+        label="統合元",
+    )
+    # null 削除（ハッチング）
+    ax.fill_between(
+        positions,
+        y2,
+        y3,
+        color=_SURVIVAL_COLORS["削除"],
+        alpha=0.3,
+        hatch="///",
+        label="削除（類似度なし）",
+    )
+    # 非null 削除
+    ax.fill_between(
+        positions,
+        y3,
+        y4,
+        color=_SURVIVAL_COLORS["削除"],
+        alpha=0.7,
+        label="削除",
+    )
+
     ax.set_xlabel("相対時間 (0 = 統合または削除直前のバージョン)", labelpad=10)
     ax.set_ylabel("メソッド数", labelpad=10)
     ax.grid(True, alpha=0.3, linestyle="--")
-    ax.legend(loc="upper left", frameon=True, fancybox=True, shadow=True)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles[::-1], labels[::-1], loc="upper left", frameon=True, fancybox=True, shadow=True
+    )
     ax.set_xticks(positions)
     ax.set_xticklabels([str(t) if t % 2 == 0 else "" for t in time_values])
     ax.set_xlim(-0.5, len(time_values) - 0.5)
@@ -499,7 +578,9 @@ def deletion_survival(
     _setup_plot_style()
     df["survival_group_ja"] = df["survival_group"].map(_SURVIVAL_LABEL_MAP)
     plot_df = df[df["median_similarity"].notna()]
+    null_df = df[df["median_similarity"].isna()]
 
+    # 箱ひげ図（非nullのみ）
     absorber_df = plot_df[plot_df["survival_group_ja"] == "統合先"]
     deletion_df = plot_df[plot_df["survival_group_ja"].isin(["統合元", "削除"])]
 
@@ -509,14 +590,38 @@ def deletion_survival(
     _plot_boxplot_absorber(absorber_df, absorber_time_values, output_boxplot_absorber)
     _plot_boxplot_deletion(deletion_df, deletion_time_values, output_boxplot_deletion)
 
-    count_df = (
+    # 面グラフ（全データからtime_valuesを算出）
+    area_absorber_df = df[df["survival_group_ja"] == "統合先"]
+    area_deletion_df = df[df["survival_group_ja"].isin(["統合元", "削除"])]
+    area_absorber_time_values = sorted(area_absorber_df["relative_time"].unique())
+    area_deletion_time_values = sorted(area_deletion_df["relative_time"].unique())
+
+    nonnull_count_df = (
         plot_df.groupby(["relative_time", "survival_group_ja"]).size().reset_index(name="count")
     )
-    absorber_counts, stacked_data, y_max = _prepare_area_data(
-        count_df, absorber_time_values, deletion_time_values
+    null_count_df = (
+        null_df.groupby(["relative_time", "survival_group_ja"]).size().reset_index(name="count")
     )
-    _plot_area_absorber(absorber_counts, absorber_time_values, y_max, output_areaplot_absorber)
-    _plot_area_deletion(stacked_data, deletion_time_values, y_max, output_areaplot_deletion)
+
+    absorber_counts, null_absorber_counts, stacked_data, null_stacked_data, y_max = (
+        _prepare_area_data(
+            nonnull_count_df, null_count_df, area_absorber_time_values, area_deletion_time_values
+        )
+    )
+    _plot_area_absorber(
+        absorber_counts,
+        null_absorber_counts,
+        area_absorber_time_values,
+        y_max,
+        output_areaplot_absorber,
+    )
+    _plot_area_deletion(
+        stacked_data,
+        null_stacked_data,
+        area_deletion_time_values,
+        y_max,
+        output_areaplot_deletion,
+    )
 
 
 @survival.command()
