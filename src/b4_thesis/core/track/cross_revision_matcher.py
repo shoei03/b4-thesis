@@ -138,16 +138,16 @@ class CrossRevisionMatcher:
                 )
 
         # 3. Add added blocks (target blocks with no match)
-        for i in range(len(target_blocks)):
-            if i not in matched_target_indices:
-                all_results.append(
-                    self._format_block(
-                        target_block=target_blocks[i],
-                        is_matched=False,
-                        is_deleted=False,
-                        is_added=True,
-                    )
-                )
+        # for i in range(len(target_blocks)):
+        #     if i not in matched_target_indices:
+        #         all_results.append(
+        #             self._format_block(
+        #                 target_block=target_blocks[i],
+        #                 is_matched=False,
+        #                 is_deleted=False,
+        #                 is_added=True,
+        #             )
+        #         )
 
         return all_results
 
