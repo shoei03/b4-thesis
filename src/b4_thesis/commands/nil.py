@@ -834,22 +834,43 @@ def class_delete(
 ):
     df = pd.read_csv(input_file)
 
+    # ブール型に変換（文字列として読み込まれている場合に対応）
+    df["is_matched"] = df["is_matched"].astype(bool)
+    df["is_absorbed"] = df["is_absorbed"].astype(bool)
+    df["is_deleted"] = df["is_deleted"].astype(bool)
+    df["has_clone"] = df["has_clone"].astype(bool)
+
+    # 状態を3分類: deleted, absorbed, survived
+    df["status"] = "survived"
+    df.loc[df["is_deleted"], "status"] = "deleted"
+    df.loc[df["is_absorbed"], "status"] = "absorbed"
+
     result = pd.crosstab(
         df[ColumnNames.PREV_REVISION_ID.value],
-        [df["is_matched"], df["has_clone"]],
+        [df["status"], df["has_clone"]],
     )
 
-    # クローン有無別の削除率
-    deletion_by_clone = (
-        df.groupby([ColumnNames.PREV_REVISION_ID.value, "has_clone"])["is_matched"]
-        .apply(lambda x: (~x).mean() * 100)
+    # クローン有無別の削除率（is_deleted）
+    deleted_rate_by_clone = (
+        df.groupby([ColumnNames.PREV_REVISION_ID.value, "has_clone"])["is_deleted"]
+        .apply(lambda x: x.mean() * 100)
+        .unstack(fill_value=0)
+        .round(2)
+    )
+
+    # クローン有無別の吸収率（is_absorbed）
+    absorbed_rate_by_clone = (
+        df.groupby([ColumnNames.PREV_REVISION_ID.value, "has_clone"])["is_absorbed"]
+        .apply(lambda x: x.mean() * 100)
         .unstack(fill_value=0)
         .round(2)
     )
 
     # カラムとして追加
-    result[("clone_deletion_rate(%)", "")] = deletion_by_clone.get(True, 0)
-    result[("no_clone_deletion_rate(%)", "")] = deletion_by_clone.get(False, 0)
+    result[("clone_deleted_rate(%)", "")] = deleted_rate_by_clone.get(True, 0)
+    result[("no_clone_deleted_rate(%)", "")] = deleted_rate_by_clone.get(False, 0)
+    result[("clone_absorbed_rate(%)", "")] = absorbed_rate_by_clone.get(True, 0)
+    result[("no_clone_absorbed_rate(%)", "")] = absorbed_rate_by_clone.get(False, 0)
 
     # 全リビジョンでの平均を計算
     avg_row = result.mean(numeric_only=True).round(2)
@@ -886,11 +907,13 @@ def class_high_low_sim(
             "median_similarity",
             "is_matched",
             "is_deleted",
+            "is_absorbed",
             "has_clone",
         ],
         dtype={
             "is_matched": "boolean",
             "is_deleted": "boolean",
+            "is_absorbed": "boolean",
             "has_clone": "boolean",
         },
         low_memory=False,
@@ -900,28 +923,49 @@ def class_high_low_sim(
     df["high_sim"] = df["median_similarity"] >= 90
     df["low_sim"] = (df["median_similarity"] < 90) & (df["median_similarity"] >= 70)
 
+    # 状態を3分類: deleted, absorbed, survived
+    df["status"] = "survived"
+    df.loc[df["is_deleted"], "status"] = "deleted"
+    df.loc[df["is_absorbed"], "status"] = "absorbed"
+
     result = pd.crosstab(
         df[ColumnNames.PREV_REVISION_ID.value],
-        [df["is_matched"], df["high_sim"], df["low_sim"]],
+        [df["status"], df["high_sim"], df["low_sim"]],
     )
 
-    # high_sim と low_sim 別の削除率を計算
-    deletion_by_high_sim = (
+    # high_sim の削除率と吸収率を計算
+    high_sim_deleted_rate = (
         df[df["high_sim"] & df["has_clone"]]
         .groupby(ColumnNames.PREV_REVISION_ID.value)["is_deleted"]
         .apply(lambda x: x.astype(float).mean() * 100)
         .round(2)
     )
-    deletion_by_low_sim = (
+    high_sim_absorbed_rate = (
+        df[df["high_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_absorbed"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+
+    # low_sim の削除率と吸収率を計算
+    low_sim_deleted_rate = (
         df[df["low_sim"] & df["has_clone"]]
         .groupby(ColumnNames.PREV_REVISION_ID.value)["is_deleted"]
         .apply(lambda x: x.astype(float).mean() * 100)
         .round(2)
     )
+    low_sim_absorbed_rate = (
+        df[df["low_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_absorbed"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
 
     # カラムとして追加（3レベルのマルチインデックスに対応）
-    result[("high_sim_deletion_rate(%)", "", "")] = deletion_by_high_sim
-    result[("low_sim_deletion_rate(%)", "", "")] = deletion_by_low_sim
+    result[("high_sim_deleted_rate(%)", "", "")] = high_sim_deleted_rate
+    result[("high_sim_absorbed_rate(%)", "", "")] = high_sim_absorbed_rate
+    result[("low_sim_deleted_rate(%)", "", "")] = low_sim_deleted_rate
+    result[("low_sim_absorbed_rate(%)", "", "")] = low_sim_absorbed_rate
 
     avg_row = result.mean(numeric_only=True).round(2)
     avg_row.name = "Average"
