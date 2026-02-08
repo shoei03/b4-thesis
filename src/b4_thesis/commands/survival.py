@@ -296,42 +296,23 @@ def _plot_area_deletion(
 
     positions = list(range(len(time_values)))
 
-    # 4層の累積値（下から: null統合元, 非null統合元, null削除, 非null削除）
+    # 4層の累積値（下から: null削除, 非null削除, null統合元, 非null統合元）
     nn_absorbed = stacked_data["統合元"]
     nn_deleted = stacked_data["削除"]
     null_absorbed = null_stacked_data["統合元"]
     null_deleted = null_stacked_data["削除"]
 
     y0 = [0] * len(positions)
-    y1 = list(null_absorbed)
-    y2 = [a + b for a, b in zip(y1, nn_absorbed)]
-    y3 = [a + b for a, b in zip(y2, null_deleted)]
-    y4 = [a + b for a, b in zip(y3, nn_deleted)]
+    y1 = list(null_deleted)
+    y2 = [a + b for a, b in zip(y1, nn_deleted)]
+    y3 = [a + b for a, b in zip(y2, null_absorbed)]
+    y4 = [a + b for a, b in zip(y3, nn_absorbed)]
 
-    # null 統合元（下、ハッチング）
+    # null 削除（下、ハッチング）
     ax.fill_between(
         positions,
         y0,
         y1,
-        color=_SURVIVAL_COLORS["統合元"],
-        alpha=0.3,
-        hatch="///",
-        label="統合元（類似度なし）",
-    )
-    # 非null 統合元
-    ax.fill_between(
-        positions,
-        y1,
-        y2,
-        color=_SURVIVAL_COLORS["統合元"],
-        alpha=0.7,
-        label="統合元",
-    )
-    # null 削除（ハッチング）
-    ax.fill_between(
-        positions,
-        y2,
-        y3,
         color=_SURVIVAL_COLORS["削除"],
         alpha=0.3,
         hatch="///",
@@ -340,11 +321,30 @@ def _plot_area_deletion(
     # 非null 削除
     ax.fill_between(
         positions,
-        y3,
-        y4,
+        y1,
+        y2,
         color=_SURVIVAL_COLORS["削除"],
         alpha=0.7,
         label="削除",
+    )
+    # null 統合元（ハッチング）
+    ax.fill_between(
+        positions,
+        y2,
+        y3,
+        color=_SURVIVAL_COLORS["統合元"],
+        alpha=0.3,
+        hatch="///",
+        label="統合元（類似度なし）",
+    )
+    # 非null 統合元
+    ax.fill_between(
+        positions,
+        y3,
+        y4,
+        color=_SURVIVAL_COLORS["統合元"],
+        alpha=0.7,
+        label="統合元",
     )
 
     ax.set_xlabel("相対時間 (0 = 統合または削除直前のバージョン)", labelpad=10)
@@ -568,10 +568,13 @@ def deletion_survival(
 
     # 3. CSV出力 + サマリー表示
     df.to_csv(output_csv, index=False)
-    t0_df = df[df["relative_time"] == 0]
-    console.print(f"relative_time = 0 :{t0_df.groupby(['survival_group']).size()}")
-    t1_df = df[df["relative_time"] == -1]
-    console.print(f"relative_time = -1:{t1_df.groupby(['survival_group']).size()}")
+    for t in [1, 0, -1]:
+        t_df = df[df["relative_time"] == t]
+        nonnull = t_df[t_df["median_similarity"].notna()].groupby("survival_group").size()
+        null = t_df[t_df["median_similarity"].isna()].groupby("survival_group").size()
+        console.print(f"relative_time = {t}:")
+        console.print(f"  非null: {nonnull.to_dict()}")
+        console.print(f"  null:   {null.to_dict()}")
     console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
 
     # 4. プロット
