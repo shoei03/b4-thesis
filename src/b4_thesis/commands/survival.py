@@ -483,20 +483,16 @@ def deletion_survival(
     # 1. survival_group 分類
     group_map = _classify_survival_groups(df)
     df["survival_group"] = df["method_id"].map(group_map)
-    df = df[df["survival_group"].notna()]
 
     # 2. relative_time 計算
     df = _compute_relative_time(df)
 
     # 3. CSV出力 + サマリー表示
     df.to_csv(output_csv, index=False)
-    latest_df = df[df["relative_time"] == 0]
-    console.print(latest_df.groupby(["survival_group"]).size())
-    console.print(
-        latest_df[latest_df["median_similarity"].notna()]
-        .groupby(["survival_group"])["median_similarity"]
-        .mean()
-    )
+    t0_df = df[df["relative_time"] == 0]
+    console.print(f"relative_time = 0 :{t0_df.groupby(['survival_group']).size()}")
+    t1_df = df[df["relative_time"] == -1]
+    console.print(f"relative_time = -1:{t1_df.groupby(['survival_group']).size()}")
     console.print(f"[green]Data with survival groups saved to:[/green] {output_csv}")
 
     # 4. プロット
