@@ -190,7 +190,7 @@ def track_sig(
                 ColumnNames.CURR_RETURN_TYPE.value,
                 ColumnNames.CURR_PARAMETERS.value,
             ],
-            how="outer",
+            how="left",
         )
 
         matched_df["is_sig_matched"] = (
@@ -205,9 +205,6 @@ def track_sig(
         if (
             len(prev_code_blocks)
             != matched_df["is_sig_matched"].sum() + matched_df["is_sig_deleted"].sum()
-        ) or (
-            len(curr_code_blocks)
-            != matched_df["is_sig_matched"].sum() + matched_df["is_sig_added"].sum()
         ):
             console.print(
                 f"[red]Mismatch in counts detected for revisions "
@@ -394,7 +391,7 @@ def track_median_similarity(
         avg_sim = pd.concat([hash_1_sim, hash_2_sim]).groupby(level=0).median().round(1)
 
         df = df.merge(
-            avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="outer"
+            avg_sim, left_on=ColumnNames.PREV_TOKEN_HASH.value, right_index=True, how="left"
         )
         output_df = pd.concat([output_df, df], ignore_index=True)
 
