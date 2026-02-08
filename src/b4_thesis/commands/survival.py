@@ -365,143 +365,6 @@ def _plot_area_deletion(
     console.print(f"[green]Area plot (deletion) saved to:[/green] {output_path}")
 
 
-# --- analyze_absorbed ヘルパー ---
-
-
-def _load_absorbed_data(input_file: str, input_tracking: str) -> pd.DataFrame:
-    """deletion_survivalの出力とトラッキングデータを読み込み、Absorbed t=0行を構築する。"""
-    ds_cols = [
-        ColumnNames.PREV_REVISION_ID.value,
-        "method_id",
-        "survival_group",
-        "relative_time",
-        "median_similarity",
-    ]
-    df_ds = pd.read_csv(input_file, usecols=ds_cols)
-
-    lifetime = df_ds.groupby("method_id").size().rename("lifetime")
-
-    sig_cols = [
-        "method_id",
-        ColumnNames.PREV_REVISION_ID.value,
-        ColumnNames.PREV_FILE_PATH.value,
-        ColumnNames.PREV_METHOD_NAME.value,
-        ColumnNames.PREV_RETURN_TYPE.value,
-        ColumnNames.PREV_PARAMETERS.value,
-    ]
-    has_clone_col = ColumnNames.HAS_CLONE.value
-    try:
-        df_tracking = pd.read_csv(input_tracking, usecols=sig_cols + [has_clone_col])
-    except ValueError:
-        df_tracking = pd.read_csv(input_tracking, usecols=sig_cols)
-        df_tracking[has_clone_col] = None
-
-    absorbed_t0 = df_ds[(df_ds["survival_group"] == "Absorbed") & (df_ds["relative_time"] == 0)][
-        ["method_id", ColumnNames.PREV_REVISION_ID.value, "median_similarity"]
-    ].copy()
-
-    absorbed_t0 = absorbed_t0.merge(lifetime.reset_index(), on="method_id")
-
-    df_tracking_dedup = df_tracking.drop_duplicates(
-        subset=["method_id", ColumnNames.PREV_REVISION_ID.value], keep="first"
-    )
-    absorbed_t0 = absorbed_t0.merge(
-        df_tracking_dedup,
-        on=["method_id", ColumnNames.PREV_REVISION_ID.value],
-        how="left",
-    )
-
-    return absorbed_t0
-
-
-def _classify_absorbed_origin(absorbed_t0: pd.DataFrame, input_dir: str) -> pd.DataFrame:
-    """lifetime=1のAbsorbedメソッドのoriginを分類する。
-
-    分類結果:
-    - already_tracked: lifetime >= 2（以前から追跡済み）
-    - newly_added: 前のリビジョンにシグネチャが存在しない（新規追加）
-    - similarity_crossed: 前のリビジョンにシグネチャが存在する（類似度閾値超過）
-    - first_revision: 最初のリビジョンのため前のリビジョンが存在しない
-    """
-    revision_manager = RevisionManager()
-    revisions = revision_manager.get_revisions(Path(input_dir))
-
-    prev_rev_lookup: dict = {}
-    for i in range(1, len(revisions)):
-        prev_rev_lookup[str(revisions[i].timestamp)] = revisions[i - 1]
-
-    absorbed_t0["origin"] = "already_tracked"
-    absorbed_t0.loc[absorbed_t0["lifetime"] == 1, "origin"] = "unknown"
-
-    single_row = absorbed_t0[absorbed_t0["lifetime"] == 1]
-
-    for rev_id, group in single_row.groupby(ColumnNames.PREV_REVISION_ID.value):
-        if rev_id not in prev_rev_lookup:
-            absorbed_t0.loc[group.index, "origin"] = "first_revision"
-            continue
-
-        prev_rev = prev_rev_lookup[rev_id]
-        code_blocks = revision_manager.load_code_blocks(prev_rev)
-
-        sig_set = set(
-            zip(
-                code_blocks[ColumnNames.FILE_PATH.value],
-                code_blocks[ColumnNames.METHOD_NAME.value],
-                code_blocks[ColumnNames.RETURN_TYPE.value],
-                code_blocks[ColumnNames.PARAMETERS.value],
-            )
-        )
-
-        for idx, row in group.iterrows():
-            method_sig = (
-                row[ColumnNames.PREV_FILE_PATH.value],
-                row[ColumnNames.PREV_METHOD_NAME.value],
-                row[ColumnNames.PREV_RETURN_TYPE.value],
-                row[ColumnNames.PREV_PARAMETERS.value],
-            )
-            if method_sig in sig_set:
-                absorbed_t0.loc[idx, "origin"] = "similarity_crossed"
-            else:
-                absorbed_t0.loc[idx, "origin"] = "newly_added"
-
-    return absorbed_t0
-
-
-def _print_absorbed_summary(absorbed_t0: pd.DataFrame) -> None:
-    """Absorbedメソッドの統計サマリーを表示する。"""
-    total = len(absorbed_t0)
-    if total == 0:
-        console.print("[yellow]No absorbed methods found.[/yellow]")
-        return
-
-    single_count = int((absorbed_t0["lifetime"] == 1).sum())
-    multi_count = int((absorbed_t0["lifetime"] >= 2).sum())
-
-    newly_added_count = int((absorbed_t0["origin"] == "newly_added").sum())
-    sim_crossed_count = int((absorbed_t0["origin"] == "similarity_crossed").sum())
-    first_rev_count = int((absorbed_t0["origin"] == "first_revision").sum())
-
-    console.print("\n[bold]Absorbed Method Analysis[/bold]")
-    console.print("=" * 40)
-    console.print(f"Total Absorbed methods: {total:,}")
-    console.print(f"  lifetime=1 (t=0 only): {single_count:,} ({single_count / total * 100:.1f}%)")
-    console.print(
-        f"    newly_added:        {newly_added_count:,} ({newly_added_count / total * 100:.1f}%)"
-    )
-    console.print(
-        f"    similarity_crossed: {sim_crossed_count:,} ({sim_crossed_count / total * 100:.1f}%)"
-    )
-    console.print(
-        f"    first_revision:     {first_rev_count:,} ({first_rev_count / total * 100:.1f}%)"
-    )
-    console.print(f"  lifetime>=2 (tracked): {multi_count:,} ({multi_count / total * 100:.1f}%)")
-    if multi_count > 0:
-        multi_lifetime = absorbed_t0[absorbed_t0["lifetime"] >= 2]["lifetime"]
-        console.print(f"    Mean lifetime: {multi_lifetime.mean():.1f}")
-        console.print(f"    Median lifetime: {multi_lifetime.median():.1f}")
-    console.print(f"\nt=0 -> t=-1 drop: {single_count:,} methods")
-
-
 # --- Click コマンド ---
 
 
@@ -640,20 +503,38 @@ def deletion_survival(
     default="./output/versions/method_tracker/methods_tracked.csv",
     help="Full tracking data with method signatures",
 )
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    required=True,
-    default="./data/versions",
-    help="Input directory containing revision subdirectories",
-)
 def analyze_absorbed(
     input_file: str,
     input_tracking: str,
-    input: str,
 ) -> None:
     """Analyze Absorbed methods: lifetime distribution and origin classification."""
-    absorbed_t0 = _load_absorbed_data(input_file, input_tracking)
-    absorbed_t0 = _classify_absorbed_origin(absorbed_t0, input)
-    _print_absorbed_summary(absorbed_t0)
+    df = pd.read_csv(input_file)
+    absorbed_df = df[df["survival_group"] == "Absorbed"]
+    absorbed_time_0 = absorbed_df[absorbed_df["relative_time"] == 0].copy()
+    absorbed_time_minus1 = absorbed_df[absorbed_df["relative_time"] == -1].copy()
+    
+    unique_method_ids = set(absorbed_time_0["method_id"].unique()) - set(absorbed_time_minus1["method_id"].unique())
+    console.print(f"[blue]Unique Absorbed Methods (t=0 only): {len(unique_method_ids)}[/blue]")
+    
+    method_info_df = pd.read_csv(input_tracking)
+    added_to_merged = method_info_df[method_info_df["method_id"].isin(unique_method_ids)]
+    console.print(f"[blue]Details of Unique Absorbed Methods: {len(added_to_merged)}[/blue]")
+    
+    # 以下は分析例
+    console.print(added_to_merged["median_similarity"].describe())
+    
+    # added_to_mergedのprev_file_pathの文字列にtestがどれだけ含まれるか
+    test_count = added_to_merged["prev_file_path"].str.contains("test", case=False, na=False).sum()
+    console.print(f"[blue]Number of Unique Absorbed Methods in Test Files: {test_count}[/blue]")
+    
+    # added_to_mergedのprev_method_nameの一覧
+    unique_prev_method_names = added_to_merged["prev_method_name"].unique()
+    console.print(f"[blue]Unique Previous Method Names of Absorbed Methods: {len(unique_prev_method_names)}[/blue]")
+    # ランキング上位10件を表示
+    top_prev_method_names = (
+        added_to_merged["prev_method_name"]
+        .value_counts()
+        .head(15)
+    )
+    console.print("[blue]Top 10 Previous Method Names of Absorbed Methods:[/blue]")
+    console.print(top_prev_method_names)
