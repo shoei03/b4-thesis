@@ -8,6 +8,7 @@ from b4_thesis.commands import (
     method_tracker,
     nil,
     survival,
+    test_analysis,
 )
 
 console = Console()
@@ -29,6 +30,7 @@ main.add_command(git.git)
 main.add_command(method_tracker.method_tracker)
 main.add_command(nil.nil)
 main.add_command(survival.survival)
+main.add_command(test_analysis.test_analysis)
 
 
 if __name__ == "__main__":
