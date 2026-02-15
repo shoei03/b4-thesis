@@ -699,6 +699,12 @@ def classify_clone(
 
     revision_manager = RevisionManager()
     revisions = revision_manager.get_revisions(Path(input))
+    
+    clone_count = df["has_clone"].sum()
+    console.print(f"Number of rows with has_clone=True: {clone_count/len(revisions)}")
+    
+    no_clone_count = (~df["has_clone"]).sum()
+    console.print(f"Number of rows with has_clone=False: {no_clone_count/len(revisions)}")
 
     uf = UnionFind()
 

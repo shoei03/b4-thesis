@@ -508,33 +508,116 @@ def analyze_absorbed(
     input_tracking: str,
 ) -> None:
     """Analyze Absorbed methods: lifetime distribution and origin classification."""
-    df = pd.read_csv(input_file)
-    absorbed_df = df[df["survival_group"] == "Absorbed"]
-    absorbed_time_0 = absorbed_df[absorbed_df["relative_time"] == 0].copy()
-    absorbed_time_minus1 = absorbed_df[absorbed_df["relative_time"] == -1].copy()
-    
-    unique_method_ids = set(absorbed_time_0["method_id"].unique()) - set(absorbed_time_minus1["method_id"].unique())
-    console.print(f"[blue]Unique Absorbed Methods (t=0 only): {len(unique_method_ids)}[/blue]")
-    
+    deletion_survival_df = pd.read_csv(input_file)
     method_info_df = pd.read_csv(input_tracking)
-    added_to_merged = method_info_df[method_info_df["method_id"].isin(unique_method_ids)]
-    console.print(f"[blue]Details of Unique Absorbed Methods: {len(added_to_merged)}[/blue]")
     
-    # 以下は分析例
-    console.print(added_to_merged["median_similarity"].describe())
+    df = deletion_survival_df.merge(method_info_df, on=["method_id", "prev_revision_id"], how="left", suffixes=("", "_info"))
+    sort_method_info_df = df.sort_values(["method_id", "prev_revision_id"], ascending=[True, False])
     
-    # added_to_mergedのprev_file_pathの文字列にtestがどれだけ含まれるか
-    test_count = added_to_merged["prev_file_path"].str.contains("test", case=False, na=False).sum()
-    console.print(f"[blue]Number of Unique Absorbed Methods in Test Files: {test_count}[/blue]")
+    absorbed_df = sort_method_info_df[sort_method_info_df["survival_group"] == "Absorbed"]
     
-    # added_to_mergedのprev_method_nameの一覧
-    unique_prev_method_names = added_to_merged["prev_method_name"].unique()
-    console.print(f"[blue]Unique Previous Method Names of Absorbed Methods: {len(unique_prev_method_names)}[/blue]")
-    # ランキング上位10件を表示
-    top_prev_method_names = (
-        added_to_merged["prev_method_name"]
-        .value_counts()
-        .head(15)
-    )
-    console.print("[blue]Top 10 Previous Method Names of Absorbed Methods:[/blue]")
-    console.print(top_prev_method_names)
+    # t = 0 
+    absorbed_time_0 = absorbed_df[absorbed_df["relative_time"] == 0].copy()
+    console.print(f"Total Absorbed Methods: {len(absorbed_time_0)}")
+    # t = -1
+    absorbed_time_minus1 = absorbed_df[absorbed_df["relative_time"] == -1].copy()
+    console.print(f"Absorbed Methods at t=-1: {len(absorbed_time_minus1)}")
+    # t = -2
+    absorbed_time_minus2 = absorbed_df[absorbed_df["relative_time"] == -2].copy()
+    console.print(f"Absorbed Methods at t=-2: {len(absorbed_time_minus2)}")
+    # t = -3
+    absorbed_time_minus3 = absorbed_df[absorbed_df["relative_time"] == -3].copy()
+    console.print(f"Absorbed Methods at t=-3: {len(absorbed_time_minus3)}")
+    # t = -10
+    absorbed_time_minus10 = absorbed_df[absorbed_df["relative_time"] == -10].copy()
+    console.print(f"Absorbed Methods at t=-10: {len(absorbed_time_minus10)}")
+    # t = -11
+    absorbed_time_minus11 = absorbed_df[absorbed_df["relative_time"] == -11].copy()
+    console.print(f"Absorbed Methods at t=-11: {len(absorbed_time_minus11)}")
+    
+    # 一時複製型メソッドID
+    unique_method_ids = set(absorbed_time_0["method_id"].unique()) - set(absorbed_time_minus1["method_id"].unique())
+    # 段階的収束型メソッドID
+    gradually_absorbed_ids = set(absorbed_time_minus1["method_id"].unique())
+    console.print(f"Unique Absorbed Method IDs (t=0 only): {len(unique_method_ids)}")
+    # 生存期間が2回のメソッドID
+    survived_2_ids = set(absorbed_time_minus2["method_id"].unique()) - set(absorbed_time_minus3["method_id"].unique())
+    console.print(f"Survived 2 Revisions Method IDs: {len(survived_2_ids)}")
+    # 生存期間が10回のメソッドID
+    survived_10_ids = set(absorbed_time_minus10["method_id"].unique()) - set(absorbed_time_minus11["method_id"].unique())
+    console.print(f"Survived 10 Revisions Method IDs: {len(survived_10_ids)}")
+
+    # t=0での段階的収束型メソッド
+    method_info_t0 = absorbed_time_0[absorbed_time_0["method_id"].isin(gradually_absorbed_ids)]
+    console.print(f"[blue]Gradually Absorbed Methods (t=-1 present): {method_info_t0["median_similarity"].describe()}[/blue]")
+    console.print((method_info_t0["median_similarity"] == 100).sum())
+    
+    # t = 0での一時複製型メソッド
+    method_info_minus1 = absorbed_time_0[absorbed_time_0["method_id"].isin(unique_method_ids)]
+    console.print(f"[blue]Unique Absorbed Methods (t=0 only): {method_info_minus1["median_similarity"].describe()}[/blue]")
+    console.print((method_info_minus1["median_similarity"] == 100).sum())
+    
+    # lifetime=2のメソッドのt = -2での生存分析
+    method_info_life_2 = absorbed_time_minus2[absorbed_time_minus2["method_id"].isin(survived_2_ids)]
+    console.print(f"method count : {len(method_info_life_2)}")
+    console.print(f"[blue]Absorbed Methods Survived 2 Revisions (at t=-2): {method_info_life_2["median_similarity"].describe()}[/blue]")
+    console.print((method_info_life_2["median_similarity"] == 100).sum())
+    
+    # lifetime=2のメソッドのt = -1での生存分析
+    method_info_life_2 = absorbed_time_minus1[absorbed_time_minus1["method_id"].isin(survived_2_ids)]
+    console.print(f"method count : {len(method_info_life_2)}")
+    console.print(f"[blue]Absorbed Methods Survived 2 Revisions (at t=-1): {method_info_life_2["median_similarity"].describe()}[/blue]")
+    console.print((method_info_life_2["median_similarity"] == 100).sum())
+    
+    # lifetime=10のメソッドのt=-2での生存分析
+    method_info_life_10_at_2 = absorbed_time_minus2[absorbed_time_minus2["method_id"].isin(survived_10_ids)]
+    console.print(f"method count : {len(method_info_life_10_at_2)}")
+    console.print(f"[blue]Absorbed Methods Survived 10 Revisions (at t=-2): {method_info_life_10_at_2["median_similarity"].describe()}[/blue]")
+    console.print((method_info_life_10_at_2["median_similarity"] == 100).sum())
+    
+    # lifetime=10のメソッドのt=-10での生存分析
+    method_info_life_10 = absorbed_time_minus10[absorbed_time_minus10["method_id"].isin(survived_10_ids)]
+    console.print(f"method count : {len(method_info_life_10)}")
+    console.print(f"[blue]Absorbed Methods Survived 10 Revisions (at t=-10): {method_info_life_10["median_similarity"].describe()}[/blue]")
+    console.print((method_info_life_10["median_similarity"] == 100).sum())
+    
+    
+    absorber_df = sort_method_info_df[(sort_method_info_df["survival_group"] == "Absorber") & (sort_method_info_df["relative_time"] == 0)]
+    high_similarity_absorbers = absorber_df[absorber_df["median_similarity"] == 100]
+    console.print(f"[blue]Absorber Methods at t=0 with 100% Similarity: {len(high_similarity_absorbers)}[/blue]")
+    console.print(absorber_df["median_similarity"].describe())
+    
+    
+    # # 段階的収束型メソッドの生存分析
+    # gradually_absorbed_methods = method_info_t0[method_info_t0["method_id"].isin(gradually_absorbed_ids)]
+    # # 段階的収束型メソッドのt=0での分析
+    # console.print(f"[blue]Gradually Absorbed Methods (t=-1 present): {gradually_absorbed_methods["median_similarity"].describe()}[/blue]")
+    # console.print((gradually_absorbed_methods["median_similarity"] == 100).sum())
+    
+    # # 一時的複製型メソッドの生存分析
+    # temporary_absorbed_methods = method_info_t0[method_info_t0["method_id"].isin(unique_method_ids)]
+    
+    
+    # console.print(f"[blue]Unique Absorbed Methods (t=0 only): {len(unique_method_ids)}[/blue]")
+    
+    # added_to_merged = method_info_df[method_info_df["method_id"].isin(unique_method_ids)]
+    # console.print(f"[blue]Details of Unique Absorbed Methods: {len(added_to_merged)}[/blue]")
+    
+    # # 以下は分析例
+    # console.print(added_to_merged["median_similarity"].describe())
+    
+    # # added_to_mergedのprev_file_pathの文字列にtestがどれだけ含まれるか
+    # test_count = added_to_merged["prev_file_path"].str.contains("test", case=False, na=False).sum()
+    # console.print(f"[blue]Number of Unique Absorbed Methods in Test Files: {test_count}[/blue]")
+    
+    # # added_to_mergedのprev_method_nameの一覧
+    # unique_prev_method_names = added_to_merged["prev_method_name"].unique()
+    # console.print(f"[blue]Unique Previous Method Names of Absorbed Methods: {len(unique_prev_method_names)}[/blue]")
+    # # ランキング上位10件を表示
+    # top_prev_method_names = (
+    #     added_to_merged["prev_method_name"]
+    #     .value_counts()
+    #     .head(15)
+    # )
+    # console.print("[blue]Top 10 Previous Method Names of Absorbed Methods:[/blue]")
+    # console.print(top_prev_method_names)
