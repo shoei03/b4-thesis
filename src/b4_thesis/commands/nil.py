@@ -84,24 +84,17 @@ def track_sim(
 
     # Iterate through revision pairs
     for prev_revision, curr_revision in zip(revisions[:-1], revisions[1:]):
+        console.print(f"Revision {prev_revision.timestamp} -> {curr_revision.timestamp}")
+
         prev_code_blocks = revision_manager.load_code_blocks(prev_revision)
         curr_code_blocks = revision_manager.load_code_blocks(curr_revision)
 
         prev_code_blocks[ColumnNames.REVISION_ID.value] = prev_revision.timestamp
         curr_code_blocks[ColumnNames.REVISION_ID.value] = curr_revision.timestamp
 
-        # Convert DataFrames to list of dicts for NIL-based matching
-        source_blocks = prev_code_blocks.to_dict("records")
-        target_blocks = curr_code_blocks.to_dict("records")
-
-        console.print(
-            f"Revision {prev_revision.timestamp} -> {curr_revision.timestamp}: "
-            f"{len(source_blocks)}×{len(target_blocks)} blocks to match"
-        )
-
         # Use NIL-based cross-revision matching
         match_results = cross_revision_matcher.match_revisions_with_changes(
-            source_blocks, target_blocks
+            prev_code_blocks, curr_code_blocks
         )
 
         # Accumulate results

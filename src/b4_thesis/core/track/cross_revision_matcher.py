@@ -8,6 +8,7 @@ import bisect
 from collections import defaultdict
 
 from rich.progress import track
+import pandas as pd
 
 from b4_thesis.const.column import ColumnNames
 
@@ -43,14 +44,18 @@ class CrossRevisionMatcher:
 
     def match_revisions_with_changes(
         self,
-        source_blocks: list[dict],
-        target_blocks: list[dict],
+        prev_code_blocks: pd.DataFrame,
+        curr_code_blocks: pd.DataFrame,
     ) -> list[dict]:
         """Match blocks and track deletions/additions.
 
         Returns:
             Single list of all blocks with boolean flags (is_matched, is_deleted, is_added)
         """
+
+        # Convert DataFrames to list of dicts for NIL-based matching
+        source_blocks = prev_code_blocks.to_dict("records")
+        target_blocks = curr_code_blocks.to_dict("records")
 
         # 空チェック
         if not source_blocks and not target_blocks:
