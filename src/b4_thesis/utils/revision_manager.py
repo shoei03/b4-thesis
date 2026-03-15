@@ -49,7 +49,7 @@ class RevisionManager:
                 ColumnNames.TOKEN_SEQUENCE.value: "string",
             },
         )
-        
+
         code_blocks[ColumnNames.REVISION_ID.value] = revision.timestamp
 
         code_blocks[ColumnNames.TOKEN_SEQUENCE.value] = (
