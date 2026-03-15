@@ -6,8 +6,6 @@ import pandas as pd
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
-from b4_thesis.core.track.classify.merge_splits import merge_splits
-from b4_thesis.core.track.cross_revision_matcher import CrossRevisionMatcher
 from b4_thesis.core.track.union_find import UnionFind
 from b4_thesis.utils.revision_manager import RevisionManager
 
@@ -255,43 +253,6 @@ def evaluate(input: str, output: str) -> None:
     console.print(f"  - Entries with matched references: {count_matched_with_matched}")
     console.print(f"Total added entries: {len(added_false_positives)}")
     console.print(f"  - Entries with matched references: {count_added_with_matched}")
-
-
-@nil.command()
-@click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    required=True,
-    default="./output/versions/nil/methods_tracking_by_nil.csv",
-    help="Input file containing tracked methods data",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=True, dir_okay=False),
-    required=False,
-    default="./output/versions/nil/methods_tracking_with_merge_splits.csv",
-    help="Output file for classified results",
-)
-@click.option(
-    "--verify-threshold",
-    type=click.FloatRange(0.0, 1.0),
-    default=0.7,
-    help="Threshold for verifying splits/merges (0.0-1.0, default: 0.7)",
-)
-def track_merge_splits(
-    input: str,
-    output: str,
-    verify_threshold: float,
-) -> None:
-    """Classify tracked methods into categories including merges and splits."""
-    df = pd.read_csv(input)
-
-    merge_splits_df = merge_splits(df, verify_threshold=verify_threshold)
-
-    merge_splits_df.to_csv(output, index=False)
-    console.print(f"[green]Results with merge/split classification saved to:[/green] {output}")
 
 
 @nil.command()
