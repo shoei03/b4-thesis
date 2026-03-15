@@ -24,6 +24,12 @@ def nil():
     """
     pass
 
+def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
+    """Add a unified similarity column to clone_pairs DataFrame."""
+    clone_pairs["similarity"] = clone_pairs[ColumnNames.VERIFY_SIMILARITY.value].fillna(
+        clone_pairs[ColumnNames.NGRAM_OVERLAP.value]
+    )
+    return clone_pairs
 
 @nil.command()
 @click.option(
