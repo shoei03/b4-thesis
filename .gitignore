@@ -50,7 +50,7 @@ data/
 *.db
 
 # Output
-output/
+# output/
 results/
 plots/
 *.png
