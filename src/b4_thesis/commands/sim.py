@@ -84,3 +84,150 @@ def apply_median_similarity(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     console.print(f"[green]Results saved to:[/green] {output_path}")
+
+
+@sim.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/4_track_median_similarity.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/6_class_delete.csv",
+    help="Output file for CSV data",
+)
+def by_clone(
+    input_file: str,
+    output: str,
+):
+    df = pd.read_csv(input_file)
+
+    df["has_clone"] = df["median_similarity"] >= 70
+
+    # ブール型に変換（文字列として読み込まれている場合に対応）
+    df["is_matched"] = df["is_matched"].astype(bool)
+    df["is_absorbed"] = df["is_absorbed"].astype(bool)
+    df["is_deleted"] = df["is_deleted"].astype(bool)
+
+    # 状態を3分類: deleted, absorbed, survived
+    df["status"] = "survived"
+    df.loc[df["is_deleted"], "status"] = "deleted"
+    df.loc[df["is_absorbed"], "status"] = "absorbed"
+
+    result = pd.crosstab(
+        df[ColumnNames.PREV_REVISION_ID.value],
+        [df["status"], df["has_clone"]],
+    )
+
+    # クローン有無別の削除率（is_deleted）
+    deleted_rate_by_clone = (
+        df.groupby([ColumnNames.PREV_REVISION_ID.value, "has_clone"])["is_deleted"]
+        .apply(lambda x: x.mean() * 100)
+        .unstack(fill_value=0)
+        .round(2)
+    )
+
+    # クローン有無別の吸収率（is_absorbed）
+    absorbed_rate_by_clone = (
+        df.groupby([ColumnNames.PREV_REVISION_ID.value, "has_clone"])["is_absorbed"]
+        .apply(lambda x: x.mean() * 100)
+        .unstack(fill_value=0)
+        .round(2)
+    )
+
+    # カラムとして追加
+    result[("clone_deleted_rate(%)", "")] = deleted_rate_by_clone.get(True, 0)
+    result[("no_clone_deleted_rate(%)", "")] = deleted_rate_by_clone.get(False, 0)
+    result[("clone_absorbed_rate(%)", "")] = absorbed_rate_by_clone.get(True, 0)
+    result[("no_clone_absorbed_rate(%)", "")] = absorbed_rate_by_clone.get(False, 0)
+
+    # 全リビジョンでの平均を計算
+    avg_row = result.mean(numeric_only=True).round(2)
+    avg_row.name = "Average"
+    result = pd.concat([result, avg_row.to_frame().T])
+
+    result.to_csv(output, index=True)
+    console.print(f"[green]Results saved to:[/green] {output}")
+
+
+@sim.command()
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    default="./output/versions/nil/4_track_median_similarity.csv",
+    help="Input file containing tracked methods data",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=True, dir_okay=False),
+    required=True,
+    default="./output/versions/nil/7_class_high_low_sim.csv",
+    help="Output file for CSV data",
+)
+def by_sim(
+    input_file: str,
+    output: str,
+):
+    df = pd.read_csv(input_file)
+
+    df = df.sort_values("prev_revision_id")
+    df["has_clone"] = df["median_similarity"] >= 70
+    df["high_sim"] = df["median_similarity"] >= 90
+    df["low_sim"] = (df["median_similarity"] < 90) & (df["median_similarity"] >= 70)
+
+    # 状態を3分類: deleted, absorbed, survived
+    df["status"] = "survived"
+    df.loc[df["is_deleted"], "status"] = "deleted"
+    df.loc[df["is_absorbed"], "status"] = "absorbed"
+
+    result = pd.crosstab(
+        df[ColumnNames.PREV_REVISION_ID.value],
+        [df["status"], df["high_sim"], df["low_sim"]],
+    )
+
+    # high_sim の削除率と吸収率を計算
+    high_sim_deleted_rate = (
+        df[df["high_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_deleted"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+    high_sim_absorbed_rate = (
+        df[df["high_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_absorbed"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+
+    # low_sim の削除率と吸収率を計算
+    low_sim_deleted_rate = (
+        df[df["low_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_deleted"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+    low_sim_absorbed_rate = (
+        df[df["low_sim"] & df["has_clone"]]
+        .groupby(ColumnNames.PREV_REVISION_ID.value)["is_absorbed"]
+        .apply(lambda x: x.astype(float).mean() * 100)
+        .round(2)
+    )
+
+    # カラムとして追加（3レベルのマルチインデックスに対応）
+    result[("high_sim_deleted_rate(%)", "", "")] = high_sim_deleted_rate
+    result[("high_sim_absorbed_rate(%)", "", "")] = high_sim_absorbed_rate
+    result[("low_sim_deleted_rate(%)", "", "")] = low_sim_deleted_rate
+    result[("low_sim_absorbed_rate(%)", "", "")] = low_sim_absorbed_rate
+
+    avg_row = result.mean(numeric_only=True).round(2)
+    avg_row.name = "Average"
+    result = pd.concat([result, avg_row.to_frame().T])
+
+    result.to_csv(output, index=True)
+    console.print(f"[green]Results saved to:[/green] {output}")
