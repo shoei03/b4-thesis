@@ -23,73 +23,9 @@ def nil():
 
 @nil.command()
 @click.option(
-    "--input",
-    "-i",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    required=True,
-    default="./data/versions",
-    help="Input directory containing revision subdirectories",
-)
-@click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     default="./output/versions/nil/4_track_median_similarity.csv",
-    help="Input file containing tracked methods data",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(file_okay=True, dir_okay=False),
-    required=True,
-    default="./output/versions/nil/5_has_clone.csv",
-    help="Output file for CSV data",
-)
-def track_clone(
-    input: str,
-    input_file: str,
-    output: str,
-) -> None:
-    """Track clone presence in method tracking results."""
-    df = pd.read_csv(input_file)
-    revision_manager = RevisionManager()
-    revisions = revision_manager.get_revisions(Path(input))
-
-    rev_clone_hashes = {}
-    for rev in revisions:
-        clone_pairs = revision_manager.load_clone_pairs(rev)
-        hashes = set(clone_pairs[ColumnNames.TOKEN_HASH_1.value]) | set(
-            clone_pairs[ColumnNames.TOKEN_HASH_2.value]
-        )
-        rev_clone_hashes[str(rev.timestamp)] = hashes
-
-    prev_rev_col = ColumnNames.PREV_REVISION_ID.value
-    prev_hash_col = ColumnNames.PREV_TOKEN_HASH.value
-
-    df[ColumnNames.HAS_CLONE.value] = False
-    for rev_id, hashes in rev_clone_hashes.items():
-        mask = df[prev_rev_col] == rev_id
-        matched = df.loc[mask, prev_hash_col].isin(hashes)
-        df.loc[mask, ColumnNames.HAS_CLONE.value] = matched
-
-    output_path = Path(output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    console.print(f"[green]Results saved to:[/green] {output_path}")
-
-    console.print("\nOverall clone presence:")
-    console.print(
-        pd.crosstab(
-            df[ColumnNames.PREV_REVISION_ID.value],
-            [df[ColumnNames.HAS_CLONE.value], df["is_matched"], df["is_deleted"]],
-        )
-    )
-
-
-@nil.command()
-@click.option(
-    "--input-file",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/5_has_clone.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -105,6 +41,8 @@ def class_delete(
     output: str,
 ):
     df = pd.read_csv(input_file)
+    
+    df["has_clone"] = df["median_similarity"] >= 70
 
     # ブール型に変換（文字列として読み込まれている場合に対応）
     df["is_matched"] = df["is_matched"].astype(bool)
@@ -157,7 +95,7 @@ def class_delete(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/5_has_clone.csv",
+    default="./output/versions/nil/4_track_median_similarity.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
