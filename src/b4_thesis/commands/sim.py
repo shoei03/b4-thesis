@@ -35,8 +35,8 @@ def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/method_tracker/methods_tracked.csv",
-    help="Input file containing tracked methods data",
+    default="./output/versions/labels/final/method_identity_tracking.csv",
+    help="Input CSV containing method identity tracking labels",
 )
 @click.option(
     "--output",

@@ -189,8 +189,8 @@ def method_tracker():
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/method_tracker/methods_tracked.csv",
-    help="Output file for classified results",
+    default="./output/versions/labels/final/method_identity_tracking.csv",
+    help="Output CSV for method identity tracking labels",
 )
 def assign_method_ids(input_csv: str, output_csv: str) -> None:
     """CSVファイルを読み込み、メソッドに一意のIDを割り当てる"""

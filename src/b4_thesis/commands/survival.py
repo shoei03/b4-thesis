@@ -378,8 +378,8 @@ def survival():
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/4_track_median_similarity.csv",
-    help="Input file containing tracked methods data",
+    default="./output/versions/features/method_similarity_features.csv",
+    help="Input CSV containing method-level similarity features",
 )
 @click.option(
     "--output-csv",
@@ -500,8 +500,8 @@ def deletion_survival(
 @click.option(
     "--input-tracking",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/method_tracker/methods_tracked.csv",
-    help="Full tracking data with method signatures",
+    default="./output/versions/labels/final/method_identity_tracking.csv",
+    help="Method identity tracking labels with method signatures",
 )
 def analyze_absorbed(
     input_file: str,
