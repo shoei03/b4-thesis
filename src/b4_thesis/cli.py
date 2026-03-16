@@ -7,7 +7,6 @@ from b4_thesis.commands import (
     git,
     label,
     method_tracker,
-    nil,
     sim,
     survival,
     test_analysis,
@@ -31,7 +30,6 @@ def main(ctx):
 main.add_command(git.git)
 main.add_command(label.label)
 main.add_command(method_tracker.method_tracker)
-main.add_command(nil.nil)
 main.add_command(sim.sim)
 main.add_command(survival.survival)
 main.add_command(test_analysis.test_analysis)
