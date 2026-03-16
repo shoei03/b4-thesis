@@ -42,8 +42,8 @@ def _add_similarity_column(clone_pairs: pd.DataFrame) -> pd.DataFrame:
     "--output",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/nil/4_track_median_similarity.csv",
-    help="Output file for CSV data",
+    default="./output/versions/features/method_similarity_features.csv",
+    help="Output CSV for method-level similarity features",
 )
 def apply_median_similarity(
     input: str,
@@ -90,16 +90,16 @@ def apply_median_similarity(
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/4_track_median_similarity.csv",
-    help="Input file containing tracked methods data",
+    default="./output/versions/features/method_similarity_features.csv",
+    help="Input CSV containing method-level similarity features",
 )
 @click.option(
     "--output",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/6_class_delete.csv",
-    help="Output file for CSV data",
+    default="./output/versions/analysis/deletion_by_clone_summary.csv",
+    help="Output CSV for deletion/absorption summary by clone presence",
 )
 def by_clone(
     input_file: str,
@@ -151,24 +151,26 @@ def by_clone(
     avg_row.name = "Average"
     result = pd.concat([result, avg_row.to_frame().T])
 
-    result.to_csv(output, index=True)
-    console.print(f"[green]Results saved to:[/green] {output}")
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(output_path, index=True)
+    console.print(f"[green]Results saved to:[/green] {output_path}")
 
 
 @sim.command()
 @click.option(
     "--input-file",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
-    default="./output/versions/nil/4_track_median_similarity.csv",
-    help="Input file containing tracked methods data",
+    default="./output/versions/features/method_similarity_features.csv",
+    help="Input CSV containing method-level similarity features",
 )
 @click.option(
     "--output",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    default="./output/versions/nil/7_class_high_low_sim.csv",
-    help="Output file for CSV data",
+    default="./output/versions/analysis/deletion_by_similarity_band_summary.csv",
+    help="Output CSV for deletion/absorption summary by similarity band",
 )
 def by_sim(
     input_file: str,
@@ -229,5 +231,7 @@ def by_sim(
     avg_row.name = "Average"
     result = pd.concat([result, avg_row.to_frame().T])
 
-    result.to_csv(output, index=True)
-    console.print(f"[green]Results saved to:[/green] {output}")
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(output_path, index=True)
+    console.print(f"[green]Results saved to:[/green] {output_path}")
