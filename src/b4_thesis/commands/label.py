@@ -32,8 +32,8 @@ def label():
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/2_sig_match.csv",
-    help="Output file for signature matching results",
+    default="./output/versions/labels/intermediate/signature_match_labels.csv",
+    help="Output CSV for signature-based label candidates",
 )
 def track_sig(
     input: str,
@@ -59,8 +59,10 @@ def track_sig(
 
         validate_counts(prev_code_blocks, matched_df, prev_rev.timestamp)
 
-    df.to_csv(output, index=False)
-    console.print(f"[green]Results saved to:[/green] {output}")
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    console.print(f"[green]Results saved to:[/green] {output_path}")
 
 
 @label.command()
@@ -93,10 +95,10 @@ def track_sig(
 @click.option(
     "--output",
     "-o",
-    default="./output/versions/nil/1_sim_match.csv",
+    default="./output/versions/labels/intermediate/similarity_match_labels.csv",
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
-    help="Output file for similarity matching results",
+    help="Output CSV for similarity-based label candidates",
 )
 def track_sim(
     input: str,
@@ -130,9 +132,11 @@ def track_sim(
 
         all_results.extend(match_results)
 
-    pd.DataFrame(all_results).to_csv(output, index=False)
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(all_results).to_csv(output_path, index=False)
 
-    console.print(f"[green]Results saved to:[/green] {output}")
+    console.print(f"[green]Results saved to:[/green] {output_path}")
 
 
 @label.command()
@@ -141,23 +145,23 @@ def track_sim(
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/1_sim_match.csv",
-    help="Input file containing tracked methods data",
+    default="./output/versions/labels/intermediate/similarity_match_labels.csv",
+    help="Input CSV containing similarity-based label candidates",
 )
 @click.option(
     "--input-sig",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/2_sig_match.csv",
-    help="Input file containing tracked methods data",
+    default="./output/versions/labels/intermediate/signature_match_labels.csv",
+    help="Input CSV containing signature-based label candidates",
 )
 @click.option(
     "--output",
     "-o",
     type=click.Path(file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/3_sim_sig_match.csv",
-    help="Output file for classified results",
+    default="./output/versions/labels/final/method_transition_labels.csv",
+    help="Output CSV for merged method-transition labels",
 )
 def track_sim_sig(
     input_sim: str,
@@ -246,5 +250,7 @@ def track_sim_sig(
     df_result["is_deleted"] = df_result["is_sig_deleted"] & df_result["is_sim_deleted"]
     df_result["is_added"] = ~df_result["is_matched"] & ~df_result["is_deleted"]
 
-    df_result.to_csv(output, index=False)
-    console.print(f"[green]Results saved to:[/green] {output}")
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_result.to_csv(output_path, index=False)
+    console.print(f"[green]Results saved to:[/green] {output_path}")

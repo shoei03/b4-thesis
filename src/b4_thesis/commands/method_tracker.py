@@ -3,6 +3,7 @@ from typing import NamedTuple
 import click
 import pandas as pd
 from rich.console import Console
+from pathlib import Path
 
 console = Console()
 
@@ -180,7 +181,7 @@ def method_tracker():
     "-i",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=False,
-    default="./output/versions/nil/3_sim_sig_match.csv",
+    default="./output/versions/labels/final/method_transition_labels.csv",
     help="Input file containing tracked methods data",
 )
 @click.option(
@@ -202,11 +203,13 @@ def assign_method_ids(input_csv: str, output_csv: str) -> None:
     df["is_absorbed"] = is_absorbed_flags
     df["is_absorber"] = is_absorber_flags
 
-    df.sort_values(["method_id", "prev_revision_id"]).to_csv(output_csv, index=False)
+    output_path = Path(output_csv)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.sort_values(["method_id", "prev_revision_id"]).to_csv(output_path, index=False)
 
     stats["total_rows"] = len(df)
     _print_statistics(stats)
-    print(f"Output saved to: {output_csv}")
+    print(f"Output saved to: {output_path}")
 
 
 # --- 表示ヘルパー ---
