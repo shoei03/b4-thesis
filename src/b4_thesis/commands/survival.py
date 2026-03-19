@@ -91,6 +91,7 @@ def _compute_relative_time(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.sort_values(["method_id", ColumnNames.PREV_REVISION_ID.value])
 
+    # 相対時間を計測（削除、統合元）
     df["relative_time"] = (
         (
             df.groupby("method_id").cumcount()
@@ -101,14 +102,22 @@ def _compute_relative_time(df: pd.DataFrame) -> pd.DataFrame:
         .astype(int)
     )
 
+    # 相対時間を計測（統合先）
     absorber_mask = df["survival_group"] == "Absorber"
     if absorber_mask.any():
         absorber_df = df.loc[absorber_mask].copy()
+
+        # method_idの古い順に順序を割り当てる
         absorber_df["_pos"] = absorber_df.groupby("method_id").cumcount()
+
+        # 各method_idの最後の統合時点を取得
         last_absorber_pos = (
             absorber_df[absorber_df["is_absorber"]].groupby("method_id")["_pos"].last()
         )
+
+        # 統合時点の順序をアンカーとしてメモ
         absorber_df["_anchor"] = absorber_df["method_id"].map(last_absorber_pos)
+
         df.loc[absorber_mask, "relative_time"] = (
             absorber_df["_pos"] - absorber_df["_anchor"]
         ).astype(int)
