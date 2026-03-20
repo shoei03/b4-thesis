@@ -528,94 +528,90 @@ def analyze_absorbed(
 
     absorbed_df = sort_method_info_df[sort_method_info_df["survival_group"] == "Absorbed"]
 
-    # t = 0
+    # t = 0で生存しているメソッド
     absorbed_time_0 = absorbed_df[absorbed_df["relative_time"] == 0].copy()
     console.print(f"Total Absorbed Methods: {len(absorbed_time_0)}")
-    # t = -1
+    # t = -1で生存しているメソッド
     absorbed_time_minus1 = absorbed_df[absorbed_df["relative_time"] == -1].copy()
     console.print(f"Absorbed Methods at t=-1: {len(absorbed_time_minus1)}")
-    # t = -2
+    # t = -2で生存しているメソッド
     absorbed_time_minus2 = absorbed_df[absorbed_df["relative_time"] == -2].copy()
     console.print(f"Absorbed Methods at t=-2: {len(absorbed_time_minus2)}")
-    # t = -3
+    # t = -3で生存しているメソッド
     absorbed_time_minus3 = absorbed_df[absorbed_df["relative_time"] == -3].copy()
     console.print(f"Absorbed Methods at t=-3: {len(absorbed_time_minus3)}")
-    # t = -10
+    # t = -9で生存しているメソッド
+    absorbed_time_minus9 = absorbed_df[absorbed_df["relative_time"] == -9].copy()
+    console.print(f"Absorbed Methods at t=-9: {len(absorbed_time_minus9)}")
+    # t = -10で生存しているメソッド
     absorbed_time_minus10 = absorbed_df[absorbed_df["relative_time"] == -10].copy()
     console.print(f"Absorbed Methods at t=-10: {len(absorbed_time_minus10)}")
-    # t = -11
-    absorbed_time_minus11 = absorbed_df[absorbed_df["relative_time"] == -11].copy()
-    console.print(f"Absorbed Methods at t=-11: {len(absorbed_time_minus11)}")
 
-    # 一時複製型メソッドID
-    unique_method_ids = set(absorbed_time_0["method_id"].unique()) - set(
+    # 生存期間が1回のメソッドID（一時的複製型）
+    tmp_clone_ids = set(absorbed_time_0["method_id"].unique()) - set(
         absorbed_time_minus1["method_id"].unique()
     )
-    # 段階的収束型メソッドID
+    # 生存期間が2回以上のメソッドID（段階的収束型）
     gradually_absorbed_ids = set(absorbed_time_minus1["method_id"].unique())
-    console.print(f"Unique Absorbed Method IDs (t=0 only): {len(unique_method_ids)}")
-    # 生存期間が2回のメソッドID
-    survived_2_ids = set(absorbed_time_minus2["method_id"].unique()) - set(
+    console.print(f"Unique Absorbed Method IDs (t=0 only): {len(tmp_clone_ids)}")
+    # 生存期間が3回のメソッドID（段階的収束型）
+    survived_3_ids = set(absorbed_time_minus2["method_id"].unique()) - set(
         absorbed_time_minus3["method_id"].unique()
     )
-    console.print(f"Survived 2 Revisions Method IDs: {len(survived_2_ids)}")
-    # 生存期間が10回のメソッドID
-    survived_10_ids = set(absorbed_time_minus10["method_id"].unique()) - set(
-        absorbed_time_minus11["method_id"].unique()
+    console.print(f"Survived 3 Revisions Method IDs: {len(survived_3_ids)}")
+    # 生存期間が10回のメソッドID（段階的収束型）
+    survived_10_ids = set(absorbed_time_minus9["method_id"].unique()) - set(
+        absorbed_time_minus10["method_id"].unique()
     )
     console.print(f"Survived 10 Revisions Method IDs: {len(survived_10_ids)}")
 
-    # t=0での段階的収束型メソッド
+    # t = 0での一時複製型メソッドの類似度（median）
+    method_info_minus1 = absorbed_time_0[absorbed_time_0["method_id"].isin(tmp_clone_ids)]
+    console.print(
+        f"[blue]Temporary Clone Methods (t=0 only): {method_info_minus1['median_similarity'].describe()}[/blue]"
+    )
+    # t = 0での段階的収束型メソッドの類似度（median）
     method_info_t0 = absorbed_time_0[absorbed_time_0["method_id"].isin(gradually_absorbed_ids)]
     console.print(
         f"[blue]Gradually Absorbed Methods (t=-1 present): {method_info_t0['median_similarity'].describe()}[/blue]"
     )
-    console.print((method_info_t0["median_similarity"] == 100).sum())
 
-    # t = 0での一時複製型メソッド
-    method_info_minus1 = absorbed_time_0[absorbed_time_0["method_id"].isin(unique_method_ids)]
-    console.print(
-        f"[blue]Unique Absorbed Methods (t=0 only): {method_info_minus1['median_similarity'].describe()}[/blue]"
-    )
-    console.print((method_info_minus1["median_similarity"] == 100).sum())
-
-    # lifetime=2のメソッドのt = -2での生存分析
-    method_info_life_2 = absorbed_time_minus2[
-        absorbed_time_minus2["method_id"].isin(survived_2_ids)
+    # lifetime = 3のメソッドのt = -1での生存分析
+    method_info_life_3 = absorbed_time_minus1[
+        absorbed_time_minus1["method_id"].isin(survived_3_ids)
     ]
-    console.print(f"method count : {len(method_info_life_2)}")
+    console.print(f"method count : {len(method_info_life_3)}")
     console.print(
-        f"[blue]Absorbed Methods Survived 2 Revisions (at t=-2): {method_info_life_2['median_similarity'].describe()}[/blue]"
+        f"[blue]Absorbed Methods Survived 3 Revisions (at t=-1): {method_info_life_3['median_similarity'].describe()}[/blue]"
     )
-    console.print((method_info_life_2["median_similarity"] == 100).sum())
-
-    # lifetime=2のメソッドのt = -1での生存分析
-    method_info_life_2 = absorbed_time_minus1[
-        absorbed_time_minus1["method_id"].isin(survived_2_ids)
+    console.print((method_info_life_3["median_similarity"] == 100).sum())
+    # lifetime = 3のメソッドのt = -2での生存分析
+    method_info_life_3 = absorbed_time_minus2[
+        absorbed_time_minus2["method_id"].isin(survived_3_ids)
     ]
-    console.print(f"method count : {len(method_info_life_2)}")
+    console.print(f"method count : {len(method_info_life_3)}")
     console.print(
-        f"[blue]Absorbed Methods Survived 2 Revisions (at t=-1): {method_info_life_2['median_similarity'].describe()}[/blue]"
+        f"[blue]Absorbed Methods Survived 3 Revisions (at t=-2): {method_info_life_3['median_similarity'].describe()}[/blue]"
     )
-    console.print((method_info_life_2["median_similarity"] == 100).sum())
+    console.print((method_info_life_3["median_similarity"] == 100).sum())
 
-    # lifetime=10のメソッドのt=-2での生存分析
-    method_info_life_10_at_2 = absorbed_time_minus2[
-        absorbed_time_minus2["method_id"].isin(survived_10_ids)
+    # lifetime = 10のメソッドのt = -1での生存分析
+    method_info_life_10_at_1 = absorbed_time_minus1[
+        absorbed_time_minus1["method_id"].isin(survived_10_ids)
     ]
-    console.print(f"method count : {len(method_info_life_10_at_2)}")
+    console.print(f"method count : {len(method_info_life_10_at_1)}")
     console.print(
-        f"[blue]Absorbed Methods Survived 10 Revisions (at t=-2): {method_info_life_10_at_2['median_similarity'].describe()}[/blue]"
+        f"[blue]Absorbed Methods Survived 10 Revisions (at t=-1): {method_info_life_10_at_1['median_similarity'].describe()}[/blue]"
     )
-    console.print((method_info_life_10_at_2["median_similarity"] == 100).sum())
+    console.print((method_info_life_10_at_1["median_similarity"] == 100).sum())
 
-    # lifetime=10のメソッドのt=-10での生存分析
-    method_info_life_10 = absorbed_time_minus10[
-        absorbed_time_minus10["method_id"].isin(survived_10_ids)
+    # lifetime = 10のメソッドのt = -9での生存分析
+    method_info_life_10 = absorbed_time_minus9[
+        absorbed_time_minus9["method_id"].isin(survived_10_ids)
     ]
     console.print(f"method count : {len(method_info_life_10)}")
     console.print(
-        f"[blue]Absorbed Methods Survived 10 Revisions (at t=-10): {method_info_life_10['median_similarity'].describe()}[/blue]"
+        f"[blue]Absorbed Methods Survived 10 Revisions (at t=-9): {method_info_life_10['median_similarity'].describe()}[/blue]"
     )
     console.print((method_info_life_10["median_similarity"] == 100).sum())
 
