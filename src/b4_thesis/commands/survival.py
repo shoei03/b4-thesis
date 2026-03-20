@@ -393,31 +393,31 @@ def survival():
 @click.option(
     "--output-csv",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/survival/deletion_survival.csv",
+    default="./output/versions/analysis/deletion_survival.csv",
     help="Output file for CSV data",
 )
 @click.option(
     "--output-boxplot-absorber",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/survival/deletion_survival_boxplot_absorber.pdf",
+    default="./output/versions/analysis/deletion_survival_boxplot_absorber.pdf",
     help="Output file for the absorber group boxplot",
 )
 @click.option(
     "--output-boxplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/survival/deletion_survival_boxplot_deletion.pdf",
+    default="./output/versions/analysis/deletion_survival_boxplot_deletion.pdf",
     help="Output file for the absorbed+deleted group boxplot",
 )
 @click.option(
     "--output-areaplot-absorber",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/survival/deletion_survival_areaplot_absorber.pdf",
+    default="./output/versions/analysis/deletion_survival_areaplot_absorber.pdf",
     help="Output file for the absorber group area plot",
 )
 @click.option(
     "--output-areaplot-deletion",
     type=click.Path(file_okay=True, dir_okay=False),
-    default="./output/versions/survival/deletion_survival_areaplot_deletion.pdf",
+    default="./output/versions/analysis/deletion_survival_areaplot_deletion.pdf",
     help="Output file for the absorbed+deleted group stacked area plot",
 )
 def deletion_survival(
@@ -471,6 +471,7 @@ def deletion_survival(
     area_absorber_time_values = sorted(area_absorber_df["relative_time"].unique())
     area_deletion_time_values = sorted(area_deletion_df["relative_time"].unique())
 
+    # 各相対時間におけるメソッド数をカウント
     nonnull_count_df = (
         plot_df.groupby(["relative_time", "survival_group_ja"]).size().reset_index(name="count")
     )
