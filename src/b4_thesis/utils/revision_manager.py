@@ -6,7 +6,7 @@ import pandas as pd
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
-from b4_thesis.core.track.validate import validate_code_block
+from b4_thesis.utils.validate import validate_code_block
 
 console = Console()
 

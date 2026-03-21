@@ -5,7 +5,7 @@ import pandas as pd
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
-from b4_thesis.core.track.cross_revision_matcher import CrossRevisionMatcher
+from b4_thesis.utils.cross_revision_matcher import CrossRevisionMatcher
 from b4_thesis.utils.revision_manager import RevisionManager
 from b4_thesis.utils.sig_match import apply_signature_matching, pre_process, validate_counts
 
