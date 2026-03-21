@@ -1,11 +1,11 @@
+from pathlib import Path
+
 import click
+import pandas as pd
 from rich.console import Console
 
 from b4_thesis.const.column import ColumnNames
 from b4_thesis.utils.revision_manager import RevisionManager
-import pandas as pd
-
-from pathlib import Path
 
 console = Console()
 

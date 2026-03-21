@@ -1,9 +1,9 @@
+from pathlib import Path
 from typing import NamedTuple
 
 import click
 import pandas as pd
 from rich.console import Console
-from pathlib import Path
 
 console = Console()
 

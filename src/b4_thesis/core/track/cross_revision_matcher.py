@@ -7,8 +7,8 @@ across different revisions, reducing complexity from O(N×M) to O((N+M)log(N+M))
 import bisect
 from collections import defaultdict
 
-from rich.progress import track
 import pandas as pd
+from rich.progress import track
 
 from b4_thesis.const.column import ColumnNames
 
