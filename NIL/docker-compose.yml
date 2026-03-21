@@ -1,0 +1,6 @@
+services:
+  nil:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
