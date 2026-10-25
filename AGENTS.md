@@ -6,7 +6,7 @@ This document contains essential information for developing this project with co
 
 **Project Name**: B4 Thesis - Software Engineering Research Analysis Tool
 **Purpose**: Python CLI analysis tool for software engineering research
-**Python Version**: 3.10+
+**Python Version**: 3.12+
 
 ## Project Structure
 
@@ -123,7 +123,7 @@ uv add --dev pytest-cov
 1. **Format**: Use Ruff (line-length: 100)
 2. **Import Order**: Auto-sort enabled (stdlib → third-party → first-party)
 3. **Strings**: Use double quotes
-4. **Type Hints**: Use wherever possible (Python 3.10+ syntax)
+4. **Type Hints**: Use wherever possible (Python 3.12+ syntax)
 
 ### Code Quality Checks
 
